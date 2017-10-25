@@ -1,0 +1,1 @@
+ftn -o r -O3 wave2.f90 dist.f circ.f effload.f amat.f tmat.f ttmat.f kmat.f glas.f90 ranmar.f dt.f90
