@@ -18,6 +18,12 @@
 100.0
 0.1
 11695378
+2.0E+04
+1.0E+04
+1.0E+02
+0
+20000
+20000
 --------------------------
 PRESSURE
 MELT
@@ -39,3 +45,9 @@ YN
 GRID
 POR
 ISEED
+DAMP1 - translational damping
+DAMP2 - rotational damping
+DRAG - drag coeff - was 1.0E+1
+BEDZONLY
+OUTINT
+RESOUTINT

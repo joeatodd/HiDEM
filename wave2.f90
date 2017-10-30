@@ -58,11 +58,11 @@
 	REAL*8 X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
 	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
-	REAL*8 SSB,CSB,SQB,LNN,SCL
+	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
-        INTEGER rc,myid,ntasks,ierr,SEED,SEEDI
-
+        INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
+        INTEGER BEDZONLY
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -129,6 +129,12 @@
 	READ(111,*) GRID
 	READ(111,*) POR
 	READ(111,*) SEEDI
+	READ(111,*) DAMP1
+	READ(111,*) DAMP2
+	READ(111,*) DRAG
+	READ(111,*) BEDZONLY
+	READ(111,*) OUTINT
+	READ(111,*) RESOUTINT
 
 ! S = width/thickness of the beams, scaled by SCL
 ! S * SCL, scales the whole system up, so beam width * 60, particle size * 60
@@ -150,9 +156,11 @@
         CALL RANMAR(RAN,NOCON)
 
 	PI=ACOS(-1.0)
-        DMP=2.0E+04*SCL**2.0
-        DMP2=1.0E+04*SCL**2.0
-        MAXDT=0.0
+        DMP=DAMP1*SCL**2.0
+        DMP2=DAMP2*SCL**2.0
+        MAXDT=0.0 !<- error checking for integrator, but not really used
+
+!mpi stuff - boundaries
 	FXC=0
 	FXR=0
 	FXL=0
@@ -387,7 +395,7 @@
 !          IF (Z.LT.WL) THEN
           VELO(IX)=SQRT(((UT(6*IX-5)-UTM(6*IX-5))/DT)**2.0+&
           ((UT(6*IX-4)-UTM(6*IX-4))/DT)**2.0+((UT(6*IX-3)-UTM(6*I-3))/DT)**2.0)
-          VDP(IX)=SCL*SCL*1.0e+01*VELO(IX)
+          VDP(IX)=SCL*SCL*DRAG*VELO(IX)
 !          VDP(IX)=SCL*SCL*1.0e+01
 !          ELSE
 !          VDP(IX)=SCL*SCL*1.0e+00
@@ -827,7 +835,7 @@
 !          IF (Z.LT.WL) THEN
           VELO(I)=SQRT(((UT(6*I-5)-UTM(6*I-5))/DT)**2.0+&
           ((UT(6*I-4)-UTM(6*I-4))/DT)**2.0+((UT(6*I-3)-UTM(6*I-3))/DT)**2.0)
-          VDP(I)=SCL*SCL*1.0e+01*VELO(I)
+          VDP(I)=SCL*SCL*DRAG*VELO(I) !<- calc velo, then proportional drag
 !          VDP(I)=SCL*SCL*1.0e+01
 !          ELSE
 !          VDP(I)=SCL*SCL*1.0e+00
@@ -836,17 +844,23 @@
 
         CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),DIX,DIY,DIZ,GRID)
- 
-!        IF (Z.LT.ZB+SCL/2.0) THEN
-!  	FRX(I)=FRX(I)+DIX*1e+08*(ZB-Z)
-!      	FRY(I)=FRY(I)+DIY*1e+08*(ZB-Z)
-!      	FRZ(I)=FRZ(I)+DIZ*1e+08*(ZB-Z)
 
-!      	FRZ(I)=FRZ(I)+2e+07*(ZB+SCL/2.0-Z)
-!	GSUM=GSUM+1.0e+07*(ZB+SCL/2.0-Z)**2
+!Bed interaction
+
+!Bed Normal
+        IF (Z.LT.ZB+SCL/2.0) THEN
+          IF(BEDZONLY==0) THEN
+             FRX(I)=FRX(I)+DIX*1e+07*(ZB+SCL/2.0-Z) !FR* - forces on particles.
+             FRY(I)=FRY(I)+DIY*1e+07*(ZB+SCL/2.0-Z) !Modifying for bed interaction
+             FRZ(I)=FRZ(I)+DIZ*1e+07*(ZB+SCL/2.0-Z) !DIX - components of bed normal
+           ELSE
+             !Z only
+             FRZ(I)=FRZ(I)+2e+07*(ZB+SCL/2.0-Z)
+           END IF
+             GSUM=GSUM+1.0e+07*(ZB+SCL/2.0-Z)**2
+	ENDIF
 
 !        IF (RY.EQ.1) write(800+myid,18) X,Y,Z,DIX,DIY,DIZ
-!	ENDIF
 
 !        IF (Y.GT.2.0*SCL.AND.Y.LT.4.0*SCL) THEN
 !      	FRY(I)=FRY(I)+1e+03*(SCL-UT(6*I-4))
@@ -1244,7 +1258,8 @@
 	UT(I)=UTP(I)
 	END DO
 
-	IF (MOD(RY,20000).EQ.1) THEN
+ !output
+	IF (MOD(RY,OUTINT).EQ.1) THEN
 
           dest=0
 
@@ -1349,7 +1364,14 @@
 !          CALL PSNET(NTOT,NN,myid,GL,WL,SUB,ntasks)
 	  CLOSE(910)
 	  CLOSE(920)
+
 	ENDIF
+
+	IF (MOD(RY,RESOUTINT).EQ.1) THEN
+            !Add restart stuff here
+            CALL WriteRestart()
+        END IF
+
 
 !	IF (RY.EQ.RY0+STEPS0) THEN
 !        CALL CRACK(NN,NTOT,CCN,EF,NAN,NRXF,UT,WL,myid,ntasks,NANR,NTOR,EFR)
@@ -1396,6 +1418,18 @@
         CALL CPU_TIME(T2)
 	WRITE(*,*) 'TIME=',T2-T1,TS1
 
+        CALL WriteRestart()
+
+!        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+!        IF (myid.EQ.0) CALL CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
+
+        CALL MPI_FINALIZE(rc)
+  	STOP
+
+CONTAINS
+
+ SUBROUTINE WriteRestart()
+   ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE='REST0'//na(myid),STATUS='UNKNOWN')
 	WRITE(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	write(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
@@ -1501,11 +1535,7 @@
 	CLOSE (117)
 	ENDIF
 
-!        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
-!        IF (myid.EQ.0) CALL CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
+ END SUBROUTINE WriteRestart
 
-        CALL MPI_FINALIZE(rc)
-  	STOP
-	END
-
+	END PROGRAM
 
