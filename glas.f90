@@ -1,3 +1,5 @@
+!defines and makes the FCC lattice - dense packing
+
 Subroutine FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,grid,melta,wl,UC)
 
 Implicit none
@@ -38,7 +40,6 @@ READ(400,*) N2
 DO I=1,N2
 !READ(400,*) x,y,s1,b1,b2,m1
 READ(400,*) x,y,s1,b1,b2,z1
-y=y-7200.0
 xk=INT(x/grid)
 yk=INT(y/grid)
 ! if (b1.ne.0.0) then

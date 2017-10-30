@@ -22,7 +22,21 @@ do something to the restitution coefficient
 
 if the simulation explodes (particles moving too far):
 
-Change DMP and DMP2 - multiply by two.
+Change DMP and DMP2 - multiply by two? High values for damping would be 16E4 and 8E4
+
+Add drag near the bed
+
+Change the timestep
+
+Change fric scale factor in input - changes bed friction
+
+Avoid friction gradients
+
+Avoid geometry gradients
+
+Kill all motion every x timesteps
+
+
 
 #### Files etc ####
 
@@ -47,6 +61,14 @@ ave*.f - these compute averages of something
 comp.txt - the compilation command
 
 rc2.f90 - compute the calved size distrib
+
+glas.f90 - computing the FCC lattice, dense packing
+dist.f - efficiently finding neighbouring particles which may interact
+tmat.f, ttmat.f - rotation matrices
+kmat.f - stiffness matrix computation
+amat.f - called by effload, does integration
+ranmar.f - random number generator
+dt.f90 - called by glas.f90, finds and write connections to FSfiles
 
 ### input files ###
 
