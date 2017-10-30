@@ -48,7 +48,7 @@
 	INTEGER P,BCC,FXC,NCL,NDR,NDF,NDB
 	INTEGER NDFL,NDBL,NDFR,NDBR
 	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
-	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)
+	INTEGER NDLFR(2,NODC),NDLBR(2,NODC),XIND,YIND
 	REAL*8 KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL*8 WENS,GSUMS,DPES,BCES
 	REAL*8 XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -140,7 +140,7 @@
 !MLOAD - maximum load - bonds break when this is exceeded - tension and bending
 
 	S=S*SCL
-	MN=SCL**3.0*910
+	MN=SCL**3.0*910 !<- ice density!
 	JS=SCL**2.0*MN/6.0
 	LNN=SCL*1.1225  
 	MLOAD=SCL*MLOAD
@@ -929,12 +929,27 @@
 	UTP(6*I-1)=(R(6*I-1)-D(6*I-1))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 	UTP(6*I-0)=(R(6*I-0)-D(6*I-0))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 
-        IF (ABS(UTPP(6*I-5)-UTP(6*I-5)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-5)-UTP(6*I-5))
-        IF (ABS(UTPP(6*I-4)-UTP(6*I-4)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-4)-UTP(6*I-4))
-        IF (ABS(UTPP(6*I-3)-UTP(6*I-3)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-3)-UTP(6*I-3))
-        IF (ABS(UTPP(6*I-2)-UTP(6*I-2)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-2)-UTP(6*I-2))
-        IF (ABS(UTPP(6*I-1)-UTP(6*I-1)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-1)-UTP(6*I-1))
-        IF (ABS(UTPP(6*I-0)-UTP(6*I-0)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-0)-UTP(6*I-0))
+        !Checking predictions - not used
+        ! IF (ABS(UTPP(6*I-5)-UTP(6*I-5)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-5)-UTP(6*I-5))
+        ! IF (ABS(UTPP(6*I-4)-UTP(6*I-4)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-4)-UTP(6*I-4))
+        ! IF (ABS(UTPP(6*I-3)-UTP(6*I-3)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-3)-UTP(6*I-3))
+        ! IF (ABS(UTPP(6*I-2)-UTP(6*I-2)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-2)-UTP(6*I-2))
+        ! IF (ABS(UTPP(6*I-1)-UTP(6*I-1)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-1)-UTP(6*I-1))
+        ! IF (ABS(UTPP(6*I-0)-UTP(6*I-0)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-0)-UTP(6*I-0))
+
+        !Check that particles haven't left the domain
+        !and freeze them if they have!
+         XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
+         YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
+         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100) THEN
+           UTP(6*I-5) = UT(6*I-5)
+           UTP(6*I-4) = UT(6*I-4)
+           UTP(6*I-3) = UT(6*I-3)
+           UTP(6*I-2) = UT(6*I-2)
+           UTP(6*I-1) = UT(6*I-1)
+           UTP(6*I-0) = UT(6*I-0)
+           PRINT *, myid, " Lost a particle : ",I," at time: ",T
+         END IF
 
 !        IF (UTP(6*I-5).GE.3e+03) UTP(6*I-5)=3.0e+03
 !        IF (UTP(6*I-4).GE.3e+03) UTP(6*I-4)=3.0e+03
@@ -949,35 +964,39 @@
         CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
 
-!        IF (ABS(ZB-Z).LT.SCL*2.0.AND.(VDP(I).GE.1.0e+10*SCL*SCL.OR.T.LT.20.0)) THEN
-!        UTP(6*I-5)=UT(6*I-5)
-!        UTP(6*I-4)=UT(6*I-4)
-!        UTP(6*I-3)=UT(6*I-3)
-!        UTP(6*I-2)=UT(6*I-2)
-!        UTP(6*I-1)=UT(6*I-1)
-!        UTP(6*I-0)=UT(6*I-0)
-!	 ENDIF
+!Freeze particles near bed if friction is too high
+       IF (ABS(ZB-Z).LT.SCL*1.0.AND.(VDP(I).GE.1.0e+10*SCL*SCL.OR.T.LT.20.0)) THEN
+       UTP(6*I-5)=UT(6*I-5)
+       UTP(6*I-4)=UT(6*I-4)
+       UTP(6*I-3)=UT(6*I-3)
+       UTP(6*I-2)=UT(6*I-2)
+       UTP(6*I-1)=UT(6*I-1)
+       UTP(6*I-0)=UT(6*I-0)
+       ENDIF
 
 !	IF (X.LT.250.0.OR.Y.LT.250.0) THEN
+        !Backplane is fixed
 	IF (Y.LT.2.0*SCL) THEN
         UTP(6*I-5)=UT(6*I-5)
         UTP(6*I-4)=UT(6*I-4)
 	ENDIF
 
-        IF (MOD(myid+1,ntasks/YN).eq.0) THEN
-        IF (X.GT.MAXX-2.0*SCL) THEN
-        UTP(6*I-5)=UT(6*I-5)
-	ENDIF
-	ENDIF
+ !Old options for setting certain nodes fixed
 
-!        IF (X.GT.MAXX-250.0) THEN
-        IF (X.LT.2.0*SCL) THEN
-        UTP(6*I-5)=UT(6*I-5)
-!        UTP(6*I-4)=UT(6*I-4)
-	ENDIF
-!	ENDIF
+        ! IF (MOD(myid+1,ntasks/YN).eq.0) THEN
+        ! IF (X.GT.MAXX-2.0*SCL) THEN
+        ! UTP(6*I-5)=UT(6*I-5)
+	! ENDIF
+	! ENDIF
 
+       ! IF (X.GT.MAXX-250.0) THEN
+       !    IF (X.LT.2.0*SCL) THEN
+       !  UTP(6*I-5)=UT(6*I-5)
+       !    UTP(6*I-4)=UT(6*I-4)
+       ! ENDIF
+       ! ENDIF
 
+       !Compute damping
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM(6*I-5))**2/(4*DT)
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-4)-UTM(6*I-4))**2/(4*DT)
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-3)-UTM(6*I-3))**2/(4*DT)
