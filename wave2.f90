@@ -1,3 +1,8 @@
+!NOMA = 1e+05 - number of points
+!NODM = 6*NOMA - degrees of freedom
+!NOCON = 4e+05 - number of beams
+!NODC - 12 times beams - linear system of equations describing beam interactions
+
  	PROGRAM WAVE
 
 	IMPLICIT NONE
@@ -83,6 +88,8 @@
  18	FORMAT(6F16.6)
  19	FORMAT(3F24.4,' ',I8)
 
+!writing out energy output
+
 	IF (myid.EQ.0) THEN
 	OPEN(UNIT=610,FILE='dtop00',STATUS='UNKNOWN',POSITION='APPEND')
 	OPEN(UNIT=611,FILE='dtop01',STATUS='UNKNOWN',POSITION='APPEND')
@@ -97,6 +104,8 @@
         ENDIF
 
         OPEN(UNIT=111,FILE='inp.dat',STATUS='OLD')
+
+!reading the inputs - horribly
 
 !	READ(111,*) MN
 !	READ(111,*) JS
@@ -120,6 +129,15 @@
 	READ(111,*) GRID
 	READ(111,*) POR
 	READ(111,*) SEEDI
+
+! S = width/thickness of the beams, scaled by SCL
+! S * SCL, scales the whole system up, so beam width * 60, particle size * 60
+! The unit case - 1m diam particles, 1.14m long beam, S width beam
+
+!MN - mass of particles
+!JS - moment of inertia - heaviness w.r.t. rotation
+!LNN - distance (scaled) between particles
+!MLOAD - maximum load - bonds break when this is exceeded - tension and bending
 
 	S=S*SCL
 	MN=SCL**3.0*910
@@ -155,6 +173,7 @@
 	EN(I)=0.0
 	END DO
 
+!accumulative energy terms - don't zero if restarting
 	IF (REST.EQ.0) THEN
 	BCC=0
 	BCE=0.0
@@ -163,6 +182,8 @@
 	PSUM=0.0
 	END IF
 
+!more MPI stuff...
+!square partitioning, (F)orward, (B)ack, (L)eft, (R)right, (FR) Forward Right, etc 
 	DO J=1,NOMA
 	NRXFL(1,J)=-1000.0
 	NRXFL(2,J)=-1000.0
@@ -190,6 +211,8 @@
 	NRXFFR(3,J)=-1000.0
 	END DO
 
+!inclination of the domain - not really used
+
 	SSB=SIN(SUB*PI/2.0)
 	CSB=COS(SUB*PI/2.0)
 	SQB=SQRT(1.0+SIN(SUB*PI/2.0)**2)
@@ -199,13 +222,14 @@
 
 	RY0=1
 
-
+        !Go to glas.f90 to make the grid
 	CALL FIBG3(LS,NN,NTOT,NTOL,NTOR,NTOF,NTOB,NTOFR,NTOBR,NTOFL,NTOBL,&
      	myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,SCL,YN,GRID,MELT,WL,UC)
 
 	write(*,17) myid,NTOL,NTOT,NTOR,NTOF,NTOB,NTOFL,NTOFR,NTOBL,NTOBR
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 	
+        !NN - particles in each core
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
         PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
@@ -219,7 +243,9 @@
         NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
 
-
+        !MATHS!
+        !Iterate over: this part nodes, edge nodes
+        ! CT - see notes - it's the cumulative translation of all the beams
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
 	CT(12*I-11)=0.0
 	CT(12*I-10)=0.0
@@ -235,20 +261,20 @@
 	CT(12*I-0)=0.0
 	END DO
 
-       	T=0
+	T=0 !T is time
 	ENM=0.0
 	WEN=0.0
 	ENM0=0
 
 	DO J=1,NN
-        VDP(J)=0.0
-	UT(6*J-5)=0.0
+        VDP(J)=0.0     !VDP = drag coefficient
+	UT(6*J-5)=0.0  ! UT = current displacement
 	UT(6*J-4)=0.0
 	UT(6*J-3)=0.0
 	UT(6*J-2)=0.0
 	UT(6*J-1)=0.0
 	UT(6*J-0)=0.0
-	UTM(6*J-5)=0.0
+	UTM(6*J-5)=0.0 ! UTM = previous displacement
 	UTM(6*J-4)=0.0
 	UTM(6*J-3)=0.0
 	UTM(6*J-2)=0.0
@@ -258,6 +284,7 @@
 
 	ELSE
 
+        !If restarting, read from restart file instead
 	OPEN(UNIT=117+myid,FILE='REST0'//na(myid),STATUS='OLD')
 	READ(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	READ(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
@@ -297,41 +324,45 @@
 
 	END IF
 
+        !Set bed -1000.0 everywhere
         DO I=-100,2000
         DO J=-100,2000
         BED(I,J)=-1000.0
         ENDDO
         ENDDO
 
+        !Read the geometry and friction
+        !into the grids BED, SUF, and FBED
         OPEN(UNIT=400,file='mass3.dat',STATUS='UNKNOWN')
         READ(400,*) NM2
 	DO I=1,NM2
         READ(400,*) X,Y,S1,B2,B1,Z1
-        Y=Y-7200.0
         XK=INT(X/GRID)
         YK=INT(Y/GRID)
         IF (XK.GE.-100.AND.YK.GE.-100) BED(XK,YK)=B1
         IF (XK.GE.-100.AND.YK.GE.-100) SUF(XK,YK)=S1
         IF (XK.GE.-100.AND.YK.GE.-100) FBED(XK,YK)=FRIC*SCL*SCL*Z1
 
-        IF (YK.EQ.0.AND.XK.GE.-100) THEN
-        DO J=0,20
-        BED(XK,-J)=B1
-        SUF(XK,-J)=S1
-        FBED(XK,-J)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
+        ! IF (YK.EQ.0.AND.XK.GE.-100) THEN
+        ! DO J=0,20
+        ! BED(XK,-J)=B1
+        ! SUF(XK,-J)=S1
+        ! FBED(XK,-J)=FRIC*SCL*SCL*Z1
+        ! ENDDO
+        ! ENDIF
 
-        IF (XK.EQ.0.AND.YK.GE.-100) THEN
-        DO J=0,20
-        BED(-J,YK)=B1
-        SUF(-J,YK)=S1
-        FBED(-J,YK)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
+        ! IF (XK.EQ.0.AND.YK.GE.-100) THEN
+        ! DO J=0,20
+        ! BED(-J,YK)=B1
+        ! SUF(-J,YK)=S1
+        ! FBED(-J,YK)=FRIC*SCL*SCL*Z1
+        ! ENDDO
+        ! ENDIF
 
 	ENDDO
 	CLOSE(400)
+
+ !Interpolation functions to smooth input data for particles
 
 	OPEN(UNIT=117+myid,FILE='NODFIL2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
@@ -419,6 +450,8 @@
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
+          !Setting porosity in domain - pre-existing damage
+          !POR - porosity
 	  IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
  	  EFR(I)=EF0
 	  ELSE
@@ -548,6 +581,8 @@
        ENDIF
 
 
+       !Read the original positions of particles
+
         dest=myid+ntasks/YN+1
         source=myid-ntasks/YN-1
         tag=134
@@ -603,13 +638,14 @@
 	TS1=0.0
 
 
-	DO 100 RY=RY0,RY0+STEPS0
+	DO 100 RY=RY0,RY0+STEPS0 !START THE TIME LOOP
 
         CALL CPU_TIME(TT1)
 
       dest=myid+1
       source=myid-1
 
+!Send positions of particles to neighbouring partitions
 
         tag=142
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
@@ -699,7 +735,7 @@
       source,tag,MPI_COMM_WORLD,stat,ierr)
 
 
-
+      !Every 250 steps, reconstruct neighbourhood list
 	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
      	CALL DIST(NN,UT,ND,NCL,NDR,NRXF,NDL,&
       	NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,NRXFF,&
@@ -710,6 +746,7 @@
 
 !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
 
+       !circ checks which particles are really in contact and computes the forces
 	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
       	T,RY,DT,WE,EFC,FXF,FXC,NDR,NCL,NDL,&
       	NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXFL,FXFR,FXL,FXR,&
@@ -724,6 +761,7 @@
 
 !      write(*,17) RY,myid,FXC,FXL,FXCB,FXCF,FXCFR,FXCFL,FXCBR,FXCBL
 
+       !Calculates elastic forces from beams. Stiffness matrix K
 	CALL EFFLOAD1(S,NTOT,NN,T,DT,MN,JS,UT,UTM,R,EN,RY,&
       	FXF,FXC,VDP,DPE,EF,EFL,EFR,NAN,NRXF,MFIL,CT,NANL,NANR,NTOL,NTOR,&
       	NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
@@ -751,11 +789,14 @@
 	ENM=0.0
 
 	DO 27 I=1,NN
-	X=NRXF(1,I)+UT(6*I-5)
+	X=NRXF(1,I)+UT(6*I-5)  !<- x,y,z actual positions, NRXF = original, UT = displacement
 	Y=NRXF(2,I)+UT(6*I-4)
 	Z=NRXF(3,I)+UT(6*I-3)
 
 	WSY(I)=0.0
+
+! If you want to add a pressure from the backwall, instead of just free.
+! Something like hydrostatic pressure - scaled
 
 !	IF (Y.LT.1000.0.AND.(X.GT.8000.0.AND.X.LT.34000.0)) THEN
 !          IF (Z.GT.WL+Y*SSB) THEN
@@ -772,6 +813,7 @@
 	I1=X/GRID-INT(X/GRID)
 	I2=Y/GRID-INT(Y/GRID)
 
+       !Update the drag calculation
         CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X/GRID),INT(Y/GRID)),SUF(INT(X/GRID)+1,INT(Y/GRID)),&
@@ -810,6 +852,8 @@
 !      	FRY(I)=FRY(I)+1e+03*(SCL-UT(6*I-4))
 !	ENDIF
 
+
+       !Buoyancy calculation
 	IF (Z.LT.WL+Y*SSB) THEN
 	BOYZ(I)=1.29*MFIL(I)*CSB
 	ELSE
@@ -825,6 +869,8 @@
 
  27	CONTINUE
 
+!calculating the drag for in-contact nodes
+
 	CALL EFFLOAD2(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,D,EN,RY,&
       	FXF,FXC,VDP,DPE,EF,EFL,EFR,NAN,NRXF,MFIL,CT,NANL,NANR,NTOL,NTOR,&
       	NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
@@ -838,6 +884,7 @@
         FXCFL,FXFFL,FXCBL,FXFBL,&
         FXCFR,FXFFR,FXCBR,FXFBR)
 
+!Prediction of UTP for damping - half step
 	DO 28 I=1,NN
 	UTPP(6*I-5)=(R(6*I-5)-2.0*D(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
 	UTPP(6*I-4)=(R(6*I-4)-2.0*D(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
@@ -866,6 +913,7 @@
 	Y=NRXF(2,I)+UT(6*I-4)
 	Z=NRXF(3,I)+UT(6*I-3)
 
+!Kinetic energy
 	KIN=KIN+0.5*MN*((UT(6*I-5)-UTM(6*I-5))/DT)**2
 	KIN=KIN+0.5*MN*((UT(6*I-4)-UTM(6*I-4))/DT)**2
 	KIN=KIN+0.5*MN*((UT(6*I-3)-UTM(6*I-3))/DT)**2
@@ -873,6 +921,7 @@
 	KIN2=KIN2+0.5*JS*((UT(6*I-1)-UTM(6*I-1))/DT)**2
 	KIN2=KIN2+0.5*JS*((UT(6*I-0)-UTM(6*I-0))/DT)**2
 
+ !Calculate final UTP
 	UTP(6*I-5)=(R(6*I-5)-D(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
 	UTP(6*I-4)=(R(6*I-4)-D(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
 	UTP(6*I-3)=(R(6*I-3)-D(6*I-3)+FRZ(I)+BOYZ(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
@@ -937,6 +986,8 @@
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-0)-UTM(6*I-0))**2/(4*DT)
  
 
+       !Calculate all the energy and sum over partitions
+
         WEN=WEN+WE(I)
 
         ENM=ENM+EN(6*I-5)+EN(6*I-4)+EN(6*I-3)+EN(6*I-2)+EN(6*I-1)+EN(6*I-0)
@@ -986,6 +1037,9 @@
 	
 	MML=0.0
 
+!Check for fracture!
+
+!internally
         DO I=1,NTOT
 	N1=NAN(1,I)
 	N2=NAN(2,I)
@@ -1068,6 +1122,7 @@
  	END DO
 	ENDIF
 
+!across the boundaries...
         dest=myid+1
         source=myid-1
         tag=131
@@ -1424,7 +1479,7 @@
 	BCC=0
 	ENDIF
 
- 100	CONTINUE
+ 100	CONTINUE !end of time loop
 
         OPEN(UNIT=930,FILE='RCK',STATUS='UNKNOWN')
         DO KK=0,ntasks-1
@@ -1456,6 +1511,10 @@
 	END DO
 	CLOSE (117+myid)
 
+ !NTOT - no connections
+ !NAN - the particle numbers (1 and 2), 2*ntot array
+ !NRXF - the original locations of all the particles
+ !EF - Youngs modulus
 	OPEN(UNIT=117+myid,FILE='FS'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOT
 	WRITE(117+myid,*) NAN(1,SI),NAN(2,SI),NRXF(1,NAN(1,SI)),&
