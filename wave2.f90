@@ -1066,34 +1066,6 @@
         ENDIF
  	END DO
 
-!        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
-!        DO I=1,NTOL
-!	N1=NANL(1,I)
-!	N2=NANL(2,I)
-!        IF (EFL(I).GT.0.0) THEN
-!	DDX=NRXFL(1,N1)+UTL(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
-!	DDY=NRXFL(2,N1)+UTL(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
-!	DDZ=NRXFL(3,N1)+UTL(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
-!	DX=NRXFL(1,N1)-NRXF(1,N2)
-!	DY=NRXFL(2,N1)-NRXF(2,N2)
-!	DZ=NRXFL(3,N1)-NRXF(3,N2)
-!	L=SQRT(DX**2+DY**2+DZ**2)
-!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-!	V1=ABS(UTL(6*N1-2)-UT(6*N2-2))
-!	V2=ABS(UTL(6*N1-1)-UT(6*N2-1))
-!	V3=ABS(UTL(6*N1-0)-UT(6*N2-0))
-!	MAXV=MAX(V1,V2,V3)
-!	LOAD=((DL-L)+0.35*MAXV)
-!	IF (LOAD.GT.MML) MML=LOAD
-!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-!	 BCE=BCE+0.5*EFL(I)*S**2/LNN*(DL-L)**2
-!         EFL(I)=0.0
-!	 BCC=BCC+1
-!	 ENDIF
-!	ENDIF
-! 	END DO
-!	ENDIF
-
         IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
         DO I=1,NTOR
 	N1=NANR(1,I)
@@ -1247,91 +1219,6 @@
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFBL,NTOBL,MPI_DOUBLE_PRECISION,&
         source,tag,MPI_COMM_WORLD,stat,ierr)
-
-!        IF (myid.gt.(ntasks-1)/YN) THEN
-!        DO I=1,NTOB
-!	N1=NANB(1,I)
-!	N2=NANB(2,I)
-!        IF (EFB(I).GT.0.0) THEN
-!	DDX=NRXFB(1,N1)+UTB(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
-!	DDY=NRXFB(2,N1)+UTB(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
-!	DDZ=NRXFB(3,N1)+UTB(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
-!	DX=NRXFB(1,N1)-NRXF(1,N2)
-!	DY=NRXFB(2,N1)-NRXF(2,N2)
-!	DZ=NRXFB(3,N1)-NRXF(3,N2)
-!	L=SQRT(DX**2+DY**2+DZ**2)
-!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-!	V1=ABS(UTF(6*N1-2)-UT(6*N2-2))
-!	V2=ABS(UTF(6*N1-1)-UT(6*N2-1))
-!	V3=ABS(UTF(6*N1-0)-UT(6*N2-0))
-!	MAXV=MAX(V1,V2,V3)
-!	LOAD=((DL-L)+0.35*MAXV)
-!	IF (LOAD.GT.MML) MML=LOAD
-!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-!	 BCE=BCE+0.5*EFB(I)*S**2/LNN*(DL-L)**2
-!         EFB(I)=0.0
-!	 BCC=BCC+1
-!	 ENDIF
-!	ENDIF
-! 	END DO
-!	ENDIF
-
-!        IF (myid.gt.(ntasks-1)/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-!        DO I=1,NTOBL
-!	N1=NANBL(1,I)
-!	N2=NANBL(2,I)
-!        IF (EFBL(I).GT.0.0) THEN
-!	DDX=NRXFBL(1,N1)+UTBL(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
-!	DDY=NRXFBL(2,N1)+UTBL(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
-!	DDZ=NRXFBL(3,N1)+UTBL(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
-!	DX=NRXFBL(1,N1)-NRXF(1,N2)
-!	DY=NRXFBL(2,N1)-NRXF(2,N2)
-!	DZ=NRXFBL(3,N1)-NRXF(3,N2)
-!	L=SQRT(DX**2+DY**2+DZ**2)
-!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-!	V1=ABS(UTFL(6*N1-2)-UT(6*N2-2))
-!	V2=ABS(UTFL(6*N1-1)-UT(6*N2-1))
-!	V3=ABS(UTFL(6*N1-0)-UT(6*N2-0))
-!	MAXV=MAX(V1,V2,V3)
-!	LOAD=((DL-L)+0.35*MAXV)
-!	IF (LOAD.GT.MML) MML=LOAD
-!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-!	 BCE=BCE+0.5*EFBL(I)*S**2/LNN*(DL-L)**2
-!         EFBL(I)=0.0
-!	 BCC=BCC+1
-!	 ENDIF
-!	ENDIF
-! 	END DO
-!	ENDIF
-
-!        IF (myid.gt.(ntasks-1)/YN
-!     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-!        DO I=1,NTOBR
-!	N1=NANBR(1,I)
-!	N2=NANBR(2,I)
-!        IF (EFBR(I).GT.0.0) THEN
-!	DDX=NRXFBR(1,N1)+UTBR(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
-!	DDY=NRXFBR(2,N1)+UTBR(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
-!	DDZ=NRXFBR(3,N1)+UTBR(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
-!	DX=NRXFBR(1,N1)-NRXF(1,N2)
-!	DY=NRXFBR(2,N1)-NRXF(2,N2)
-!	DZ=NRXFBR(3,N1)-NRXF(3,N2)
-!	L=SQRT(DX**2+DY**2+DZ**2)
-!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-!	V1=ABS(UTFR(6*N1-2)-UT(6*N2-2))
-!	V2=ABS(UTFR(6*N1-1)-UT(6*N2-1))
-!	V3=ABS(UTFR(6*N1-0)-UT(6*N2-0))
-!	MAXV=MAX(V1,V2,V3)
-!	LOAD=((DL-L)+0.35*MAXV)
-!	IF (LOAD.GT.MML) MML=LOAD
-!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-!	 BCE=BCE+0.5*EFBR(I)*S**2/LNN*(DL-L)**2
-!         EFBR(I)=0.0
-!	 BCC=BCC+1
-!	 ENDIF
-!	ENDIF
-! 	END DO
-!	ENDIF
 
 	DO I=1,6*NN
 	UTM(I)=UT(I)
