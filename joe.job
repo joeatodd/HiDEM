@@ -6,4 +6,4 @@
 export PBS_O_WORKDIR=$(readlink -f $PBS_O_WORKDIR)               
 cd $PBS_O_WORKDIR
 export OMP_NUM_THREADS=1
-aprun -n 70 /work/n01/shared/ElmerHiDEM/HiDEM/r  
+aprun -n 70 $PBS_O_WORKDIR/r 1> LOG_$PBS_JOBID 2> ERRLOG_$PBS_JOBID
