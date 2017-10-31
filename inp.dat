@@ -24,6 +24,7 @@
 0
 20000
 20000
+5.0E3
 --------------------------
 PRESSURE
 MELT
@@ -51,3 +52,4 @@ DRAG - drag coeff - was 1.0E+1
 BEDZONLY
 OUTINT
 RESOUTINT
+MAXUT - maximum particle displacement in any XYZ

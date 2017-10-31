@@ -56,7 +56,7 @@
 	REAL*8 KX(12,12),KY(12,12),KZ(12,12),K(12,12)
 	REAL*8 DDX,DDY,DDZ,DX,DY,DZ,DL,DTX,DTY,DTZ
 	REAL*8 X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
-	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ
+	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ,MAXUT
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
 	REAL RAN(NOCON)
@@ -135,6 +135,7 @@
 	READ(111,*) BEDZONLY
 	READ(111,*) OUTINT
 	READ(111,*) RESOUTINT
+	READ(111,*) MAXUT
 
 ! S = width/thickness of the beams, scaled by SCL
 ! S * SCL, scales the whole system up, so beam width * 60, particle size * 60
@@ -955,7 +956,9 @@
         !and freeze them if they have!
          XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
          YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
-         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100) THEN
+         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
+             ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
+             ABS(UTP(6*I-3)) > MAXUT) THEN
            UTP(6*I-5) = UT(6*I-5)
            UTP(6*I-4) = UT(6*I-4)
            UTP(6*I-3) = UT(6*I-3)
