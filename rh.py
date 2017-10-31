@@ -72,4 +72,8 @@ sx_plan[np.isnan(sx_plan)] = 0.0
 
 stdev = np.std(strate)
 
-plt.matshow(np.flipud(sx_side.T),vmax=stdev)
+plt.matshow(np.flipud(sx_side.T),vmax=0.01)
+plt.savefig(str2_file+".png")
+
+plt.matshow(sx_plan,vmax=0.01)
+plt.savefig(str2_file+"_plan.png")
