@@ -112,11 +112,21 @@ for each node connection in initial geometry (including broken bonds)
 
 dtop* files - these show the total energy in the system for different parts
 
+dtop00 - T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0
+dtop01 - T,DPES,DMPENS,PSUMS,GSUMS
+dtopr  - T,system energy, damping energy?
+
 Time
 WENS - elastic energy of the spheres - imagine the particles overlap and are deformed against each other. Then they might bounce back apart.
 ENMS+ENMS0 - elastic deformation energy - the energy held in a deformed/bent system
 MGHS-MGH0 - potential energy
-Kins - kinetic energy
+Kins - translational kinetic energy
+Kins2 - rotational kinetic energy
+
+DPES,DMPENS - guess energy lost to drag and damping?
+PSUMS - something like pressure
+GSUMS - energy of bed interaction
+
 
 #### Processing ####
 
