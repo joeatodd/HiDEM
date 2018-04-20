@@ -856,7 +856,7 @@
              FRZ(I)=FRZ(I)+DIZ*1e+07*(ZB+SCL/2.0-Z) !DIX - components of bed normal
            ELSE
              !Z only
-             FRZ(I)=FRZ(I)+2e+07*(ZB+SCL/2.0-Z)
+             FRZ(I)=FRZ(I)+1e+07*(ZB+SCL/2.0-Z)
            END IF
              GSUM=GSUM+1.0e+07*(ZB+SCL/2.0-Z)**2
 	ENDIF
@@ -880,6 +880,19 @@
 	ELSE
 	BOYY(I)=9.8*MFIL(I)*SSB
 	ENDIF
+
+ !Jan's code for smoothing the buoyant forces across the waterline
+        ! IF (Z.LT.WL-0.4*SCL) THEN
+        !    BOYZ(I)=1.29*MFIL(I)
+        ! ELSE
+        !    IF (Z.GT.WL+0.1*SCL) THEN
+        !       BOYZ(I)=-9.8*MFIL(I)
+        !    ELSE
+        !       KK=(1.29*MFIL(I)+9.8*MFIL(I))/(0.5*SCL)
+        !       BOYZ(I)=1.29*MFIL(I)-KK*(Z-(WL-0.4*SCL))
+        !    ENDIF
+        ! ENDIF
+
 
 
  27	CONTINUE
