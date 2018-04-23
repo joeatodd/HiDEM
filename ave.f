@@ -1,7 +1,7 @@
       PROGRAM STAND
 
-      REAL AFIL(2000),NFIL(2000),DX,DY,J,LJ,DR,DT
-      REAL STR
+      REAL*8 AFIL(2000),NFIL(2000),DX,DY,J,LJ,DR,DT
+      REAL*8 STR
       INTEGER IDX,N,T,I,SDX
       CHARACTER*2 na(0:64)
         data na/'00','01','02','03','04','05','06','07','08',
@@ -31,8 +31,8 @@ c      WRITE(*,*) 'N?'
 
       DO 20 T=1,N
       READ(10,*) DX,DR
-      DX=(DX*50.0*50.0)/1000.0
-!      DX=(DX*50.0*50.0*50.0)**0.667
+!      DX=(DX*30.0*30.0)/1000.0
+!      DX=(DX*0.03*0.03*0.03)**0.667
 !      DR=DR**0.5
       IF (DX.LT.10) THEN
       IDX=DX
@@ -40,12 +40,15 @@ c      WRITE(*,*) 'N?'
       GOTO 20
       ENDIF
 
+      
+!      DX=(DX*0.03**3.0)**0.77/6.0
+
       DO 10 I=1,200
       J=I-50
 c      J=(I+1)/7.0
 c      LJ=(I-1)/7.0
-      RI=EXP(J/6.0)
-      ORI=EXP((J-1)/6.0)
+      RI=EXP(J/4.0)
+      ORI=EXP((J-1)/4.0)
       IF (DX.GE.ORI.AND.DX.LT.RI) THEN
       AFIL(I)=AFIL(I)+DR
       NFIL(I)=NFIL(I)+1.0
@@ -54,19 +57,22 @@ c      LJ=(I-1)/7.0
  20   CONTINUE
 
 
-!      DO 23 T=1,9
-!      WRITE(700,*) T,AFIL(T)
-! 23   CONTINUE
+      DO 23 T=1,9
+!      WRITE(700,*) (T*0.03**3.0)**(1.0-T/40.0)/6.0,AFIL(T)/
+!     1    (((T+0.5)*0.03**3.0)**(1.0-T/40.0)
+!     1    /6.0-((T-0.5)*0.03**3.0)**(1.0-T/40.0)/6.0)
+      WRITE(700,*) T,AFIL(T)
+ 23   CONTINUE
 
 
       SM=0
       DO 30 T=1,200
       J=T-50
       IF (NFIL(T).GE.1) THEN
-c      write(*,*) NFIL(T)
-c      WRITE(70,*) (EXP(J/10.)+EXP((J-1)/10.))/2.,(AFIL(T)/NFIL(T))
-      WRITE(700,*) EXP((T-50.0-0.5)/6.0), 
-     1 AFIL(T)/(EXP((J)/6.)-EXP((J-1.0)/6.))
+!      write(*,*) NFIL(T)
+!      WRITE(70,*) (EXP(J/10.)+EXP((J-1)/10.))/2.,(AFIL(T)/NFIL(T))
+      WRITE(700,*) EXP((T-50.0-0.5)/4.0),
+     1    AFIL(T)/(EXP((J)/4.)-EXP((J-1.0)/4.))
       ENDIF
  30   CONTINUE
 

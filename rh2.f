@@ -36,12 +36,11 @@
       DO T=1,N
       READ(800,*) X1,Y1,Z1
       READ(900,*) SX1,SY1,SZ1
-      VEL=SQRT((Y1-SY1)**2+(Z1-SZ1)**2)
+!      VEL=SQRT((X1-SX1)**2+(Y1-SY1)**2)
+      VEL=Z1-SZ1
 !      WRITE(700,12) X1,Y1,VEL
-!      IX=INT((X1+SX1)/200.0)
-!      IY=INT((Y1+SY1)/200.0)
-      IX=INT((Y1+SY1)/100.0)
-      IY=INT((Z1+SZ1)/100.0)
+      IX=INT((X1+SX1)/100.0)
+      IY=INT((Y1+SY1)/100.0)
 !       IF ((Z1+SZ1)/2.0.GT.1762.0) THEN
        VG(IX,IY)=VG(IX,IY)+VEL
        NG(IX,IY)=NG(IX,IY)+1
@@ -54,9 +53,11 @@
       WRITE(*,*) 'DIST=',AVV/AVC
       TVC=0.0
       TVN=0
-      DO I=0,200
-      DO J=0,100
+      DO I=0,280
+      DO J=0,280
       IF (NG(I,J).NE.0) THEN
+
+      IF (VG(I,J)/(1.0*NG(I,J)).GE.0.0) THEN
        IF (VG(I,J)/(1.0*NG(I,J)).LT.MAX) THEN
 !       WRITE(700,12) I*100.0,J*100.0,1.0e+04*VG(I,J)/(1.0*NG(I,J))
        WRITE(700,12) I*50.0,J*50.0,VG(I,J)/(1.0*NG(I,J))
@@ -70,6 +71,24 @@
        TVC=TVC+MAX
        TVN=TVN+1
        ENDIF
+      ENDIF
+
+      IF (VG(I,J)/(1.0*NG(I,J)).LT.0.0) THEN
+       IF (VG(I,J)/(1.0*NG(I,J)).GT.-MAX) THEN
+!       WRITE(700,12) I*100.0,J*100.0,1.0e+04*VG(I,J)/(1.0*NG(I,J))
+       WRITE(700,12) I*50.0,J*50.0,VG(I,J)/(1.0*NG(I,J))
+!       TVC=TVC+1.0e+04*VG(I,J)/(1.0*NG(I,J))
+       TVC=TVC+VG(I,J)/(1.0*NG(I,J))
+       TVN=TVN+1
+       ELSE
+!       WRITE(700,12) I*100.0,J*100.0,1.0e+04*MAX
+       WRITE(700,12) I*50.0,J*50.0,-MAX
+!       TVC=TVC+1.0e+04*MAX
+       TVC=TVC+MAX
+       TVN=TVN+1
+       ENDIF
+      ENDIF
+
       ELSE
       WRITE(700,12) I*50.0,J*50.0,0.5*MAX
       ENDIF

@@ -30,12 +30,12 @@ c      WRITE(*,*) 'N?'
 
 
       DO 20 T=1,N
-      READ(10,*) DX,DR
-      IF (DX.LT.10) THEN
-      IDX=DX
-      AFIL(IDX)=AFIL(IDX)+DR
-      GOTO 20
-      ENDIF
+      READ(10,*) DX
+!      IF (DX.LT.10) THEN
+!      IDX=DX
+!      AFIL(IDX)=AFIL(IDX)+1
+!      GOTO 20
+!      ENDIF
 
       DO 10 I=1,200
       J=I-50
@@ -51,19 +51,19 @@ c      LJ=(I-1)/7.0
  20   CONTINUE
 
 
-      DO 23 T=1,9
-      WRITE(700,*) T,AFIL(T)
- 23   CONTINUE
+!      DO 23 T=1,9
+!      WRITE(700,*) T,AFIL(T)
+! 23   CONTINUE
 
 
       SM=0
-      DO 30 T=10,200
+      DO 30 T=1,200
       J=T-50
       IF (NFIL(T).GE.1) THEN
 c      write(*,*) NFIL(T)
 c      WRITE(70,*) (EXP(J/10.)+EXP((J-1)/10.))/2.,(AFIL(T)/NFIL(T))
       WRITE(700,*) EXP((T-50.0-0.5)/3.0), 
-     1        AFIL(T)/(EXP((J)/3.)-EXP((J-1.0)/3.))
+     1        0.2*NFIL(T)/(EXP((J)/3.)-EXP((J-1.0)/3.))
       ENDIF
  30   CONTINUE
 
