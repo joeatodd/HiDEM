@@ -60,7 +60,7 @@ ave*.f - these compute averages of something
 
 comp.txt - the compilation command
 
-rc2.f90 - compute the calved size distrib
+rc2.f90, rc3.f90 - compute the calved size distrib
 
 glas.f90 - computing the FCC lattice, dense packing
 dist.f - efficiently finding neighbouring particles which may interact
@@ -161,3 +161,24 @@ For the sea: add a box, set size and centrepoints
 
 For the bed: get bed.csv, read it in same as other CSVs
 then apply Delaunay2D filter.
+
+
+
+### Changes made by Jan since commit ###
+
+Got rid of: UTPP, VELO, D, MAXDT,XIND,YIND
+DAMP1,DAMP2,DRAG,BEDZONLY,MAXUT  <- but did I add these? yes
+
+The change means BEDZONLY=TRUE is implicit
+
+Using lbound,rbound fib00,tbed files, but NOT dtmax
+
+Changed ice density
+
+lots of things involving SCL seem to have changed power
+
+some change to setting porisity/predamage - no longer considers proximity to bed/base?
+
+EFLOAD1,2 -> EFFLOAD: Only EFFLOAD exists, and its passed more stuff
+
+Seems to get rid of UTP prediction, damping

@@ -75,14 +75,14 @@
 	 FXF(2,FXC)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N1)=FRX(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N1)=FRY(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
- 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N1)=FRX(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N1)=FRY(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -116,11 +116,11 @@ c        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
 	 FXFL(2,FXL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -156,11 +156,11 @@ c        IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
 	 FXFR(2,FXR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -196,11 +196,11 @@ c------------------------------------------------
 	 FXFF(2,FXCF)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
- 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+ 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -234,11 +234,11 @@ c------------------------------------------------
 	 FXFFL(2,FXCFL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -273,11 +273,11 @@ c------------------------------------------------
 	 FXFFR(2,FXCFR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -311,11 +311,11 @@ c------------------------------------------------
 	 FXFB(2,FXCB)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -349,11 +349,11 @@ c------------------------------------------------
 	 FXFBL(2,FXCBL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -388,11 +388,11 @@ c------------------------------------------------
 	 FXFBR(2,FXCBR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF

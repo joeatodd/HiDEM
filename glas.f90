@@ -40,6 +40,8 @@ READ(400,*) N2
 DO I=1,N2
 !READ(400,*) x,y,s1,b1,b2,m1
 READ(400,*) x,y,s1,b1,b2,z1
+!x=x-2000.0
+!y=y-7000.0
 xk=INT(x/grid)
 yk=INT(y/grid)
 ! if (b1.ne.0.0) then
@@ -48,7 +50,7 @@ yk=INT(y/grid)
 if (xk.ge.-100.and.yk.ge.-100) bed(xk,yk)=b1
 ! endif
 if (xk.ge.-100.and.yk.ge.-100) surf(xk,yk)=s1
-if (xk.ge.-100.and.yk.ge.-100) melt(xk,yk)=0.0
+if (xk.ge.-100.and.yk.ge.-100) melt(xk,yk)=melta*0.0
 ENDDO
 close(400)
 
@@ -103,8 +105,8 @@ x0(:,:)=b/2.0d0; x0(:,1)=0.0d0; x0(3,2)=0.0d0; x0(2,3)=0.0d0; x0(1,4)=0.0d0
 
 ip=0
 m=MOD(myid,ntasks/YN)
-Do i=1+8*m,8+8*m
-      Do j=(myid/(ntasks/YN))*8+1,(myid/(ntasks/YN)+1)*8
+Do i=1+10*m,10+10*m
+      Do j=(myid/(ntasks/YN))*10+1,(myid/(ntasks/YN)+1)*10
 	Do k=-2,l
 	  Do k1=1,4
              x=(x0(1,k1) + Float(i-1)*b)/grid
@@ -122,12 +124,12 @@ Do i=1+8*m,8+8*m
 !             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
 !             If (bed(xk,yk).ne.0.0.and.bed(xk,yk+1).ne.0.0.and.bed(xk+1,yk).ne.0.0.and.bed(xk+1,yk+1).ne.0.0) then
 !             If ((z.ge.bint+mint.or.z.ge.wl).and.z.le.sint.and.(sint-bint).gt.SCL) Then
-             If (z.ge.bint+mint.and.z.lt.sint) then
-!             lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
-!             UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
+             If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.(abs(z-wl).lt.4.0*SCL.and.bint.lt.wl))) then
+             lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
+             UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
 !             If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
-!             If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
-!             If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
+             If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
+             If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
              ip=ip+1
 	     xo(1,ip) = x0(1,k1) + Float(i-1)*b	
 	     xo(2,ip) = x0(2,k1) + Float(j-1)*b
@@ -138,8 +140,8 @@ Do i=1+8*m,8+8*m
              if (xo(1,ip).lt.minx) minx=xo(1,ip)
              if (xo(2,ip).lt.miny) miny=xo(2,ip)
              if (xo(3,ip).lt.minz) minz=xo(3,ip)
-!             EndIF
-!             EndIF
+             EndIF
+             EndIF
              EndIF
 !             EndIF
 	  EndDo

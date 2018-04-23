@@ -11,7 +11,7 @@
         INCLUDE 'na90.dat'
 	REAL*8 EMM(NOMA),BOYZ(NOMA),BOYY(NOMA),WSY(NOMA)
 	REAL*8 EN(NODM),WE(NOMA),VDP(NOMA),WSX(NOMA),BED(-100:2000,-100:2000)
-	REAL*8 SUF(-100:2000,-100:2000),VELO(NOMA)
+	REAL*8 SUF(-100:2000,-100:2000)
 	REAL*8 MFIL(NOMA),NRXF(3,NOMA),EF(NOCON),EFC(NOMA),EFL(NOCON)
 	REAL*8 NRXFL(3,NOMA),NRXFR(3,NOMA),EFR(NOCON)
 	REAL*8 NRXFB(3,NOMA),NRXFF(3,NOMA),EFF(NOCON),EFB(NOCON)
@@ -19,7 +19,7 @@
 	REAL*8 NRXFBR(3,NOMA),UTBR(NODM),EFFL(NOCON),EFBL(NOCON)
 	REAL*8 NRXFFL(3,NOMA),UTFL(NODM),FBED(-100:2000,-100:2000)
 	REAL*8 NRXFFR(3,NOMA),UTFR(NODM),DIX,DIY,DIZ,FRIC,UC
-	REAL*8 UTM(NODM),UT(NODM),UTP(NODM),UTPP(NODM),R(NODM),D(NODM)
+	REAL*8 UTM(NODM),UT(NODM),UTP(NODM),R(NODM)
 	REAL*8 UTR(NODM),UTL(NODM),UTW(NODM),NRXFW(3,NOMA)
 	REAL*8 UTB(NODM),UTF(NODM),ENM0,ENMS0,POR,GRID
         REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA)
@@ -35,7 +35,7 @@
 	INTEGER FXFFL(2,NODC),FXFBL(2,NODC)
 	INTEGER FXFFR(2,NODC),FXFBR(2,NODC)
 	REAL*8 M,MN,JS,DT,T,X,Y,CL,CN,E,GSUM,GSUM0
-	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT,MAXDT
+	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT
 	INTEGER I,N,NL,NTOT,NN,STEPS,IX,IM,MS,N1,N2,RY
 	INTEGER PN,NTOL,NTOR,NTOF,NTOB,NRY,PNN(0:5000),NTOTW(0:5000)
 	INTEGER NTOFR,NTOBR,NTOFL,NTOBL,XK,YK,ZK
@@ -48,7 +48,7 @@
 	INTEGER P,BCC,FXC,NCL,NDR,NDF,NDB
 	INTEGER NDFL,NDBL,NDFR,NDBR
 	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
-	INTEGER NDLFR(2,NODC),NDLBR(2,NODC),XIND,YIND
+	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)!,XIND,YIND
 	REAL*8 KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL*8 WENS,GSUMS,DPES,BCES
 	REAL*8 XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -62,7 +62,7 @@
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
         INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
-        INTEGER BEDZONLY
+
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -79,7 +79,7 @@
  9	FORMAT(I4,'     ',2F11.6)
  10	FORMAT(5F28.1)
  11	FORMAT(2I8,' ',7F22.9)
- 12	FORMAT(4F16.6)
+ 12	FORMAT(3F16.6)
  13	FORMAT(6F22.12)
  14	FORMAT(7I8)
  15	FORMAT(5F20.7)
@@ -90,20 +90,16 @@
 
 !writing out energy output
 
-	IF (myid.EQ.0) THEN
 	OPEN(UNIT=610,FILE='dtop00',STATUS='UNKNOWN',POSITION='APPEND')
 	OPEN(UNIT=611,FILE='dtop01',STATUS='UNKNOWN',POSITION='APPEND')
 	OPEN(UNIT=612,FILE='dtopr',STATUS='UNKNOWN',POSITION='APPEND')
 	OPEN(UNIT=613,FILE='kins2',STATUS='UNKNOWN',POSITION='APPEND')
-!	OPEN(UNIT=614,FILE='lbound',STATUS='UNKNOWN')
-!	OPEN(UNIT=615,FILE='rbound',STATUS='UNKNOWN')
-	OPEN(UNIT=616,FILE='DTmax',STATUS='UNKNOWN')
-!        OPEN(UNIT=110,FILE='fib00',STATUS='UNKNOWN')
-!	OPEN(UNIT=800+myid,FILE='tbed'//na(myid),STATUS='UNKNOWN')
-!	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
-        ENDIF
-
+	OPEN(UNIT=614,FILE='lbound',STATUS='UNKNOWN')
+	OPEN(UNIT=615,FILE='rbound',STATUS='UNKNOWN')
+        OPEN(UNIT=110,FILE='fib00',STATUS='UNKNOWN')
         OPEN(UNIT=111,FILE='inp.dat',STATUS='OLD')
+	OPEN(UNIT=800+myid,FILE='tbed'//na(myid),STATUS='UNKNOWN')
+!	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
 
 !reading the inputs - horribly
 
@@ -132,7 +128,6 @@
 	READ(111,*) DAMP1
 	READ(111,*) DAMP2
 	READ(111,*) DRAG
-	READ(111,*) BEDZONLY
 	READ(111,*) OUTINT
 	READ(111,*) RESOUTINT
 	READ(111,*) MAXUT
@@ -147,7 +142,7 @@
 !MLOAD - maximum load - bonds break when this is exceeded - tension and bending
 
 	S=S*SCL
-	MN=SCL**3.0*910 !<- ice density!
+	MN=SCL**3.0*871
 	JS=SCL**2.0*MN/6.0
 	LNN=SCL*1.1225  
 	MLOAD=SCL*MLOAD
@@ -157,9 +152,8 @@
         CALL RANMAR(RAN,NOCON)
 
 	PI=ACOS(-1.0)
-        DMP=DAMP1*SCL**2.0
-        DMP2=DAMP2*SCL**2.0
-        MAXDT=0.0 !<- error checking for integrator, but not really used
+        DMP=DAMP1*SCL**3.0
+        DMP2=DAMP2*SCL**3.0
 
 !mpi stuff - boundaries
 	FXC=0
@@ -346,27 +340,33 @@
         READ(400,*) NM2
 	DO I=1,NM2
         READ(400,*) X,Y,S1,B2,B1,Z1
+!        X=X-2000.0
+!        Y=Y-7000.0
         XK=INT(X/GRID)
         YK=INT(Y/GRID)
         IF (XK.GE.-100.AND.YK.GE.-100) BED(XK,YK)=B1
         IF (XK.GE.-100.AND.YK.GE.-100) SUF(XK,YK)=S1
         IF (XK.GE.-100.AND.YK.GE.-100) FBED(XK,YK)=FRIC*SCL*SCL*Z1
 
-        ! IF (YK.EQ.0.AND.XK.GE.-100) THEN
-        ! DO J=0,20
-        ! BED(XK,-J)=B1
-        ! SUF(XK,-J)=S1
-        ! FBED(XK,-J)=FRIC*SCL*SCL*Z1
-        ! ENDDO
-        ! ENDIF
+        !Previously had commented from here
+        !------------
+        IF (YK.EQ.0.AND.XK.GE.-100) THEN
+        DO J=0,20
+        BED(XK,-J)=B1
+        SUF(XK,-J)=S1
+        FBED(XK,-J)=FRIC*SCL*SCL*Z1
+        ENDDO
+        ENDIF
 
-        ! IF (XK.EQ.0.AND.YK.GE.-100) THEN
-        ! DO J=0,20
-        ! BED(-J,YK)=B1
-        ! SUF(-J,YK)=S1
-        ! FBED(-J,YK)=FRIC*SCL*SCL*Z1
-        ! ENDDO
-        ! ENDIF
+        IF (XK.EQ.0.AND.YK.GE.-100) THEN
+        DO J=0,20
+        BED(-J,YK)=B1
+        SUF(-J,YK)=S1
+        FBED(-J,YK)=FRIC*SCL*SCL*Z1
+        ENDDO
+        ENDIF
+        !To here
+        !------------
 
 	ENDDO
 	CLOSE(400)
@@ -388,19 +388,16 @@
         CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         
-        IF (ABS(ZB-Z).LT.SCL*1.0) THEN
+        IF (ABS(ZB-Z).LT.SCL*2.0) THEN
         CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)),&
         FBED(INT(X/GRID),INT(Y/GRID)+1),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(IX))
 !        IF (VDP(IX).GT.SCL*SCL*2.0e+07) VDP(IX)=SCL*SCL*2.0e+07
         ELSE
-!          IF (Z.LT.WL) THEN
-          VELO(IX)=SQRT(((UT(6*IX-5)-UTM(6*IX-5))/DT)**2.0+&
-          ((UT(6*IX-4)-UTM(6*IX-4))/DT)**2.0+((UT(6*IX-3)-UTM(6*I-3))/DT)**2.0)
-          VDP(IX)=SCL*SCL*DRAG*VELO(IX)
-!          VDP(IX)=SCL*SCL*1.0e+01
-!          ELSE
-!          VDP(IX)=SCL*SCL*1.0e+00
-!          ENDIF
+          IF (Z.LT.WL) THEN
+          VDP(IX)=SCL*SCL*DRAG
+          ELSE
+          VDP(IX)=SCL*SCL*DRAG
+          ENDIF
         ENDIF
 
 
@@ -414,12 +411,10 @@
         NAN(2,I)=N2
 	I1=X1/GRID-INT(X1/GRID)
 	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
-          IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
+          IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
  	  EF(I)=EF0
 	  ELSE
  	  EF(I)=0.1
@@ -454,14 +449,12 @@
 	NRXFR(3,N1)=Z1
 	I1=X1/GRID-INT(X1/GRID)
 	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
           !Setting porosity in domain - pre-existing damage
           !POR - porosity
-	  IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
+	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
  	  EFR(I)=EF0
 	  ELSE
  	  EFR(I)=0.1
@@ -494,12 +487,10 @@
 	NRXFF(3,N1)=Z1
 	I1=X1/GRID-INT(X1/GRID)
 	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
+	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
  	  EFF(I)=EF0
 	  ELSE
  	  EFF(I)=0.1
@@ -532,12 +523,10 @@
 	NRXFFL(3,N1)=Z1
 	I1=X1/GRID-INT(X1/GRID)
 	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
+	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
  	  EFFL(I)=EF0
 	  ELSE
  	  EFFL(I)=0.1
@@ -572,12 +561,10 @@
 	NRXFFR(3,N1)=Z1
 	I1=X1/GRID-INT(X1/GRID)
 	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
         CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
         SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.(ABS(Z1-ZS).LT.SLIN.OR.ABS(Z1-ZB).LT.0.0)) THEN
+	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
  	  EFFR(I)=EF0
 	  ELSE
  	  EFFR(I)=0.1
@@ -771,7 +758,7 @@
 !      write(*,17) RY,myid,FXC,FXL,FXCB,FXCF,FXCFR,FXCFL,FXCBR,FXCBL
 
        !Calculates elastic forces from beams. Stiffness matrix K
-	CALL EFFLOAD1(S,NTOT,NN,T,DT,MN,JS,UT,UTM,R,EN,RY,&
+	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
       	FXF,FXC,VDP,DPE,EF,EFL,EFR,NAN,NRXF,MFIL,CT,NANL,NANR,NTOL,NTOR,&
       	NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
         NTOF,NTOB,NRXFF,NRXFB,UTF,UTB,EFF,EFB,&
@@ -828,19 +815,16 @@
         CALL BIPINT(I1,I2,SUF(INT(X/GRID),INT(Y/GRID)),SUF(INT(X/GRID)+1,INT(Y/GRID)),&
         SUF(INT(X/GRID),INT(Y/GRID)+1),SUF(INT(X/GRID)+1,INT(Y/GRID)+1),ZS)
 
-        IF (ABS(ZB-Z).LT.SCL*1.0) THEN
+        IF (ABS(ZB-Z).LT.SCL*2.0) THEN
         CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)),&
         FBED(INT(X/GRID),INT(Y/GRID)+1),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
 !        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
         ELSE
-!          IF (Z.LT.WL) THEN
-          VELO(I)=SQRT(((UT(6*I-5)-UTM(6*I-5))/DT)**2.0+&
-          ((UT(6*I-4)-UTM(6*I-4))/DT)**2.0+((UT(6*I-3)-UTM(6*I-3))/DT)**2.0)
-          VDP(I)=SCL*SCL*DRAG*VELO(I) !<- calc velo, then proportional drag
-!          VDP(I)=SCL*SCL*1.0e+01
-!          ELSE
-!          VDP(I)=SCL*SCL*1.0e+00
-!          ENDIF
+          IF (Z.LT.WL) THEN
+          VDP(I)=SCL*SCL*DRAG
+          ELSE
+          VDP(I)=SCL*SCL*DRAG
+          ENDIF
         ENDIF
 
         CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
@@ -849,34 +833,31 @@
 !Bed interaction
 
 !Bed Normal
+! FR* - forces on particles
+! DIX - components of bed normal
         IF (Z.LT.ZB+SCL/2.0) THEN
-          IF(BEDZONLY==0) THEN
-             FRX(I)=FRX(I)+DIX*1e+07*(ZB+SCL/2.0-Z) !FR* - forces on particles.
-             FRY(I)=FRY(I)+DIY*1e+07*(ZB+SCL/2.0-Z) !Modifying for bed interaction
-             FRZ(I)=FRZ(I)+DIZ*1e+07*(ZB+SCL/2.0-Z) !DIX - components of bed normal
-           ELSE
-             !Z only
-             FRZ(I)=FRZ(I)+1e+07*(ZB+SCL/2.0-Z)
-           END IF
-             GSUM=GSUM+1.0e+07*(ZB+SCL/2.0-Z)**2
+!  	FRX(I)=FRX(I)+DIX*1e+08*(ZB-Z)
+!      	FRY(I)=FRY(I)+DIY*1e+08*(ZB-Z)
+!      	FRZ(I)=FRZ(I)+DIZ*1e+08*(ZB-Z)
+      	FRZ(I)=FRZ(I)+2e+07*(ZB+SCL/2.0-Z)
+	GSUM=GSUM+1.0e+07*(ZB+SCL/2.0-Z)**2
+!        IF (RY.EQ.1) write(800+myid,18) X,Y,Z,DIX,DIY,DIZ
 	ENDIF
 
-!        IF (RY.EQ.1) write(800+myid,18) X,Y,Z,DIX,DIY,DIZ
-
-!        IF (Y.GT.2.0*SCL.AND.Y.LT.4.0*SCL) THEN
-!      	FRY(I)=FRY(I)+1e+03*(SCL-UT(6*I-4))
+!        IF (Y.GT.1e+04.AND.T.GT.200.0) THEN
+!      	FRY(I)=FRY(I)+5e+03*(Y-1e+04)
 !	ENDIF
 
 
        !Buoyancy calculation
 	IF (Z.LT.WL+Y*SSB) THEN
-	BOYZ(I)=1.29*MFIL(I)*CSB
+	BOYZ(I)=1.06*MFIL(I)*CSB
 	ELSE
 	BOYZ(I)=-9.8*MFIL(I)*CSB
 	ENDIF
 
 	IF (Z.LT.WL+Y*SSB) THEN
-	BOYY(I)=-1.29*MFIL(I)*SSB
+	BOYY(I)=-1.06*MFIL(I)*SSB
 	ELSE
 	BOYY(I)=9.8*MFIL(I)*SSB
 	ENDIF
@@ -893,54 +874,6 @@
         !    ENDIF
         ! ENDIF
 
-
-
- 27	CONTINUE
-
-!calculating the drag for in-contact nodes
-
-	CALL EFFLOAD2(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,D,EN,RY,&
-      	FXF,FXC,VDP,DPE,EF,EFL,EFR,NAN,NRXF,MFIL,CT,NANL,NANR,NTOL,NTOR,&
-      	NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
-        NTOF,NTOB,NRXFF,NRXFB,UTF,UTB,EFF,EFB,&
-        FXCF,FXFF,FXCB,FXFB,NANB,NANF,PNN,YN,&
-      	NANFL,NANFR,NANBL,NANBR,&
-      	NRXFFL,NRXFFR,NRXFBL,NRXFBR,&
-      	UTFL,UTFR,UTBL,UTBR,&
-      	EFFL,EFFR,EFBL,EFBR,&
-        NTOFL,NTOFR,NTOBL,NTOBR,&
-        FXCFL,FXFFL,FXCBL,FXFBL,&
-        FXCFR,FXFFR,FXCBR,FXFBR)
-
-!Prediction of UTP for damping - half step
-	DO 28 I=1,NN
-	UTPP(6*I-5)=(R(6*I-5)-2.0*D(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTPP(6*I-4)=(R(6*I-4)-2.0*D(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTPP(6*I-3)=(R(6*I-3)-2.0*D(6*I-3)+FRZ(I)+BOYZ(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTPP(6*I-2)=(R(6*I-2)-2.0*D(6*I-2))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTPP(6*I-1)=(R(6*I-1)-2.0*D(6*I-1))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTPP(6*I-0)=(R(6*I-0)-2.0*D(6*I-0))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
- 28	CONTINUE
-    
-
-	CALL EFFLOAD3(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UTPP,UT,D,EN,RY,&
-      	FXF,FXC,VDP,DPE,EF,EFL,EFR,NAN,NRXF,MFIL,CT,NANL,NANR,NTOL,NTOR,&
-      	NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
-        NTOF,NTOB,NRXFF,NRXFB,UTF,UTB,EFF,EFB,&
-        FXCF,FXFF,FXCB,FXFB,NANB,NANF,PNN,YN,&
-      	NANFL,NANFR,NANBL,NANBR,&
-      	NRXFFL,NRXFFR,NRXFBL,NRXFBR,&
-      	UTFL,UTFR,UTBL,UTBR,&
-      	EFFL,EFFR,EFBL,EFBR,&
-        NTOFL,NTOFR,NTOBL,NTOBR,&
-        FXCFL,FXFFL,FXCBL,FXFBL,&
-        FXCFR,FXFFR,FXCBR,FXFBR)
-
-	DO 29 I=1,NN
-	X=NRXF(1,I)+UT(6*I-5)
-	Y=NRXF(2,I)+UT(6*I-4)
-	Z=NRXF(3,I)+UT(6*I-3)
-
 !Kinetic energy
 	KIN=KIN+0.5*MN*((UT(6*I-5)-UTM(6*I-5))/DT)**2
 	KIN=KIN+0.5*MN*((UT(6*I-4)-UTM(6*I-4))/DT)**2
@@ -949,82 +882,57 @@
 	KIN2=KIN2+0.5*JS*((UT(6*I-1)-UTM(6*I-1))/DT)**2
 	KIN2=KIN2+0.5*JS*((UT(6*I-0)-UTM(6*I-0))/DT)**2
 
- !Calculate final UTP
-	UTP(6*I-5)=(R(6*I-5)-D(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-4)=(R(6*I-4)-D(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-3)=(R(6*I-3)-D(6*I-3)+FRZ(I)+BOYZ(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-2)=(R(6*I-2)-D(6*I-2))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTP(6*I-1)=(R(6*I-1)-D(6*I-1))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTP(6*I-0)=(R(6*I-0)-D(6*I-0))/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-
-        !Checking predictions - not used
-        ! IF (ABS(UTPP(6*I-5)-UTP(6*I-5)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-5)-UTP(6*I-5))
-        ! IF (ABS(UTPP(6*I-4)-UTP(6*I-4)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-4)-UTP(6*I-4))
-        ! IF (ABS(UTPP(6*I-3)-UTP(6*I-3)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-3)-UTP(6*I-3))
-        ! IF (ABS(UTPP(6*I-2)-UTP(6*I-2)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-2)-UTP(6*I-2))
-        ! IF (ABS(UTPP(6*I-1)-UTP(6*I-1)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-1)-UTP(6*I-1))
-        ! IF (ABS(UTPP(6*I-0)-UTP(6*I-0)).GT.MAXDT) MAXDT=ABS(UTPP(6*I-0)-UTP(6*I-0))
+!Calculate final UTP
+	UTP(6*I-5)=(R(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-4)=(R(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-3)=(R(6*I-3)+BOYZ(I)+FRZ(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-2)=R(6*I-2)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
+	UTP(6*I-1)=R(6*I-1)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
+	UTP(6*I-0)=R(6*I-0)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 
         !Check that particles haven't left the domain
         !and freeze them if they have!
-         XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
-         YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
-         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
-             ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
-             ABS(UTP(6*I-3)) > MAXUT) THEN
-           UTP(6*I-5) = UT(6*I-5)
-           UTP(6*I-4) = UT(6*I-4)
-           UTP(6*I-3) = UT(6*I-3)
-           UTP(6*I-2) = UT(6*I-2)
-           UTP(6*I-1) = UT(6*I-1)
-           UTP(6*I-0) = UT(6*I-0)
-           PRINT *, myid, " Lost a particle : ",I," at time: ",T
-         END IF
+         ! XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
+         ! YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
+         ! IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
+         !     ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
+         !     ABS(UTP(6*I-3)) > MAXUT) THEN
+         !   UTP(6*I-5) = UT(6*I-5)
+         !   UTP(6*I-4) = UT(6*I-4)
+         !   UTP(6*I-3) = UT(6*I-3)
+         !   UTP(6*I-2) = UT(6*I-2)
+         !   UTP(6*I-1) = UT(6*I-1)
+         !   UTP(6*I-0) = UT(6*I-0)
+         !   PRINT *, myid, " Lost a particle : ",I," at time: ",T
+         ! END IF
 
-!        IF (UTP(6*I-5).GE.3e+03) UTP(6*I-5)=3.0e+03
-!        IF (UTP(6*I-4).GE.3e+03) UTP(6*I-4)=3.0e+03
-!        IF (UTP(6*I-3).GE.3e+03) UTP(6*I-3)=3.0e+03
-!        IF (UTP(6*I-2).GE.3e+03) UTP(6*I-2)=3.0e+03
-!        IF (UTP(6*I-1).GE.3e+03) UTP(6*I-1)=3.0e+03
-!        IF (UTP(6*I-0).GE.3e+03) UTP(6*I-0)=3.0e+03
-
-	I1=X/GRID-INT(X/GRID)
-	I2=Y/GRID-INT(Y/GRID)
-
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
-        BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
-
+!	IF (X.LT.4000.0.AND.Y.LT.4000.0) THEN
+!	IF ((ZB.GT.WL-2.0*SCL.OR.Z-ZB.LT.5.0*SCL).AND.ABS(Z-ZB).LT.2.0*SCL) THEN
 !Freeze particles near bed if friction is too high
-       IF (ABS(ZB-Z).LT.SCL*1.0.AND.(VDP(I).GE.1.0e+10*SCL*SCL.OR.T.LT.20.0)) THEN
-       UTP(6*I-5)=UT(6*I-5)
-       UTP(6*I-4)=UT(6*I-4)
-       UTP(6*I-3)=UT(6*I-3)
-       UTP(6*I-2)=UT(6*I-2)
-       UTP(6*I-1)=UT(6*I-1)
-       UTP(6*I-0)=UT(6*I-0)
-       ENDIF
+        IF (ABS(ZB-Z).LT.SCL*2.0.AND.(VDP(I).GE.1.0e+08*SCL*SCL.OR.T.LT.20.0)) THEN
+        UTP(6*I-5)=UT(6*I-5)
+        UTP(6*I-4)=UT(6*I-4)
+        UTP(6*I-3)=UT(6*I-3)
+        UTP(6*I-2)=UT(6*I-2)
+        UTP(6*I-1)=UT(6*I-1)
+        UTP(6*I-0)=UT(6*I-0)
+	ENDIF
 
 !	IF (X.LT.250.0.OR.Y.LT.250.0) THEN
         !Backplane is fixed
-	IF (Y.LT.2.0*SCL) THEN
+	IF (Y.LT.250.0) THEN
         UTP(6*I-5)=UT(6*I-5)
         UTP(6*I-4)=UT(6*I-4)
 	ENDIF
 
- !Old options for setting certain nodes fixed
+        !No XY displacement of some nodes? 
+        IF (MOD(myid+1,ntasks/YN).eq.0) THEN
+        IF (X.GT.MAXX-250.0) THEN
+        UTP(6*I-5)=UT(6*I-5)
+        UTP(6*I-4)=UT(6*I-4)
+	ENDIF
+	ENDIF
 
-        ! IF (MOD(myid+1,ntasks/YN).eq.0) THEN
-        ! IF (X.GT.MAXX-2.0*SCL) THEN
-        ! UTP(6*I-5)=UT(6*I-5)
-	! ENDIF
-	! ENDIF
-
-       ! IF (X.GT.MAXX-250.0) THEN
-       !    IF (X.LT.2.0*SCL) THEN
-       !  UTP(6*I-5)=UT(6*I-5)
-       !    UTP(6*I-4)=UT(6*I-4)
-       ! ENDIF
-       ! ENDIF
 
        !Compute damping
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM(6*I-5))**2/(4*DT)
@@ -1049,7 +957,7 @@
 	MGH=MGH+9.8*MFIL(I)*ABS(Z-WL-Y*SSB)/SQB
 	ENDIF
 
- 29	CONTINUE
+ 27	CONTINUE
 
         IF (RY.EQ.1) THEN
         CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
@@ -1105,15 +1013,43 @@
 	V2=ABS(UT(6*N1-1)-UT(6*N2-1))
 	V3=ABS(UT(6*N1-0)-UT(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
-	LOAD=((DL-L)+0.35*MAXV)
+	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.2.00) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
 	 BCE=BCE+0.5*EF(I)*S**2/LNN*(DL-L)**2
          EF(I)=0.0
 	 BCC=BCC+1
 	 ENDIF
         ENDIF
  	END DO
+
+!        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
+!        DO I=1,NTOL
+!	N1=NANL(1,I)
+!	N2=NANL(2,I)
+!        IF (EFL(I).GT.0.0) THEN
+!	DDX=NRXFL(1,N1)+UTL(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
+!	DDY=NRXFL(2,N1)+UTL(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
+!	DDZ=NRXFL(3,N1)+UTL(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
+!	DX=NRXFL(1,N1)-NRXF(1,N2)
+!	DY=NRXFL(2,N1)-NRXF(2,N2)
+!	DZ=NRXFL(3,N1)-NRXF(3,N2)
+!	L=SQRT(DX**2+DY**2+DZ**2)
+!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
+!	V1=ABS(UTL(6*N1-2)-UT(6*N2-2))
+!	V2=ABS(UTL(6*N1-1)-UT(6*N2-1))
+!	V3=ABS(UTL(6*N1-0)-UT(6*N2-0))
+!	MAXV=MAX(V1,V2,V3)
+!	LOAD=((DL-L)+0.05*MAXV)
+!	IF (LOAD.GT.MML) MML=LOAD
+!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
+!	 BCE=BCE+0.5*EFL(I)*S**2/LNN*(DL-L)**2
+!         EFL(I)=0.0
+!	 BCC=BCC+1
+!	 ENDIF
+!	ENDIF
+! 	END DO
+!	ENDIF
 
         IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
         DO I=1,NTOR
@@ -1132,9 +1068,9 @@
 	V2=ABS(UTR(6*N1-1)-UT(6*N2-1))
 	V3=ABS(UTR(6*N1-0)-UT(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
-	LOAD=((DL-L)+0.35*MAXV)
+	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.2.00) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
 	 BCE=BCE+0.5*EFR(I)*S**2/LNN*(DL-L)**2
          EFR(I)=0.0
 	 BCC=BCC+1
@@ -1171,9 +1107,9 @@
 	V2=ABS(UTF(6*N1-1)-UT(6*N2-1))
 	V3=ABS(UTF(6*N1-0)-UT(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
-	LOAD=((DL-L)+0.35*MAXV)
+	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.2.00) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
 	 BCE=BCE+0.5*EFF(I)*S**2/LNN*(DL-L)**2
          EFF(I)=0.0
 	 BCC=BCC+1
@@ -1209,9 +1145,9 @@
 	V2=ABS(UTFL(6*N1-1)-UT(6*N2-1))
 	V3=ABS(UTFL(6*N1-0)-UT(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
-	LOAD=((DL-L)+0.35*MAXV)
+	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.2.00) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
 	 BCE=BCE+0.5*EFFL(I)*S**2/LNN*(DL-L)**2
          EFFL(I)=0.0
 	 BCC=BCC+1
@@ -1247,9 +1183,9 @@
 	V2=ABS(UTFR(6*N1-1)-UT(6*N2-1))
 	V3=ABS(UTFR(6*N1-0)-UT(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
-	LOAD=((DL-L)+0.35*MAXV)
+	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.2.00) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
 	 BCE=BCE+0.5*EFFR(I)*S**2/LNN*(DL-L)**2
          EFFR(I)=0.0
 	 BCC=BCC+1
@@ -1268,6 +1204,91 @@
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFBL,NTOBL,MPI_DOUBLE_PRECISION,&
         source,tag,MPI_COMM_WORLD,stat,ierr)
+
+!        IF (myid.gt.(ntasks-1)/YN) THEN
+!        DO I=1,NTOB
+!	N1=NANB(1,I)
+!	N2=NANB(2,I)
+!        IF (EFB(I).GT.0.0) THEN
+!	DDX=NRXFB(1,N1)+UTB(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
+!	DDY=NRXFB(2,N1)+UTB(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
+!	DDZ=NRXFB(3,N1)+UTB(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
+!	DX=NRXFB(1,N1)-NRXF(1,N2)
+!	DY=NRXFB(2,N1)-NRXF(2,N2)
+!	DZ=NRXFB(3,N1)-NRXF(3,N2)
+!	L=SQRT(DX**2+DY**2+DZ**2)
+!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
+!	V1=ABS(UTF(6*N1-2)-UT(6*N2-2))
+!	V2=ABS(UTF(6*N1-1)-UT(6*N2-1))
+!	V3=ABS(UTF(6*N1-0)-UT(6*N2-0))
+!	MAXV=MAX(V1,V2,V3)
+!	LOAD=((DL-L)+0.05*MAXV)
+!	IF (LOAD.GT.MML) MML=LOAD
+!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
+!	 BCE=BCE+0.5*EFB(I)*S**2/LNN*(DL-L)**2
+!         EFB(I)=0.0
+!	 BCC=BCC+1
+!	 ENDIF
+!	ENDIF
+! 	END DO
+!	ENDIF
+
+!        IF (myid.gt.(ntasks-1)/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
+!        DO I=1,NTOBL
+!	N1=NANBL(1,I)
+!	N2=NANBL(2,I)
+!        IF (EFBL(I).GT.0.0) THEN
+!	DDX=NRXFBL(1,N1)+UTBL(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
+!	DDY=NRXFBL(2,N1)+UTBL(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
+!	DDZ=NRXFBL(3,N1)+UTBL(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
+!	DX=NRXFBL(1,N1)-NRXF(1,N2)
+!	DY=NRXFBL(2,N1)-NRXF(2,N2)
+!	DZ=NRXFBL(3,N1)-NRXF(3,N2)
+!	L=SQRT(DX**2+DY**2+DZ**2)
+!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
+!	V1=ABS(UTFL(6*N1-2)-UT(6*N2-2))
+!	V2=ABS(UTFL(6*N1-1)-UT(6*N2-1))
+!	V3=ABS(UTFL(6*N1-0)-UT(6*N2-0))
+!	MAXV=MAX(V1,V2,V3)
+!	LOAD=((DL-L)+0.05*MAXV)
+!	IF (LOAD.GT.MML) MML=LOAD
+!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
+!	 BCE=BCE+0.5*EFBL(I)*S**2/LNN*(DL-L)**2
+!         EFBL(I)=0.0
+!	 BCC=BCC+1
+!	 ENDIF
+!	ENDIF
+! 	END DO
+!	ENDIF
+
+!        IF (myid.gt.(ntasks-1)/YN
+!     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
+!        DO I=1,NTOBR
+!	N1=NANBR(1,I)
+!	N2=NANBR(2,I)
+!        IF (EFBR(I).GT.0.0) THEN
+!	DDX=NRXFBR(1,N1)+UTBR(6*N1-5)-NRXF(1,N2)-UT(6*N2-5)
+!	DDY=NRXFBR(2,N1)+UTBR(6*N1-4)-NRXF(2,N2)-UT(6*N2-4)
+!	DDZ=NRXFBR(3,N1)+UTBR(6*N1-3)-NRXF(3,N2)-UT(6*N2-3)
+!	DX=NRXFBR(1,N1)-NRXF(1,N2)
+!	DY=NRXFBR(2,N1)-NRXF(2,N2)
+!	DZ=NRXFBR(3,N1)-NRXF(3,N2)
+!	L=SQRT(DX**2+DY**2+DZ**2)
+!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
+!	V1=ABS(UTFR(6*N1-2)-UT(6*N2-2))
+!	V2=ABS(UTFR(6*N1-1)-UT(6*N2-1))
+!	V3=ABS(UTFR(6*N1-0)-UT(6*N2-0))
+!	MAXV=MAX(V1,V2,V3)
+!	LOAD=((DL-L)+0.05*MAXV)
+!	IF (LOAD.GT.MML) MML=LOAD
+!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
+!	 BCE=BCE+0.5*EFBR(I)*S**2/LNN*(DL-L)**2
+!         EFBR(I)=0.0
+!	 BCC=BCC+1
+!	 ENDIF
+!	ENDIF
+! 	END DO
+!	ENDIF
 
 	DO I=1,6*NN
 	UTM(I)=UT(I)
@@ -1380,7 +1401,6 @@
 !          CALL PSNET(NTOT,NN,myid,GL,WL,SUB,ntasks)
 	  CLOSE(910)
 	  CLOSE(920)
-
 	ENDIF
 
 	IF (MOD(RY,RESOUTINT).EQ.1) THEN
@@ -1414,11 +1434,8 @@
 !	ENDIF
 !	ENDIF
 
-        IF (MOD(RY,10000).EQ.0) THEN
-	IF (myid.EQ.0) THEN
-        WRITE(*,*) RY,MML/MLOAD,BCC
-        WRITE(616,*) RY,MAXDT
-	ENDIF
+        IF (MOD(RY,1000).EQ.0) THEN
+	IF (myid.EQ.0) WRITE(*,*) RY,MML/MLOAD,BCC
 !	IF (BCC.NE.0) WRITE(700+myid,16) T, BCC
 	BCC=0
 	ENDIF
