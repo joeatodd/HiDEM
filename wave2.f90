@@ -1316,7 +1316,7 @@
           dest,tag,MPI_COMM_WORLD,ierr)
 
           IF (myid.EQ.0) THEN
-  	  NRY=INT(RY/2e+04)
+  	  NRY=INT(RY/OUTINT)
           OPEN(UNIT=910,FILE='JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
           OPEN(UNIT=920,FILE='STR'//na(NRY)//'.csv',STATUS='UNKNOWN')
 
