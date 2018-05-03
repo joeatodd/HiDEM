@@ -62,11 +62,14 @@ comp.txt - the compilation command
 
 rc2.f90, rc3.f90 - compute the calved size distrib
 
-glas.f90 - computing the FCC lattice, dense packing
+wave2.f90 - the main program
 dist.f - efficiently finding neighbouring particles which may interact
+circ.f - confirms which particles are in contact and computes forces
+effload.f - computes elastic forces in particle beams
+amat.f - called by effload, does integration
 tmat.f, ttmat.f - rotation matrices
 kmat.f - stiffness matrix computation
-amat.f - called by effload, does integration
+glas.f90 - computing the FCC lattice, dense packing
 ranmar.f - random number generator
 dt.f90 - called by glas.f90, finds and write connections to FSfiles
 
@@ -75,6 +78,36 @@ dt.f90 - called by glas.f90, finds and write connections to FSfiles
 inp.dat
 mass3.dat
 param.dat - don't worry - something about opening files
+
+### inp.dat parameters ####
+
+PRESSURE    - PRESS - optional backwall pressure 
+MELT        - MELT  - optional basal melt rate passed to fibg3 for altering domain shape
+UNDER-CUT   - UC    - optional frontal melt rate " " "
+TIME-STEP   - DT    - timestep size
+WIDTH       - S     - beam width (relative to unit particle)
+YOUNGS MOD. - EF0   - particle bond young's mod, describes interaction between butting particles (or bonded particles?)
+SIZE        - LS    - Something to do with the fcc lattice 'box size'
+INCLI       - SUB   - Angle of the domain vs gravity vector, not used 
+WATERLINE   - WL    - Sea level for buoyancy calc
+GROUNDLINE  - GL    - 'grounding line' - not used
+SHEARLINE   - SLIN  - A distance below the surface where all bonds are broken?
+TIMESTEPS   - STEPS0- The number of steps
+MAXLOAD     - MLOAD - Maximum load on bond - bonds break beyond this
+FRIC        - FRIC  - Scale factor for friction input
+RESTART     - REST  - 1 = restart from prev, 0 = new run
+SCL         - SCL   - Scale factor for particle and beam size
+YN          - YN    - How many divisions of domain in y-direction for MPI
+GRID        - GRID  - Resolution of mass3.dat input grid
+POR         - POR   - The proportion of initially broken bonds
+ISEED       - SEEDI - Seed for random number generator
+DAMP1       - DAMP1 - The damping coefficient for translation
+DAMP2       - DAMP2 - The damping coefficient for rotation
+DRAG        - DRAG  - The drag coefficient
+OUTINT      - OUTINT- The output interval (every OUTINT steps, write out CSV)
+RESOUTINT   -RESOUTINT- The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition
+MAXUT       - MAXUT - The maximum velocity of particles (particles faster than this may be frozen if this is turned on)
+
 
 ### mass3.dat ####
 
@@ -89,12 +122,25 @@ output transformation matrix which takes from Elmer domain to HiDEM domain.
 make sure the bed is buffered beyond the edge of the ice, and define these regions by setting surf and base equal to bed.
 
 
+### Internal variables ###
+
 "YN" is the number of partitions in the Y direction.
 "NTOT" is the total number of partitions in the model
 GRID - The grid size of the mass3.dat data, make sure it matches
 SCL - diameter of each particle
 RESTART - 1 = true
 
+VDP - drag coeff
+UT  - current displacement
+UTM - previous displacement
+UTP - next displacement
+FRZ (FRY,FRX) - contact forces (particle-particle, particle-bed)
+BOYZ, BOYY - buoyant forces
+R - elastic forces
+WSX,WSY - wall contact forces?
+MN - mass of particles
+MFIL - mass of particles - per particle
+JS - moment of rotational inertia
 
 
 #### OUTPUT - jyr files and STR files ####
