@@ -1,0 +1,9 @@
+Density = 930.0
+Water Density = 1030.0
+Gravity = 9.81
+Water Line = 690.41
+Grid = 50.0
+YN = 7
+NBoxes = 10
+Scale = 60.0
+No Timesteps = 2000000
