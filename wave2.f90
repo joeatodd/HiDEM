@@ -45,6 +45,7 @@
         REAL*8 L,ALF,MLOAD,DMP,VEL,G,S1,S2,M1,B1,B2
 	REAL*8 S,LOAD,DMP2,BCE,STR,I1,I2,ZB,ZS
 	REAL*8 T2,T1,TS1,TT1,TT2,ENM,WEN,ERSUM
+	REAL*8 TT(11),TTCUM(11)
 	INTEGER NNO,NS,SI,NNT,BCCS
 	INTEGER YNOD,LS,KK,STEPS0,YN,NB
         INTEGER DST,ZNOD,J,XY,ND,O
@@ -612,10 +613,15 @@
         CALL CPU_TIME(T1)
 	TS1=0.0
 
-
+        TTCUM=0.0
+        TT=0.0
 	DO 100 RY=RY0,RY0+STEPS0 !START THE TIME LOOP
 
         CALL CPU_TIME(TT1)
+        TT(1) = TT1
+        TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
+
+        !TODO  TIME 1
 
       dest=myid+1
       source=myid-1
@@ -709,6 +715,9 @@
       CALL MPI_Recv(UTBL,6*PNN(source),MPI_DOUBLE_PRECISION,&
       source,tag,MPI_COMM_WORLD,stat,ierr)
 
+      !TODO  TIME 2
+      CALL CPU_TIME(TT(2))
+      TTCUM(2) = TTCUM(2) + (TT(2) - TT(1))
 
       !Every 250 steps, reconstruct neighbourhood list
 	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
@@ -720,6 +729,10 @@
 	END IF
 
 !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
+
+       !TODO  TIME 3
+       CALL CPU_TIME(TT(3))
+       TTCUM(3) = TTCUM(3) + (TT(3) - TT(2))
 
        !circ checks which particles are really in contact and computes the forces
 	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
@@ -735,6 +748,10 @@
         FXFFR,FXFFL,FXFBR,FXFBL,SCL)
 
 !      write(*,17) RY,myid,FXC,FXL,FXCB,FXCF,FXCFR,FXCFL,FXCBR,FXCBL
+
+       !TODO  TIME 4
+       CALL CPU_TIME(TT(4))
+       TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
 
        !Calculates elastic forces from beams. Stiffness matrix K
 	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
@@ -756,6 +773,10 @@
         CALL CPU_TIME(TT2)
 	TS1=TS1+(TT2-TT1)
 
+        !TODO  TIME 5
+       CALL CPU_TIME(TT(5))
+       TTCUM(5) = TTCUM(5) + (TT(5) - TT(4))
+
 	WEN=0.0
 	KIN=0.0
 	KIN2=0.0
@@ -764,6 +785,12 @@
 	ENM=0.0
 
 	DO 27 I=1,NN
+        !TODO  TIME 6
+        CALL CPU_TIME(TT(6))
+        IF(I>1) THEN
+          TTCUM(6) = TTCUM(6) + (TT(6) - TT(9))
+        END IF
+
 	X=NRXF(1,I)+UT(6*I-5)  !<- x,y,z actual positions, NRXF = original, UT = displacement
 	Y=NRXF(2,I)+UT(6*I-4)
 	Z=NRXF(3,I)+UT(6*I-3)
@@ -806,11 +833,14 @@
           ENDIF
         ENDIF
 
+        !TODO  TIME 7
+       CALL CPU_TIME(TT(7))
+       TTCUM(7) = TTCUM(7) + (TT(7) - TT(6))
+
         CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),DIX,DIY,DIZ,GRID)
 
 !Bed interaction
-
 !Bed Normal
 ! FR* - forces on particles
 ! DIX - components of bed normal
@@ -840,6 +870,10 @@
 	ELSE
 	BOYY(I)=9.8*MFIL(I)*SSB
 	ENDIF
+
+        !TODO  TIME 8
+       CALL CPU_TIME(TT(8))
+       TTCUM(8) = TTCUM(8) + (TT(8) - TT(7))
 
  !Jan's code for smoothing the buoyant forces across the waterline
         ! IF (Z.LT.WL-0.4*SCL) THEN
@@ -936,6 +970,10 @@
 	MGH=MGH+9.8*MFIL(I)*ABS(Z-WL-Y*SSB)/SQB
 	ENDIF
 
+        !TODO  TIME 9
+       CALL CPU_TIME(TT(9))
+       TTCUM(9) = TTCUM(9) + (TT(9) - TT(8))
+
  27	CONTINUE
 
         IF (RY.EQ.1) THEN
@@ -972,6 +1010,10 @@
 	T=T+DT
 	
 	MML=0.0
+
+        !TODO  TIME 10
+       CALL CPU_TIME(TT(10))
+       TTCUM(10) = TTCUM(10) + (TT(10) - TT(9))
 
 !Check for fracture!
 
@@ -1277,6 +1319,8 @@
  !output
 	IF (MOD(RY,OUTINT).EQ.1) THEN
 
+          PRINT *,'Times:',TTCUM
+
           dest=0
 
           tag=151
@@ -1418,6 +1462,10 @@
 !	IF (BCC.NE.0) WRITE(700+myid,16) T, BCC
 	BCC=0
 	ENDIF
+
+        !TODO  TIME 11
+       CALL CPU_TIME(TT(11))
+       TTCUM(11) = TTCUM(11) + (TT(11) - TT(10))
 
  100	CONTINUE !end of time loop
 
