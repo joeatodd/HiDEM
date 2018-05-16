@@ -121,6 +121,10 @@
 !LNN - distance (scaled) between particles
 !MLOAD - maximum load - bonds break when this is exceeded - tension and bending
 
+        PRINT *, RHO
+        PRINT *, RHOW
+        PRINT *, RESOUTINT
+
 	S=S*SCL
 	MN=SCL**3.0*RHO
 	JS=SCL**2.0*MN/6.0
@@ -859,16 +863,17 @@
 
 
        !Buoyancy calculation
+        !Note, this is gravity, not just buoyancy!
 	IF (Z.LT.WL+Y*SSB) THEN
-	BOYZ(I)=1.06*MFIL(I)*CSB
+        BOYZ(I)=GRAV*(-1.0 + (RHOW/RHO))*MFIL(I)*CSB
 	ELSE
-	BOYZ(I)=-9.8*MFIL(I)*CSB
+	BOYZ(I)=-GRAV*MFIL(I)*CSB
 	ENDIF
 
 	IF (Z.LT.WL+Y*SSB) THEN
-	BOYY(I)=-1.06*MFIL(I)*SSB
+        BOYY(I)=-GRAV*(-1.0 + (RHOW/RHO))*MFIL(I)*SSB
 	ELSE
-	BOYY(I)=9.8*MFIL(I)*SSB
+	BOYY(I)=GRAV*MFIL(I)*SSB
 	ENDIF
 
         !TODO  TIME 8
