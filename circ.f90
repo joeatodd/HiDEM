@@ -1,14 +1,14 @@
-	SUBROUTINE CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
-      T,IS,DT,WE,EFC,FXF,FXC,NDR,NCL,NDL, &
-      NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXFL,FXFR,FXL,FXR, &
-      FXCF,FXFF,UTF,NRXFF,NDLF,NDF, &
-      FXCB,FXFB,UTB,NRXFB,NDLB,NDB,LNN,YN, &
-      NDFL,NDFR,NDBL,NDBR, &
-      FXCFR,FXCFL,FXCBR,FXCBL, &
-      NDLFL,NDLFR,NDLBL,NDLBR, &
-      UTFL,UTFR,UTBL,UTBR, &
-      NRXFBL,NRXFBR,NRXFFL,NRXFFR, &
-      FXFFR,FXFFL,FXFBR,FXFBL,SCL)
+SUBROUTINE CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
+     T,IS,DT,WE,EFC,FXF,FXC,NDR,NCL,NDL, &
+     NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,myid,ntasks,FXFL,FXFR,FXL,FXR, &
+     FXCF,FXFF,UTF,NRXFF,NDLF,NDF, &
+     FXCB,FXFB,UTB,NRXFB,NDLB,NDB,LNN,YN, &
+     NDFL,NDFR,NDBL,NDBR, &
+     FXCFR,FXCFL,FXCBR,FXCBL, &
+     NDLFL,NDLFR,NDLBL,NDLBR, &
+     UTFL,UTFR,UTBL,UTBR, &
+     NRXFBL,NRXFBR,NRXFFL,NRXFFR, &
+     FXFFR,FXFFL,FXFBR,FXFBL,SCL)
 
 	IMPLICIT NONE
         include 'mpif.h'
@@ -75,20 +75,20 @@
 	 FXF(2,FXC)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N1)=FRX(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N1)=FRY(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
- 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N1)=FRX(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N1)=FRY(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
 	ENDDO
 
-c        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
+!        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
         IF (MOD(myid,ntasks/YN).ne.0) THEN
 	FXL=0
 	DO I=1,NCL
@@ -116,18 +116,18 @@ c        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
 	 FXFL(2,FXL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
 	ENDDO
         ENDIF
 
-c        IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
+!        IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
 	FXR=0
 	DO I=1,NDR
@@ -156,18 +156,18 @@ c        IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
 	 FXFR(2,FXR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
 	ENDDO
         ENDIF
 
-c------------------------------------------------
+!------------------------------------------------
 
         IF (myid.lt.(YN-1)*ntasks/YN) THEN
 	FXCF=0
@@ -196,11 +196,11 @@ c------------------------------------------------
 	 FXFF(2,FXCF)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
- 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+ 	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -234,19 +234,19 @@ c------------------------------------------------
 	 FXFFL(2,FXCFL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
 	ENDDO
         ENDIF
 
-        IF (myid.lt.(YN-1)*ntasks/YN
-     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
+        IF (myid.lt.(YN-1)*ntasks/YN &
+             .AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) THEN
 	FXCFR=0
 	DO I=1,NDFR
 	N1=NDLFR(1,I)
@@ -273,11 +273,11 @@ c------------------------------------------------
 	 FXFFR(2,FXCFR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -311,11 +311,11 @@ c------------------------------------------------
 	 FXFB(2,FXCB)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -349,19 +349,19 @@ c------------------------------------------------
 	 FXFBL(2,FXCBL)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
 	ENDDO
         ENDIF
 
-        IF (myid.ge.ntasks/YN
-     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
+        IF (myid.ge.ntasks/YN &
+             .AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) THEN
 	FXCBR=0
 	DO I=1,NDBR
 	N1=NDLBR(1,I)
@@ -388,11 +388,11 @@ c------------------------------------------------
 	 FXFBR(2,FXCBR)=N2 
 	 ENDIF
 
-         IF (RC.GT.LNN.AND.RC.LT.LNN+0.000*SCL) THEN
-         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCX
-         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCY
-         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+06*(LNN-RC)*RCZ
-	 WE(N2)=WE(N2)+SCL**2.0*0.5e+06*(LNN-RC)**2.0
+         IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+         FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+         FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+         FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+	 WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
          ENDIF
 
 	ENDIF
@@ -401,7 +401,8 @@ c------------------------------------------------
 
 
 	RETURN
-	END
+
+END SUBROUTINE CIRC
 
 
 
