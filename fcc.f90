@@ -1,3 +1,5 @@
+!Not used
+
 Subroutine FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN)
 
 Implicit none
