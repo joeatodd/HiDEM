@@ -4,7 +4,7 @@
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,&
-     maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,grid,melta,wl,UC)
+     maxy,maxz,minx,miny,minz,ntasks,wrkdir,SCL,YN,XN,grid,melta,wl,UC)
 
 Implicit none
 INCLUDE 'na90.dat'
@@ -14,9 +14,9 @@ Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
 Real*8 :: box,xo(3,1000000),b,maxx,maxy,maxz,minx,miny,minz,SCL
 INTEGER :: l,ND,ip,i,j,NDLC,NDRC,NDFC,NDBC,YN,XN,NDFRC,NDBRC,NDFLC,NDBLC
 INTEGER :: myid,ntasks,N1,N2,xk,yk
-
+CHARACTER(LEN=256) :: wrkdir
 !Open(300,file='mass.dat',STATUS='OLD')
-Open(510+myid,file='NODFIL2'//na(myid))
+OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
 
  12    FORMAT(2I8,' ',2F14.7)
  13    FORMAT(4F14.7)
@@ -78,7 +78,7 @@ box=2.0d0**(2.0d0/3.0d0)*Dfloat(l) ! box size equal to fcc ground state
 
 CALL Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC)
 
-Call DT(ip,xo,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,SCL,YN)
+CALL DT(ip,xo,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,wrkdir,SCL,YN)
 
 !DEALLOCATE (surf)
 !DEALLOCATE (bed)
@@ -97,13 +97,15 @@ SUBROUTINE Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,S
 
 Implicit None
 INCLUDE 'na90.dat'
+INCLUDE 'mpif.h'
+
 !Real*8,ALLOCATABLE :: surf(:,:),bed(:,:)
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real*8 xo(3,1000000),b,x0(3,4),box,maxx,maxy,maxz,minx,miny,minz,SCL
 REAL*8 gridminx, gridmaxx, gridminy, gridmaxy
 !Real*8 z,surf(-100:3000,-100:3000),bed(-100:3000,-100:3000)
 REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV,nxny,YN_estimate, XN_estimate, efficiency
-INTEGER i,j,k,k1,k2,l,ip,myid,ntasks,m,nb,YN,XN,xk,yk,nx,ny
+INTEGER i,j,k,k1,k2,l,ip,myid,ntasks,m,nb,YN,XN,xk,yk,nx,ny,ierr
 
 !Open(1510+myid,file='tt'//na(myid))
 11    FORMAT(2I8,' ',2F14.7)
@@ -169,8 +171,11 @@ IF(myid==0) THEN
   WRITE(*,7) (100.0 * efficiency)
 8 FORMAT('Step up: Boxes per core: ',I3,' Required cores: ',I3)
   WRITE(*,8) nb-1, INT(CEILING(1.0*nx/(nb-1))*CEILING(1.0*ny/(nb-1)))
+  PRINT *, '----------------------------------------------------'
+  PRINT *,''
 END IF
 
+CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
 IF(efficiency < 0.8) CALL FatalError("Too inefficient. Run with the right number of cores!")
 IF(xn*yn > ntasks) CALL FatalError("Programming Error: Not enough cores!")
 

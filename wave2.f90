@@ -24,7 +24,7 @@
 	REAL*8 UTM(NODM),UT(NODM),UTP(NODM),R(NODM)
 	REAL*8 UTR(NODM),UTL(NODM),UTW(NODM),NRXFW(3,NOMA)
 	REAL*8 UTB(NODM),UTF(NODM),ENM0,ENMS0,POR,GRID
-        REAL*8 RHO,RHOW,GRAV
+        REAL*8 RHO,RHOW,GRAV, BedIntConst
         REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
 	INTEGER NAN(3,NOCON),NDL(2,NODC),NDLL(2,NODC),NDLR(2,NODC)
@@ -67,7 +67,8 @@
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
         INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, DIMENSION(8) :: datetime
-        CHARACTER(LEN=256) INFILE
+        LOGICAL :: BedZOnly
+        CHARACTER(LEN=256) INFILE, runname, wrkdir, resdir
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -80,6 +81,7 @@
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
 5 FORMAT("HiDEM run starting at: ",i2.2,"/",i2.2,"/",i4.4,' ',i2.2,':',i2.2,':',i2.2)
+  PRINT *, '----------------------------------------------------'
   WRITE(*,5) datetime(3),datetime(2),datetime(1),datetime(5),datetime(6),datetime(7)
 END IF
 
@@ -100,24 +102,32 @@ END IF
  19	FORMAT(3F24.4,' ',I8)
 
 !writing out energy output
+        OPEN(UNIT=609, FILE='HIDEM_STARTINFO',STATUS='OLD')
+        READ(609,*) INFILE
+        CLOSE(609)
+        !INFILE = 'testinp.dat'
 
-	OPEN(UNIT=610,FILE='dtop00',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=611,FILE='dtop01',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=612,FILE='dtopr',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=613,FILE='kins2',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=614,FILE='lbound',STATUS='UNKNOWN')
-	OPEN(UNIT=615,FILE='rbound',STATUS='UNKNOWN')
-        OPEN(UNIT=110,FILE='fib00',STATUS='UNKNOWN')
+        CALL ReadInput(INFILE, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+             RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, DAMP2, &
+             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID)
+
+	OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
+	OPEN(UNIT=611,FILE=TRIM(wrkdir)//'/dtop01',STATUS='UNKNOWN',POSITION='APPEND')
+	OPEN(UNIT=612,FILE=TRIM(wrkdir)//'/dtopr',STATUS='UNKNOWN',POSITION='APPEND')
+	OPEN(UNIT=613,FILE=TRIM(wrkdir)//'/kins2',STATUS='UNKNOWN',POSITION='APPEND')
+	OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
+	OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
+        OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
         OPEN(UNIT=111,FILE='inp.dat',STATUS='OLD')
-	OPEN(UNIT=800+myid,FILE='tbed'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
 !	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
 
-!reading the inputs - horribly
-        INFILE = 'testinp.dat'
-
-        CALL ReadInput(INFILE, PRESS, MELT, UC, DT, S, GRAV, RHO, RHOW, EF0, LS, &
-             SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, DAMP2, &
-             DRAG, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID)
+        IF(myid==0) THEN
+          PRINT *,'Run Name: ',TRIM(runname)
+          PRINT *,'Working Directory: ',TRIM(wrkdir)
+          PRINT *,'Results Directory: ',TRIM(resdir)
+          PRINT *, '----------------------------------------------------'
+        END IF
 
 ! S = width/thickness of the beams, scaled by SCL
 ! S * SCL, scales the whole system up, so beam width * 60, particle size * 60
@@ -214,7 +224,7 @@ END IF
 
         !Go to glas.f90 to make the grid
 	CALL FIBG3(LS,NN,NTOT,NTOL,NTOR,NTOF,NTOB,NTOFR,NTOBR,NTOFL,NTOBL,&
-        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,SCL,YN,XN,GRID,MELT,WL,UC)
+        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,SCL,YN,XN,GRID,MELT,WL,UC)
 
 	write(*,17) myid,NTOL,NTOT,NTOR,NTOF,NTOB,NTOFL,NTOFR,NTOBL,NTOBR
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -275,7 +285,7 @@ END IF
 	ELSE
 
         !If restarting, read from restart file instead
-	OPEN(UNIT=117+myid,FILE='REST0'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST0'//na(myid),STATUS='OLD')
 	READ(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	READ(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
 	READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
@@ -294,7 +304,7 @@ END IF
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
-	OPEN(UNIT=117+myid,FILE='REST1'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST1'//na(myid),STATUS='OLD')
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
       	CT(12*I-8),CT(12*I-7),CT(12*I-6)
@@ -303,7 +313,7 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='REST2'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST2'//na(myid),STATUS='OLD')
 	DO I=1,NN
 	READ(117+myid,*) UT(6*I-5),UT(6*I-4),UT(6*I-3),&
       	UT(6*I-2),UT(6*I-1),UT(6*I-0)
@@ -360,7 +370,7 @@ END IF
 
  !Interpolation functions to smooth input data for particles
 
-	OPEN(UNIT=117+myid,FILE='NODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
 	READ(117+myid,*) IX,X,Y,Z,M
 	NRXF(1,IX)=X
@@ -391,9 +401,9 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
- 	OPEN(UNIT=117+myid,FILE='FS'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOT
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
+          READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NAN(1,I)=N1
         NAN(2,I)=N2
 	I1=X1/GRID-INT(X1/GRID)
@@ -413,7 +423,7 @@ END IF
         CLOSE (117+myid)
 
         IF (MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE='FSL'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOL
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANL(1,I)=N1
@@ -426,7 +436,7 @@ END IF
 	ENDIF
 
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE='FSR'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOR
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANR(1,I)=N1
@@ -464,7 +474,7 @@ END IF
         source,tag,MPI_COMM_WORLD,stat,ierr)
 
         IF (myid.lt.(YN-1)*ntasks/YN) THEN
- 	OPEN(UNIT=117+myid,FILE='FSF'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOF
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANF(1,I)=N1
@@ -500,7 +510,7 @@ END IF
         source,tag,MPI_COMM_WORLD,stat,ierr)
 
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE='FSFL'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOFL
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANFL(1,I)=N1
@@ -538,7 +548,7 @@ END IF
 
         IF (myid.lt.(YN-1)*ntasks/YN&
       	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE='FSFR'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFR'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOFR
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANFR(1,I)=N1
@@ -578,7 +588,7 @@ END IF
         source,tag,MPI_COMM_WORLD,stat,ierr)
 
         IF (myid.ge.ntasks/YN) THEN
- 	OPEN(UNIT=117+myid,FILE='FSB'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOB
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANB(1,I)=N1
@@ -591,7 +601,7 @@ END IF
 	ENDIF
 
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE='FSBL'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBL'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOBL
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANBL(1,I)=N1
@@ -605,7 +615,7 @@ END IF
 
         IF (myid.ge.ntasks/YN&
       	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE='FSBR'//na(myid),STATUS='UNKNOWN')
+ 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBR'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOBR
         READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
         NANBR(1,I)=N1
@@ -852,12 +862,15 @@ END IF
 ! FR* - forces on particles
 ! DIX - components of bed normal
         IF (Z.LT.ZB+SCL/2.0) THEN
-!  	FRX(I)=FRX(I)+DIX*1e+08*(ZB-Z)
-!      	FRY(I)=FRY(I)+DIY*1e+08*(ZB-Z)
-!      	FRZ(I)=FRZ(I)+DIZ*1e+08*(ZB-Z)
-      	FRZ(I)=FRZ(I)+2e+07*(ZB+SCL/2.0-Z)
-	GSUM=GSUM+2.0e+07*(ZB+SCL/2.0-Z)**2
-!        IF (RY.EQ.1) write(800+myid,18) X,Y,Z,DIX,DIY,DIZ
+          IF(BedZOnly) THEN
+            FRZ(I)=FRZ(I)+BedIntConst*(ZB+SCL/2.0-Z)
+            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+          ELSE
+            FRX(I)=FRX(I)+DIX*BedIntConst*(ZB+SCL/2.0-Z)
+            FRY(I)=FRY(I)+DIY*BedIntConst*(ZB+SCL/2.0-Z)
+            FRZ(I)=FRZ(I)+DIZ*BedIntConst*(ZB+SCL/2.0-Z)
+            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+          END IF
 	ENDIF
 
 !        IF (Y.GT.1e+04.AND.T.GT.200.0) THEN
@@ -1327,7 +1340,8 @@ END IF
  !output
 	IF (MOD(RY,OUTINT).EQ.1) THEN
 
-          PRINT *,'Times:',TTCUM
+20 FORMAT(" Times: ",11F4.1)
+          WRITE(*,20) TTCUM
 
           dest=0
 
@@ -1348,8 +1362,8 @@ END IF
 
           IF (myid.EQ.0) THEN
   	  NRY=INT(RY/OUTINT)
-          OPEN(UNIT=910,FILE='JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
-          OPEN(UNIT=920,FILE='STR'//na(NRY)//'.csv',STATUS='UNKNOWN')
+          OPEN(UNIT=910,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
+          OPEN(UNIT=920,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.csv',STATUS='UNKNOWN')
 
           DO KK=1,ntasks-1
 
@@ -1477,7 +1491,7 @@ END IF
 
  100	CONTINUE !end of time loop
 
-        OPEN(UNIT=930,FILE='RCK',STATUS='UNKNOWN')
+        OPEN(UNIT=930,FILE=TRIM(resdir)//'/RCK',STATUS='UNKNOWN')
         DO KK=0,ntasks-1
         WRITE(930,*) KK, NTOTW(KK),PNN(KK),PTR(KK),PTB(KK)
         END DO
@@ -1498,21 +1512,21 @@ CONTAINS
 
  SUBROUTINE WriteRestart()
    ! Write out the restart files
-	OPEN(UNIT=117+myid,FILE='REST0'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST0'//na(myid),STATUS='UNKNOWN')
 	WRITE(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	write(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
 	WRITE(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
 	WRITE(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='REST1'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST1'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
 	WRITE(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),CT(12*I-8),CT(12*I-7),CT(12*I-6)
 	WRITE(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),CT(12*I-2),CT(12*I-1),CT(12*I-0)
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='REST2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
 	WRITE(117+myid,*) UT(6*I-5),UT(6*I-4),UT(6*I-3),UT(6*I-2),UT(6*I-1),UT(6*I-0)
 	WRITE(117+myid,*) UTM(6*I-5),UTM(6*I-4),UTM(6*I-3),UTM(6*I-2),UTM(6*I-1),UTM(6*I-0)
@@ -1523,7 +1537,7 @@ CONTAINS
  !NAN - the particle numbers (1 and 2), 2*ntot array
  !NRXF - the original locations of all the particles
  !EF - Youngs modulus
-	OPEN(UNIT=117+myid,FILE='FS'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOT
 	WRITE(117+myid,*) NAN(1,SI),NAN(2,SI),NRXF(1,NAN(1,SI)),&
       	   NRXF(2,NAN(1,SI)),NRXF(3,NAN(1,SI)),NRXF(1,NAN(2,SI)),&
@@ -1531,7 +1545,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSL'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOL
 	WRITE(117+myid,*) NANL(1,SI),NANL(2,SI),NRXFL(1,NANL(1,SI)),&
       	   NRXFL(2,NANL(1,SI)),NRXFL(3,NANL(1,SI)),NRXF(1,NANL(2,SI)),&
@@ -1539,7 +1553,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSR'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOR
 	WRITE(117+myid,*) NANR(1,SI),NANR(2,SI),NRXFR(1,NANR(1,SI)),&
       	   NRXFR(2,NANR(1,SI)),NRXFR(3,NANR(1,SI)),NRXF(1,NANR(2,SI)),&
@@ -1547,7 +1561,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSF'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOF
 	WRITE(117+myid,*) NANF(1,SI),NANF(2,SI),NRXFF(1,NANF(1,SI)),&
       	   NRXFF(2,NANF(1,SI)),NRXFF(3,NANF(1,SI)),NRXF(1,NANF(2,SI)),&
@@ -1555,7 +1569,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSFL'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOFL
 	WRITE(117+myid,*) NANFL(1,SI),NANFL(2,SI),NRXFFL(1,NANFL(1,SI)),&
       	 NRXFFL(2,NANFL(1,SI)),NRXFFL(3,NANFL(1,SI)),NRXF(1,NANFL(2,SI)),&
@@ -1563,7 +1577,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSFR'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFR'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOFR
 	WRITE(117+myid,*) NANFR(1,SI),NANFR(2,SI),NRXFFR(1,NANFR(1,SI)),&
       	 NRXFFR(2,NANFR(1,SI)),NRXFFR(3,NANFR(1,SI)),NRXF(1,NANFR(2,SI)),&
@@ -1571,7 +1585,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSB'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOB
 	WRITE(117+myid,*) NANB(1,SI),NANB(2,SI),NRXFB(1,NANB(1,SI)),&
       	   NRXFB(2,NANB(1,SI)),NRXFB(3,NANB(1,SI)),NRXF(1,NANB(2,SI)),&
@@ -1579,7 +1593,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSBL'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBL'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOBL
 	WRITE(117+myid,*) NANBL(1,SI),NANBL(2,SI),NRXFBL(1,NANBL(1,SI)),&
       	 NRXFBL(2,NANBL(1,SI)),NRXFBL(3,NANBL(1,SI)),NRXF(1,NANBL(2,SI)),&
@@ -1587,7 +1601,7 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE='FSBR'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBR'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOBR
 	WRITE(117+myid,*) NANBR(1,SI),NANBR(2,SI),NRXFBR(1,NANBR(1,SI)),&
       	 NRXFBR(2,NANBR(1,SI)),NRXFBR(3,NANBR(1,SI)),NRXF(1,NANBR(2,SI)),&
@@ -1596,7 +1610,7 @@ CONTAINS
 	CLOSE (117+myid)
 
 	IF (myid.EQ.0) THEN
-	OPEN(UNIT=117,FILE='crkd',STATUS='UNKNOWN')
+	OPEN(UNIT=117,FILE=TRIM(resdir)//'/crkd',STATUS='UNKNOWN')
 	DO SI=1,ntasks
 	WRITE(117,*) NTOTW(SI-1),PNN(SI-1),PTR(SI-1),PTB(SI-1)
 	END DO

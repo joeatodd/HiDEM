@@ -1,4 +1,4 @@
-	SUBROUTINE DT(NNA,NRXF,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,SCL,YN)
+	SUBROUTINE DT(NNA,NRXF,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,wrkdir,SCL,YN)
 
 	IMPLICIT NONE
         include 'mpif.h'
@@ -14,14 +14,14 @@
 	INTEGER NDFRC,NDBRC,NDFLC,NDBLC
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
         INTEGER myid,ntasks,ierr
-
+        CHARACTER(LEN=256) :: wrkdir
 
  11     FORMAT(2I8,' ',7F18.8)
  12     FORMAT(6F18.8)
 
-        OPEN(UNIT=210+myid,FILE='FS'//na(myid),STATUS='UNKNOWN')
-        OPEN(UNIT=310+myid,FILE='FSL'//na(myid),STATUS='UNKNOWN')
-        OPEN(UNIT=410+myid,FILE='FSR'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=210+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=310+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
 
         CALL MPI_ALLGATHER(NNA,1,MPI_INTEGER,PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
@@ -129,8 +129,8 @@
         CLOSE (410+myid)
 
 
-        OPEN(UNIT=310+myid,FILE='FSB'//na(myid),STATUS='UNKNOWN')
-        OPEN(UNIT=410+myid,FILE='FSF'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=310+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
 
 
 	NDFC=0
@@ -211,8 +211,8 @@
         CLOSE (410+myid)
 
 
-        OPEN(UNIT=310+myid,FILE='FSBR'//na(myid),STATUS='UNKNOWN')
-        OPEN(UNIT=410+myid,FILE='FSFR'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=310+myid,FILE=TRIM(wrkdir)//'/FSBR'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/FSFR'//na(myid),STATUS='UNKNOWN')
 
 
 	NDFRC=0
@@ -294,8 +294,8 @@
         CLOSE (310+myid)
         CLOSE (410+myid)
 
-        OPEN(UNIT=310+myid,FILE='FSBL'//na(myid),STATUS='UNKNOWN')
-        OPEN(UNIT=410+myid,FILE='FSFL'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=310+myid,FILE=TRIM(wrkdir)//'/FSBL'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
 
 
 	NDFLC=0
@@ -378,7 +378,7 @@
         CLOSE (310+myid)
         CLOSE (410+myid)
 
-!        OPEN(UNIT=410+myid,FILE='NCN'//na(myid),STATUS='UNKNOWN')
+!        OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/NCN'//na(myid),STATUS='UNKNOWN')
 
 !	DO I=1,NNA
 !	write(410+myid,*) NRXF(3,I), NCN(I)

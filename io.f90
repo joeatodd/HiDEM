@@ -4,16 +4,18 @@ MODULE INOUT
 
 CONTAINS
 
- SUBROUTINE ReadInput(INFILE, PRESS, MELT, UC, DT, S, GRAV, RHO, RHOW, EF0, LS, &
-      SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID)
+ SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+      RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
+      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
-   REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW
+   REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
-   CHARACTER(256) :: INFILE, buff,VarName,VarValue
+   CHARACTER(256) :: INFILE, buff,VarName,VarValue,runname,wrkdir,&
+        resdir
+   LOGICAL :: BedZOnly
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
-        gotGrid=.FALSE.
+        gotGrid=.FALSE.,gotName=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
@@ -43,6 +45,10 @@ CONTAINS
    GRAV = 9.81
    RHO = 900.0
    RHOW = 1030.0
+   BedIntConst = 1.0E8
+   BedZOnly = .TRUE.
+   wrkdir = './'
+   resdir = './'
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -122,6 +128,17 @@ CONTAINS
        READ(VarValue,*) RESOUTINT
      CASE("maximum displacement")
        READ(VarValue,*) MAXUT
+     CASE("run name")
+       READ(VarValue,*) runname
+       gotName = .TRUE.
+     CASE("work directory")
+       READ(VarValue,*) wrkdir
+     CASE("results directory")
+       READ(VarValue,*) resdir
+     CASE("bed stiffness constant")
+       READ(VarValue,*) BedIntConst
+     CASE("bed z only")
+       READ(VarValue,*) BedZOnly
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -135,6 +152,7 @@ CONTAINS
    IF(.NOT. gotGrid) CALL FatalError("Didn't get Grid")
    IF(.NOT. gotSCL) CALL FatalError("Didn't get Scale")
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
+   IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
  END SUBROUTINE ReadInput
 
  FUNCTION ToLowerCase(from) RESULT(to)
@@ -171,7 +189,7 @@ CONTAINS
     SUBROUTINE FatalError(Message)
       CHARACTER(*) Message
 
-      PRINT *,Message
+      PRINT *, 'Fatal Error: ',Message
       STOP
 
     END SUBROUTINE FatalError
