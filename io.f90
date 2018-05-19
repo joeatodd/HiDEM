@@ -6,14 +6,14 @@ CONTAINS
 
  SUBROUTINE ReadInput(INFILE, PRESS, MELT, UC, DT, S, GRAV, RHO, RHOW, EF0, LS, &
       SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, YN, NB, GRID)
+      DAMP2, DRAG, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW
-   INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS, YN, NB
+   INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
    CHARACTER(256) :: INFILE, buff,VarName,VarValue
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
-        gotYN=.FALSE., gotNB=.FALSE., gotGrid=.FALSE.
+        gotGrid=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
@@ -103,12 +103,6 @@ CONTAINS
      CASE("scale")
        READ(VarValue,*) SCL
        gotSCL = .TRUE.
-     CASE("yn")
-       READ(VarValue,*) YN
-       gotYN = .TRUE.
-     CASE("nboxes")
-       READ(VarValue,*) NB !TODO - compute this and YN!
-       gotNB = .TRUE.
      CASE("grid")
        READ(VarValue,*) GRID
        gotGrid = .TRUE.
@@ -137,12 +131,8 @@ CONTAINS
 
    CLOSE(112)
 
-   PRINT *,'rho*10', RHO*10.0
-
    IF(.NOT. gotWL) CALL FatalError("Didn't get Water Line")
    IF(.NOT. gotGrid) CALL FatalError("Didn't get Grid")
-   IF(.NOT. gotYN) CALL FatalError("Didn't get YN")
-   IF(.NOT. gotNB) CALL FatalError("Didn't get Nboxes")
    IF(.NOT. gotSCL) CALL FatalError("Didn't get Scale")
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
  END SUBROUTINE ReadInput
