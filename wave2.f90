@@ -66,6 +66,7 @@
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
         INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
+        INTEGER, DIMENSION(8) :: datetime
         CHARACTER(LEN=256) INFILE
 
         CALL MPI_INIT(rc)
@@ -75,6 +76,12 @@
         END IF
         CALL MPI_COMM_RANK(MPI_COMM_WORLD, myid, rc)
         CALL MPI_COMM_SIZE(MPI_COMM_WORLD, ntasks, rc)
+
+IF(myid==0) THEN
+  CALL DATE_AND_TIME(VALUES=datetime)
+5 FORMAT("HiDEM run starting at: ",i2.2,"/",i2.2,"/",i4.4,' ',i2.2,':',i2.2,':',i2.2)
+  WRITE(*,5) datetime(3),datetime(2),datetime(1),datetime(5),datetime(6),datetime(7)
+END IF
 
 
  6      FORMAT(F11.6,' ',I8,' ',2F11.6)
@@ -120,10 +127,6 @@
 !JS - moment of inertia - heaviness w.r.t. rotation
 !LNN - distance (scaled) between particles
 !MLOAD - maximum load - bonds break when this is exceeded - tension and bending
-
-        PRINT *, RHO
-        PRINT *, RHOW
-        PRINT *, RESOUTINT
 
 	S=S*SCL
 	MN=SCL**3.0*RHO
