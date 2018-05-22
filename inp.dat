@@ -15,13 +15,13 @@
 0
 60.0
 7
-100.0
+10
+50.0
 0.1
 11695378
-2.0E+04
+1.0E+04
 1.0E+04
 1.0E+01
-0
 20000
 20000
 5.0E3
@@ -43,13 +43,13 @@ FRIC
 RESTART
 SCL
 YN
+NB !TODO -compute
 GRID
 POR
 ISEED
 DAMP1 - translational damping
 DAMP2 - rotational damping
 DRAG - drag coeff - was 1.0E+1
-BEDZONLY
 OUTINT
 RESOUTINT
 MAXUT - maximum particle displacement in any XYZ

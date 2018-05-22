@@ -1,3 +1,6 @@
+!Generates the info on the connections between particles (within and between partitions)
+!If two particles are closer than 1.6*SCL, they are connected. This should be predictable 
+!based on structure, but this code is nicely flexible (i.e. no prior info about structure required)
 	SUBROUTINE DT(NNA,NRXF,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,wrkdir,SCL,YN)
 
 	IMPLICIT NONE

@@ -38,8 +38,6 @@ Avoid geometry gradients
 
 Kill all motion every x timesteps
 
-
-
 #### Files etc ####
 
 These are part of the compiled code:

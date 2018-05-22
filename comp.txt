@@ -1,3 +1,3 @@
 module swap PrgEnv-gnu PrgEnv-cray
-ftn -o r -O3 wave2.f90 dist.f circ.f effload.f amat.f tmat.f ttmat.f kmat.f glas.f90 ranmar.f dt.f90
+ftn -o r -O3 wave2.f90 dist.f circ.f90 effload.f90 amat.f tmat.f ttmat.f kmat.f glas.f90 ranmar.f dt.f90
 module swap PrgEnv-cray PrgEnv-gnu
