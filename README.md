@@ -1,4 +1,6 @@
-Jan's HiDEM model.
+# The Helsinki Discrete Element Model (HiDEM) #
+
+Author: Jan Åström
 
 ##### Compilation ####
 
@@ -83,7 +85,7 @@ param.dat - don't worry - something about opening files
 
 PRESSURE    - PRESS - optional backwall pressure 
 MELT        - MELT  - optional basal melt rate passed to fibg3 for altering domain shape
-UNDER-CUT   - UC    - optional frontal melt rate " " "
+UNDER-CUT   - UC    - optional frontal melt rate
 TIME-STEP   - DT    - timestep size
 WIDTH       - S     - beam width (relative to unit particle)
 YOUNGS MOD. - EF0   - particle bond young's mod, describes interaction between butting particles (or bonded particles?)
@@ -141,6 +143,10 @@ WSX,WSY - wall contact forces?
 MN - mass of particles
 MFIL - mass of particles - per particle
 JS - moment of rotational inertia
+
+NAN - list of connections between particles e.g. NAN(1:2,1) lists the two particle numbers which make up connection 1
+NRXF - initial position of this partition's particles
+NRXFL,... - initial position of particles in the partition to the left
 
 
 #### OUTPUT - jyr files and STR files ####
