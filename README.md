@@ -2,13 +2,13 @@
 
 Author: Jan Åström
 
-##### Compilation ####
+## Compilation ##
 
 Compilation requires the cray ftn compiler:
 
 module swap PrgEnv-gnu PrgEnv-cray
 
-#### Getting data ready ####
+## Getting data ready ##
 
 Replace no data with zero
 
@@ -20,7 +20,7 @@ Choose the number of cores
 
 do something to the restitution coefficient
 
-#### simulation blow up ####
+## simulation blow up ##
 
 if the simulation explodes (particles moving too far):
 
@@ -38,7 +38,7 @@ Avoid geometry gradients
 
 Kill all motion every x timesteps
 
-#### Files etc ####
+## Files etc ##
 
 These are part of the compiled code:
 
@@ -73,13 +73,13 @@ glas.f90 - computing the FCC lattice, dense packing
 ranmar.f - random number generator  
 dt.f90 - called by glas.f90, finds and write connections to FSfiles  
 
-### input files ###
+## input files ##
 
 inp.dat  
 mass3.dat  
 param.dat - don't worry - something about opening files  
 
-### inp.dat parameters ####
+### inp.dat parameters ###
 
 PRESSURE    - PRESS - optional backwall pressure   
 MELT        - MELT  - optional basal melt rate passed to fibg3 for altering domain shape  
@@ -147,7 +147,7 @@ NRXF - initial position of this partition's particles
 NRXFL,... - initial position of particles in the partition to the left  
 
 
-#### OUTPUT - jyr files and STR files ####
+## OUTPUT - jyr files and STR files ##
 
 List position of all particles in x,y,z, every 2 seconds.  
 Read this in paraview quite easily.  
@@ -178,7 +178,7 @@ PSUMS - something like pressure
 GSUMS - energy of bed interaction  
 
 
-#### Processing ####
+## Processing ##
 
 rc2.f90 computes the size distribution of calved blocks  
 
@@ -201,7 +201,7 @@ INFI2 - second JYR
 N - wc -l JYR0001.csv  
 max - 10?  
 
-#### PARAVIEW ####
+## PARAVIEW ##
 
 First simply load csv, with blank space delimiter, merge delimiters, has no header  
 Then apply table to points filter  
@@ -214,7 +214,7 @@ then apply Delaunay2D filter.
 
 
 
-### Changes made by Jan since commit ###
+## Changes made by Jan since commit ##
 
 Got rid of: UTPP, VELO, D, MAXDT,XIND,YIND  
 DAMP1,DAMP2,DRAG,BEDZONLY,MAXUT  <- but did I add these? yes  
