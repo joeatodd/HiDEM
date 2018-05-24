@@ -20,6 +20,8 @@ Choose the number of cores
 
 do something to the restitution coefficient
 
+Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
+
 ## simulation blow up ##
 
 if the simulation explodes (particles moving too far):
