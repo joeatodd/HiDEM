@@ -22,6 +22,10 @@ do something to the restitution coefficient
 
 Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
+## Running the model ##
+
+e.g. `mpirun -n 70 r`
+
 ## simulation blow up ##
 
 if the simulation explodes (particles moving too far):

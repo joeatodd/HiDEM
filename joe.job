@@ -1,9 +1,0 @@
-#!/bin/bash --login
-#PBS -N Thwaites
-#PBS -l select=3
-#PBS -l walltime=00:05:00
-#PBS -A n01-CALISMO
-export PBS_O_WORKDIR=$(readlink -f $PBS_O_WORKDIR)               
-cd $PBS_O_WORKDIR
-export OMP_NUM_THREADS=1
-aprun -n 70 $PBS_O_WORKDIR/r 1> LOG_$PBS_JOBID 2> ERRLOG_$PBS_JOBID
