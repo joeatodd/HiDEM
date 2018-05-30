@@ -22,13 +22,13 @@ MODULE INOUT
 
 CONTAINS
 
- SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+ SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
-   INTEGER :: readstat, i,incount
+   INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, buff,VarName,VarValue,runname,wrkdir,&
         resdir
    LOGICAL :: BedZOnly
@@ -171,7 +171,45 @@ CONTAINS
    IF(.NOT. gotSCL) CALL FatalError("Didn't get Scale")
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
    IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
- END SUBROUTINE ReadInput
+
+   IF(myid==0) THEN
+     PRINT *,'---------------Input Vars-----------------'
+     WRITE(*,'(A,A)') "Run Name = ",TRIM(runname)
+     WRITE(*,'(A,A)') "Work Directory = ",TRIM(wrkdir)
+     WRITE(*,'(A,A)') "Results Directory = ",TRIM(resdir)
+     WRITE(*,'(A,F9.2)') "Backwall Pressure = ",PRESS
+     WRITE(*,'(A,F9.2)') "Submarine Melt = ",MELT
+     WRITE(*,'(A,F9.2)') "UC = ",UC
+     WRITE(*,'(A,ES12.5)') "Timestep = ",DT
+     WRITE(*,'(A,F9.2)') "Width = ",S
+     WRITE(*,'(A,F9.2)') "Gravity = ",GRAV
+     WRITE(*,'(A,F7.2)') "Density = ",RHO
+     WRITE(*,'(A,F7.2)') "Water Density = ",RHOW
+     WRITE(*,'(A,ES12.5)') "Youngs Modulus = ",EF0
+     WRITE(*,'(A,I0)') "Size = ",LS
+     WRITE(*,'(A,F9.2)') "Domain Inclination = ",SUB
+     WRITE(*,'(A,F7.2)') "Grounding Line = ",GL
+     WRITE(*,'(A,F7.2)') "Shear Line = ",SLIN
+     WRITE(*,'(A,ES12.5)') "Max Load = ",MLOAD
+     WRITE(*,'(A,ES12.5)') "Friction Scale = ",FRIC
+     WRITE(*,'(A,I0)') "Restart = ",REST
+     WRITE(*,'(A,F9.2)') "Porosity = ",POR
+     WRITE(*,'(A,I0)') "Random Seed = ",SEEDI
+     WRITE(*,'(A,ES12.5)') "Translational Damping = ",DAMP1
+     WRITE(*,'(A,ES12.5)') "Rotational Damping = ",DAMP2
+     WRITE(*,'(A,ES12.5)') "Drag Coefficient = ",DRAG
+     WRITE(*,'(A,ES12.5)') "Bed Stiffness Constant = ",BedIntConst
+     WRITE(*,'(A,L)') "Bed Z Only = ",BedZOnly
+     WRITE(*,'(A,I0)') "Output Interval = ",OUTINT
+     WRITE(*,'(A,I0)') "Restart Output Interval = ",RESOUTINT
+     WRITE(*,'(A,ES12.5)') "Maximum Displacement = ",MAXUT
+     WRITE(*,'(A,F9.2)') "Scale = ",SCL
+     WRITE(*,'(A,F9.2)') "Water Line = ",WL
+     WRITE(*,'(A,I0)') "No Timesteps = ",STEPS0
+     WRITE(*,'(A,F9.2)') "Grid = ",GRID
+     PRINT *,'---------------End Input------------------'
+   END IF
+END SUBROUTINE ReadInput
 
  FUNCTION ToLowerCase(from) RESULT(to)
    !------------------------------------------------------------------------------

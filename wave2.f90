@@ -126,7 +126,7 @@ END IF
         CLOSE(609)
         !INFILE = 'testinp.dat'
 
-        CALL ReadInput(INFILE, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+        CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, DAMP2, &
              DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID)
 
