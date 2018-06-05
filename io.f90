@@ -22,18 +22,19 @@ MODULE INOUT
 
 CONTAINS
 
- SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+ SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID)
+      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
+   REAL*8 :: fractime
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: myid, readstat, i,incount
-   CHARACTER(256) :: INFILE, buff,VarName,VarValue,runname,wrkdir,&
+   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir
    LOGICAL :: BedZOnly
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
-        gotGrid=.FALSE.,gotName=.FALSE.
+        gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
@@ -67,6 +68,7 @@ CONTAINS
    BedZOnly = .TRUE.
    wrkdir = './'
    resdir = './'
+   fractime = 40.0
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -151,12 +153,17 @@ CONTAINS
        gotName = .TRUE.
      CASE("work directory")
        READ(VarValue,*) wrkdir
+     CASE("geometry file")
+       READ(VarValue,*) geomfile
+       gotGeom = .TRUE.
      CASE("results directory")
        READ(VarValue,*) resdir
      CASE("bed stiffness constant")
        READ(VarValue,*) BedIntConst
      CASE("bed z only")
        READ(VarValue,*) BedZOnly
+     CASE("fracture after time")
+       READ(VarValue,*) fractime
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -171,10 +178,12 @@ CONTAINS
    IF(.NOT. gotSCL) CALL FatalError("Didn't get Scale")
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
    IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
+   IF(.NOT. gotGeom) CALL FatalError("No Geometry File specified!")
 
    IF(myid==0) THEN
      PRINT *,'---------------Input Vars-----------------'
      WRITE(*,'(A,A)') "Run Name = ",TRIM(runname)
+     WRITE(*,'(A,A)') "Geometry File = ",TRIM(geomfile)
      WRITE(*,'(A,A)') "Work Directory = ",TRIM(wrkdir)
      WRITE(*,'(A,A)') "Results Directory = ",TRIM(resdir)
      WRITE(*,'(A,F9.2)') "Backwall Pressure = ",PRESS
@@ -207,6 +216,7 @@ CONTAINS
      WRITE(*,'(A,F9.2)') "Water Line = ",WL
      WRITE(*,'(A,I0)') "No Timesteps = ",STEPS0
      WRITE(*,'(A,F9.2)') "Grid = ",GRID
+     WRITE(*,'(A,F9.2)') "Fracture After Time = ",fractime
      PRINT *,'---------------End Input------------------'
    END IF
 END SUBROUTINE ReadInput

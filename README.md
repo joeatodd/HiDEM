@@ -8,6 +8,19 @@ HiDEM can be compiled using one of the compilation scripts in this directory.
 
 `./compile_cray.sh`
 
+## input files ##
+
+On starting, HiDEM reads the name of an input file from HIDEM\_STARTINFO (e.g. 'inp.dat').
+
+inp.dat - defines various parameters for the simulation
+
+The user must also supply the initial geometry in gridded format: X,Y,SURF,BASE,BED,FRICTION
+
+This initial geometry file is specified in the input file as 'Geometry File':
+
+`Geometry File = "mass3.dat"`
+
+
 ## Getting data ready ##
 
 Replace no data with zero
@@ -66,7 +79,7 @@ ave*.f - these compute averages of something
 
 *.job - job scripts for torque  
 
-comp.txt - the compilation command  
+compile_*.sh - compilation scripts
 
 rc2.f90, rc3.f90 - compute the calved size distrib  
 
@@ -80,12 +93,6 @@ kmat.f - stiffness matrix computation
 glas.f90 - computing the FCC lattice, dense packing  
 ranmar.f - random number generator  
 dt.f90 - called by glas.f90, finds and write connections to FSfiles  
-
-## input files ##
-
-inp.dat  
-mass3.dat  
-param.dat - don't worry - something about opening files  
 
 ### inp.dat parameters ###
 
@@ -115,7 +122,7 @@ DRAG        - DRAG  - The drag coefficient
 OUTINT      - OUTINT- The output interval (every OUTINT steps, write out CSV)  
 RESOUTINT   -RESOUTINT- The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition  
 MAXUT       - MAXUT - The maximum velocity of particles (particles faster than this may be frozen if this is turned on)  
-
+Fracture After Time - FRACTIME - Fracture is permitted after this time.
 
 ### mass3.dat ####
 
@@ -240,3 +247,9 @@ some change to setting porisity/predamage - no longer considers proximity to bed
 EFLOAD1,2 -> EFFLOAD: Only EFFLOAD exists, and its passed more stuff  
 
 Seems to get rid of UTP prediction, damping  
+
+
+## TO DO ##
+
+Allow user to specify restart prefix (i.e. look for files [prefix]_REST0*, etc)
+

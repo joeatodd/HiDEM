@@ -4,7 +4,7 @@
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,&
-     maxy,maxz,minx,miny,minz,ntasks,wrkdir,SCL,YN,XN,grid,melta,wl,UC)
+     maxy,maxz,minx,miny,minz,ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC)
 
 Implicit none
 INCLUDE 'na90.dat'
@@ -14,7 +14,7 @@ Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
 Real*8 :: box,xo(3,1000000),b,maxx,maxy,maxz,minx,miny,minz,SCL
 INTEGER :: l,ND,ip,i,j,NDLC,NDRC,NDFC,NDBC,YN,XN,NDFRC,NDBRC,NDFLC,NDBLC
 INTEGER :: myid,ntasks,N1,N2,xk,yk
-CHARACTER(LEN=256) :: wrkdir
+CHARACTER(LEN=256) :: wrkdir,geomfile
 !Open(300,file='mass.dat',STATUS='OLD')
 OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
 
@@ -38,7 +38,7 @@ ENDDO
 ENDDO
 
 
-Open(400,file='mass3.dat',STATUS='OLD')
+Open(400,file=TRIM(geomfile),STATUS='OLD')
 READ(400,*) N2
 DO I=1,N2
 !READ(400,*) x,y,s1,b1,b2,m1

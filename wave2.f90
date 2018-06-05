@@ -81,13 +81,13 @@
 	REAL*8 X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
 	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ,MAXUT
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
-	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
+	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG,fractime
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
         INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly
-        CHARACTER(LEN=256) INFILE, runname, wrkdir, resdir
+        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -126,27 +126,21 @@ END IF
         CLOSE(609)
         !INFILE = 'testinp.dat'
 
-        CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, PRESS, MELT, UC, DT, S, GRAV, &
+        CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, DAMP2, &
-             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID)
+             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime)
 
-	OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=611,FILE=TRIM(wrkdir)//'/dtop01',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=612,FILE=TRIM(wrkdir)//'/dtopr',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=613,FILE=TRIM(wrkdir)//'/kins2',STATUS='UNKNOWN',POSITION='APPEND')
-	OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
-	OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
-        OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
-        OPEN(UNIT=111,FILE='inp.dat',STATUS='OLD')
-	OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
-!	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
-
-        IF(myid==0) THEN
-          PRINT *,'Run Name: ',TRIM(runname)
-          PRINT *,'Working Directory: ',TRIM(wrkdir)
-          PRINT *,'Results Directory: ',TRIM(resdir)
-          PRINT *, '----------------------------------------------------'
-        END IF
+   IF(myid==0) THEN
+     OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=611,FILE=TRIM(wrkdir)//'/dtop01',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=612,FILE=TRIM(wrkdir)//'/dtopr',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=613,FILE=TRIM(wrkdir)//'/kins2',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
+     OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
+     OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
+     OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
+     !	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
+   END IF
 
 ! S = width/thickness of the beams, scaled by SCL
 ! S * SCL, scales the whole system up, so beam width * 60, particle size * 60
@@ -243,7 +237,7 @@ END IF
 
         !Go to glas.f90 to make the grid
 	CALL FIBG3(LS,NN,NTOT,NTOL,NTOR,NTOF,NTOB,NTOFR,NTOBR,NTOFL,NTOBL,&
-        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,SCL,YN,XN,GRID,MELT,WL,UC)
+        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC)
 
 	write(*,17) myid,NTOL,NTOT,NTOR,NTOF,NTOB,NTOFL,NTOFR,NTOBL,NTOBR
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -352,7 +346,7 @@ END IF
 
         !Read the geometry and friction
         !into the grids BED, SUF, and FBED
-        OPEN(UNIT=400,file='mass3.dat',STATUS='UNKNOWN')
+        OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
         READ(400,*) NM2
 	DO I=1,NM2
         READ(400,*) X,Y,S1,B2,B1,Z1
@@ -1076,7 +1070,7 @@ END IF
 	MAXV=MAX(V1,V2,V3)
 	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
-	 IF (LOAD.GT.MLOAD.AND.T.GT.40.0) THEN
+	 IF (LOAD.GT.MLOAD.AND.T.GT.fractime) THEN
 	 BCE=BCE+0.5*EF(I)*S**2/LNN*(DL-L)**2
          EF(I)=0.0
 	 BCC=BCC+1

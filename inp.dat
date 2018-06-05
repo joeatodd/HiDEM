@@ -1,55 +1,14 @@
-0.0
-0.0
-0.0
-1.0d-04
-0.7
-1.0d+09
-100
-0.0
-690.41
--100.0
-2000.0
-2000000
-0.0002
-1.0d-09
-0
-60.0
-7
-10
-50.0
-0.1
-11695378
-1.0E+04
-1.0E+04
-1.0E+01
-20000
-20000
-5.0E3
---------------------------
-PRESSURE
-MELT
-UNDER-CUT
-TIME-STEP
-WIDTH
-YOUNGS MOD.
-SIZE
-INCLI
-WATERLINE
-GROUNDLINE
-SHEARLINE
-TIMESTEPS
-MAXLOAD
-FRIC
-RESTART
-SCL
-YN
-NB !TODO -compute
-GRID
-POR
-ISEED
-DAMP1 - translational damping
-DAMP2 - rotational damping
-DRAG - drag coeff - was 1.0E+1
-OUTINT
-RESOUTINT
-MAXUT - maximum particle displacement in any XYZ
+Run Name = "Store_test"
+Geometry File = "mass3.dat"
+Work Directory = "./work"
+Results Directory = "./Results"
+Density = 930.0
+Water Density = 1030.0
+Gravity = 9.81
+Water Line = 690.41
+Grid = 50.0
+Scale = 60.0
+No Timesteps = 2000000
+Bed Stiffness Constant = 2.0E7
+Bed Z Only = True
+Fracture After Time = 10.0
