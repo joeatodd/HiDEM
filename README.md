@@ -95,34 +95,43 @@ ranmar.f - random number generator
 dt.f90 - called by glas.f90, finds and write connections to FSfiles  
 
 ### inp.dat parameters ###
-
-PRESSURE    - PRESS - optional backwall pressure   
-MELT        - MELT  - optional basal melt rate passed to fibg3 for altering domain shape  
-UNDER-CUT   - UC    - optional frontal melt rate  
-TIME-STEP   - DT    - timestep size  
-WIDTH       - S     - beam width (relative to unit particle)  
-YOUNGS MOD. - EF0   - particle bond young's mod, describes interaction between butting particles (or bonded particles?)  
-SIZE        - LS    - Something to do with the fcc lattice 'box size'  
-INCLI       - SUB   - Angle of the domain vs gravity vector, not used   
-WATERLINE   - WL    - Sea level for buoyancy calc  
-GROUNDLINE  - GL    - 'grounding line' - not used  
-SHEARLINE   - SLIN  - A distance below the surface where all bonds are broken?  
-TIMESTEPS   - STEPS0- The number of steps  
-MAXLOAD     - MLOAD - Maximum load on bond - bonds break beyond this  
-FRIC        - FRIC  - Scale factor for friction input  
-RESTART     - REST  - 1 = restart from prev, 0 = new run  
-SCL         - SCL   - Scale factor for particle and beam size  
-YN          - YN    - How many divisions of domain in y-direction for MPI  
-GRID        - GRID  - Resolution of mass3.dat input grid  
-POR         - POR   - The proportion of initially broken bonds  
-ISEED       - SEEDI - Seed for random number generator  
-DAMP1       - DAMP1 - The damping coefficient for translation  
-DAMP2       - DAMP2 - The damping coefficient for rotation  
-DRAG        - DRAG  - The drag coefficient  
-OUTINT      - OUTINT- The output interval (every OUTINT steps, write out CSV)  
-RESOUTINT   -RESOUTINT- The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition  
-MAXUT       - MAXUT - The maximum velocity of particles (particles faster than this may be frozen if this is turned on)  
-Fracture After Time - FRACTIME - Fracture is permitted after this time.
+| Parameter | VarName | Description |
+| --------- | ------- | ----------- |
+| Run Name  | RUNNAME | The name of the simulation (prepended to output filenames) |
+| Work Directory | wrkdir | The subdirectory in which to store working files (must exist!) |
+| Results Directory | resdir | The subdirection in which to store result files (must exist!) |
+| Geometry File | geomfile | The name of the file which defines the geometry (see above) |
+| Density | RHO | The density of the material (ice) |
+| Water Density | RHOW | The density of the water in which the ice floats |
+| Gravity | GRAV | Magnitude of gravity (positive!) |
+| Backwall Pressure | PRESS | optional backwall pressure    |
+| Submarine Melt    | MELT  | optional basal melt rate passed to fibg3 for altering domain shape   |
+| UC                | UC    | optional frontal melt rate   |
+| Timestep          | DT    | timestep size   |
+| Width             | S     | beam width (relative to unit particle)   |
+| Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between butting particles (or bonded particles?)   |
+| Size              | LS    | Something to do with the fcc lattice 'box size'   |
+| Domain Inclination | SUB   | Angle of the domain vs gravity vector, not used    |
+| Water Line   | WL    | Sea level for buoyancy calc   |
+| Grounding Line  | GL    | 'grounding line' - not used   |
+| Shear Line   | SLIN  | A distance below the surface where all bonds are broken?   |
+| No Timesteps   | STEPS0| The number of steps   |
+| Max Load     | MLOAD | Maximum load on bond - bonds break beyond this   |
+| Friction Scale    | FRIC  | Scale factor for friction input   |
+| Restart     | REST  | 1 = restart from prev, 0 = new run   |
+| Scale         | SCL   | Scale factor for particle and beam size   |
+| Grid        | GRID  | Resolution of mass3.dat input grid   |
+| Porosity         | POR   | The proportion of initially broken bonds   |
+| Random Seed       | SEEDI | Seed for random number generator   |
+| Translational Damping       | DAMP1 | The damping coefficient for translation   |
+| Rotational Damping       | DAMP2 | The damping coefficient for rotation   |
+| Drag Coefficient        | DRAG  | The drag coefficient   |
+| Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   |
+| Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   |
+| Maximum Displacement       | MAXUT | The maximum velocity of particles (particles faster than this may be frozen if this is turned on)   |
+| Fracture After Time | FRACTIME | Fracture is permitted after this time. |
+| Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
+| Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
 
 ### mass3.dat ####
 
@@ -139,27 +148,27 @@ make sure the bed is buffered beyond the edge of the ice, and define these regio
 
 ### Internal variables ###
 
-"YN" is the number of partitions in the Y direction.  
-"NTOT" is the total number of partitions in the model  
-GRID - The grid size of the mass3.dat data, make sure it matches  
-SCL - diameter of each particle  
-RESTART - 1 = true  
-
-VDP - drag coeff  
-UT  - current displacement  
-UTM - previous displacement  
-UTP - next displacement  
-FRZ (FRY,FRX) - contact forces (particle-particle, particle-bed)  
-BOYZ, BOYY - buoyant forces  
-R - elastic forces  
-WSX,WSY - wall contact forces?  
-MN - mass of particles  
-MFIL - mass of particles - per particle  
-JS - moment of rotational inertia  
-
-NAN - list of connections between particles e.g. NAN(1:2,1) lists the two particle numbers which make up connection 1  
-NRXF - initial position of this partition's particles  
-NRXFL,... - initial position of particles in the partition to the left  
+| VarName | Description |
+| --------- | ------- |
+| YN | the number of partitions in the Y direction. |
+| NTOT | the total number of partitions in the model |
+| GRID | The grid size of the mass3.dat data, make sure it matches |
+| SCL | diameter of each particle |
+| RESTART | 1 = true |
+| VDP | drag coeff |
+| UT  | current displacement |
+| UTM | previous displacement |
+| UTP | next displacement |
+| FRZ (FRY,FRX) | contact forces (particle-particle, particle-bed) |
+| BOYZ, BOYY | buoyant forces |
+| R | elastic forces |
+| WSX,WSY | wall contact forces? |
+| MN | mass of particles |
+| MFIL | mass of particles - per particle |
+| JS | moment of rotational inertia |
+| NAN | list of connections between particles e.g. NAN(1:2,1) lists the two particle numbers which make up connection 1   |
+| NRXF | initial position of this partition's particles   |
+| NRXFL,... | initial position of particles in the partition to the left   |
 
 
 ## OUTPUT - jyr files and STR files ##
