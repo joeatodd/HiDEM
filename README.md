@@ -4,9 +4,7 @@ Author: Jan Åström
 
 ## Compilation ##
 
-Compilation requires the cray ftn compiler:
-
-module swap PrgEnv-gnu PrgEnv-cray
+HiDEM can be compiled using one of the compilation scripts in this directory.
 
 ## Getting data ready ##
 
@@ -24,7 +22,7 @@ Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
 ## Running the model ##
 
-e.g. `mpirun -n 70 r`
+e.g. `mpirun -n 70 HiDEM`
 
 ## simulation blow up ##
 
