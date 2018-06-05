@@ -87,7 +87,7 @@
         INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly
-        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir
+        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -127,7 +127,7 @@ END IF
         !INFILE = 'testinp.dat'
 
         CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
-             RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, DAMP2, &
+             RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, DAMP2, &
              DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime)
 
    IF(myid==0) THEN
@@ -298,11 +298,13 @@ END IF
 	ELSE
 
         !If restarting, read from restart file instead
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST0'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
+
 	READ(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	READ(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
 	READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
 	READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
+	READ(117+myid,*) XN,YN
 	CLOSE(117+myid)
 
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
@@ -317,7 +319,7 @@ END IF
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST1'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
       	CT(12*I-8),CT(12*I-7),CT(12*I-6)
@@ -326,7 +328,7 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST2'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD')
 	DO I=1,NN
 	READ(117+myid,*) UT(6*I-5),UT(6*I-4),UT(6*I-3),&
       	UT(6*I-2),UT(6*I-1),UT(6*I-0)
@@ -1525,21 +1527,22 @@ CONTAINS
 
  SUBROUTINE WriteRestart()
    ! Write out the restart files
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST0'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')
 	WRITE(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
 	write(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
 	WRITE(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
 	WRITE(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
+	WRITE(117+myid,*) XN,YN
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST1'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST1'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
 	WRITE(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),CT(12*I-8),CT(12*I-7),CT(12*I-6)
 	WRITE(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),CT(12*I-2),CT(12*I-1),CT(12*I-0)
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/REST2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
 	WRITE(117+myid,*) UT(6*I-5),UT(6*I-4),UT(6*I-3),UT(6*I-2),UT(6*I-1),UT(6*I-0)
 	WRITE(117+myid,*) UTM(6*I-5),UTM(6*I-4),UTM(6*I-3),UTM(6*I-2),UTM(6*I-1),UTM(6*I-0)

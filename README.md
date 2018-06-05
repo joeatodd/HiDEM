@@ -127,6 +127,7 @@ dt.f90 - called by glas.f90, finds and write connections to FSfiles
 | Max Load     | MLOAD | Maximum load on bond - bonds break beyond this   |
 | Friction Scale    | FRIC  | Scale factor for friction input   |
 | Restart     | REST  | 1 = restart from prev, 0 = new run   |
+| Restart From Run Name    | restname  | Specifies the name of the run from which to restart (defaults to same as 'Run Name')|
 | Scale         | SCL   | Scale factor for particle and beam size   |
 | Grid        | GRID  | Resolution of mass3.dat input grid   |
 | Porosity         | POR   | The proportion of initially broken bonds   |

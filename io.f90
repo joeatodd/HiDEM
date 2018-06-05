@@ -23,7 +23,7 @@ MODULE INOUT
 CONTAINS
 
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
-      RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, POR, SEEDI, DAMP1, &
+      RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
@@ -31,10 +31,10 @@ CONTAINS
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
-        resdir
+        resdir,restname
    LOGICAL :: BedZOnly
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
-        gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.
+        gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
@@ -151,6 +151,9 @@ CONTAINS
      CASE("run name")
        READ(VarValue,*) runname
        gotName = .TRUE.
+     CASE("restart from run name")
+       READ(VarValue,*) restname
+       gotRestName = .TRUE.
      CASE("work directory")
        READ(VarValue,*) wrkdir
      CASE("geometry file")
@@ -179,10 +182,14 @@ CONTAINS
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
    IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
    IF(.NOT. gotGeom) CALL FatalError("No Geometry File specified!")
+   IF(.NOT. gotRestName .AND. REST == 1) THEN
+     restname = runname
+   END IF
 
    IF(myid==0) THEN
      PRINT *,'---------------Input Vars-----------------'
      WRITE(*,'(A,A)') "Run Name = ",TRIM(runname)
+     IF(REST == 1) WRITE(*,'(A,A)') "Restarting from Run Name = ",TRIM(restname)
      WRITE(*,'(A,A)') "Geometry File = ",TRIM(geomfile)
      WRITE(*,'(A,A)') "Work Directory = ",TRIM(wrkdir)
      WRITE(*,'(A,A)') "Results Directory = ",TRIM(resdir)
