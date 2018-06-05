@@ -26,6 +26,8 @@ Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
 e.g. `mpirun -n 70 HiDEM`
 
+An example PBS job script is provided in example.job
+
 ## simulation blow up ##
 
 if the simulation explodes (particles moving too far):
