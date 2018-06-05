@@ -6,6 +6,8 @@ Author: Jan Åström
 
 HiDEM can be compiled using one of the compilation scripts in this directory.
 
+`./compile_cray.sh`
+
 ## Getting data ready ##
 
 Replace no data with zero
