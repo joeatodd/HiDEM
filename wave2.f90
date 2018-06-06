@@ -957,15 +957,17 @@ END IF
 
 !	IF (X.LT.4000.0.AND.Y.LT.4000.0) THEN
 !	IF ((ZB.GT.WL-2.0*SCL.OR.Z-ZB.LT.5.0*SCL).AND.ABS(Z-ZB).LT.2.0*SCL) THEN
+
+!TODO - standardise and unhardcode this
 !Freeze particles near bed if friction is too high
-        IF (ABS(ZB-Z).LT.SCL*2.0.AND.(VDP(I).GE.1.0e+08*SCL*SCL.OR.T.LT.20.0)) THEN
-        UTP(6*I-5)=UT(6*I-5)
-        UTP(6*I-4)=UT(6*I-4)
-        UTP(6*I-3)=UT(6*I-3)
-        UTP(6*I-2)=UT(6*I-2)
-        UTP(6*I-1)=UT(6*I-1)
-        UTP(6*I-0)=UT(6*I-0)
-	ENDIF
+        ! IF (ABS(ZB-Z).LT.SCL*2.0.AND.(VDP(I).GE.1.0e+08*SCL*SCL.OR.T.LT.20.0)) THEN
+        ! UTP(6*I-5)=UT(6*I-5)
+        ! UTP(6*I-4)=UT(6*I-4)
+        ! UTP(6*I-3)=UT(6*I-3)
+        ! UTP(6*I-2)=UT(6*I-2)
+        ! UTP(6*I-1)=UT(6*I-1)
+        ! UTP(6*I-0)=UT(6*I-0)
+	! ENDIF
 
 !	IF (X.LT.250.0.OR.Y.LT.250.0) THEN
         !Backplane is fixed
