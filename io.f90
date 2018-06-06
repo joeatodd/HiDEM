@@ -20,6 +20,8 @@ MODULE INOUT
 
   IMPLICIT NONE
 
+  INTEGER :: MPI_COMM_ACTIVE
+
 CONTAINS
 
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
@@ -266,4 +268,40 @@ END SUBROUTINE ReadInput
       STOP
 
     END SUBROUTINE FatalError
+
+    SUBROUTINE Warn(Message)
+      CHARACTER(*) Message
+
+      PRINT *, 'WARNING: ',Message
+
+    END SUBROUTINE Warn
+
+    !Create the 'MPI_COMM_ACTIVE' communicator which includes only 
+    !CPUs which are actually doing something
+    SUBROUTINE RedefineMPI(noprocs,myid)
+
+      INCLUDE 'mpif.h'
+
+      INTEGER :: myid,i,noprocs, groupworld, groupactive,ierr
+      INTEGER, ALLOCATABLE :: active_parts(:)
+
+        CALL MPI_COMM_GROUP(MPI_COMM_WORLD, groupworld, ierr)
+        ALLOCATE(active_parts(noprocs))
+        DO i=1,noprocs
+          active_parts(i) = i-1
+        END DO
+
+        CALL MPI_Group_Incl(groupworld, noprocs, active_parts, groupactive, ierr)
+        CALL MPI_Comm_Create(MPI_COMM_WORLD, groupactive, MPI_COMM_ACTIVE, ierr)
+
+        IF(myid < noprocs) THEN
+          CALL MPI_BARRIER(MPI_COMM_ACTIVE, ierr)
+        ELSE
+          PRINT *,'MPI process ',myid,' terminating because not required.'
+          CALL MPI_Finalize()
+          STOP
+        END IF
+
+      END SUBROUTINE RedefineMPI
+
   END MODULE INOUT

@@ -28,7 +28,9 @@
      NTOFL,NTOFR,NTOBL,NTOBR, &
      FXCFL,FXFFL,FXCBL,FXFBL, &
      FXCFR,FXFFR,FXCBR,FXFBR)
-	
+
+        USE INOUT
+
 	IMPLICIT NONE
         include 'mpif.h'
         include 'param.dat'
@@ -129,30 +131,30 @@
       tag=133
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
      CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-     dest,tag,MPI_COMM_WORLD,ierr)
+     dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (MOD(myid,ntasks/YN).ne.0) &
      CALL MPI_Recv(UTML,6*PNN(source),MPI_DOUBLE_PRECISION, &
-     source,tag,MPI_COMM_WORLD,stat,ierr)
+     source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-1
       source=myid+1
       tag=135
       IF (MOD(myid,ntasks/YN).ne.0) &
      CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-     dest,tag,MPI_COMM_WORLD,ierr)
+     dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
      CALL MPI_Recv(UTMR,6*PNN(source),MPI_DOUBLE_PRECISION, &
-     source,tag,MPI_COMM_WORLD,stat,ierr)
+     source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN
       source=myid-ntasks/YN
       tag=137
       IF (myid.lt.(YN-1)*ntasks/YN) &
      CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-     dest,tag,MPI_COMM_WORLD,ierr)
+     dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN) &
      CALL MPI_Recv(UTMB,6*PNN(source),MPI_DOUBLE_PRECISION, &
-     source,tag,MPI_COMM_WORLD,stat,ierr)
+     source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN+1
       source=myid-ntasks/YN-1
@@ -160,51 +162,51 @@
       IF (myid.lt.(YN-1)*ntasks/YN &
      .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
      CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-     dest,tag,MPI_COMM_WORLD,ierr)
+     dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
      CALL MPI_Recv(UTMBL,6*PNN(source),MPI_DOUBLE_PRECISION, &
-     source,tag,MPI_COMM_WORLD,stat,ierr)
+     source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN-1
       source=myid-ntasks/YN+1
       tag=141
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
            CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-           dest,tag,MPI_COMM_WORLD,ierr)
+           dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
            CALL MPI_Recv(UTMBR,6*PNN(source),MPI_DOUBLE_PRECISION, &
-           source,tag,MPI_COMM_WORLD,stat,ierr)
+           source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN
       source=myid+ntasks/YN
       tag=143
       IF (myid.ge.ntasks/YN) &
       CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN) &
       CALL MPI_Recv(UTMF,6*PNN(source),MPI_DOUBLE_PRECISION, &
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN+1
       source=myid+ntasks/YN-1
       tag=145
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
       CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
       CALL MPI_Recv(UTMFL,6*PNN(source),MPI_DOUBLE_PRECISION, &
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN-1
       source=myid+ntasks/YN+1
       tag=147
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
       CALL MPI_Send(UTM,6*NN,MPI_DOUBLE_PRECISION, &
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN &
       .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
       CALL MPI_Recv(UTMFR,6*PNN(source),MPI_DOUBLE_PRECISION, &
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
 !------------------------------------------------------
         IF (MOD(myid,ntasks/YN).ne.0) THEN

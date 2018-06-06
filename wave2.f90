@@ -83,10 +83,10 @@
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG,fractime
 	REAL RAN(NOCON)
-        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE)
-        INTEGER rc,myid,ntasks,ierr,SEED,SEEDI,OUTINT,RESOUTINT
+        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
+        INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly
+        LOGICAL :: BedZOnly,FileExists
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
         CALL MPI_INIT(rc)
@@ -96,6 +96,7 @@
         END IF
         CALL MPI_COMM_RANK(MPI_COMM_WORLD, myid, rc)
         CALL MPI_COMM_SIZE(MPI_COMM_WORLD, ntasks, rc)
+        ntasks_init = ntasks
 
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
@@ -240,20 +241,20 @@ END IF
         myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC)
 
 	write(*,17) myid,NTOL,NTOT,NTOR,NTOF,NTOB,NTOFL,NTOFR,NTOBL,NTOBR
-        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
 	
         !NN - particles in each core
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         CALL MPI_ALLGATHER(NTOR,1,MPI_INTEGER,&
-        PTR,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PTR,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         CALL MPI_ALLGATHER(NTOB,1,MPI_INTEGER,&
-        PTB,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PTB,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
 
         !MATHS!
@@ -295,29 +296,45 @@ END IF
 	UTM(6*J-0)=0.0
 	END DO
 
-	ELSE
+	ELSE         !If restarting, read from restart file instead
 
-        !If restarting, read from restart file instead
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
+        !May have initialized HiDEM with more cores than are in use, so need to check for 
+        !existence of restart file
+        INQUIRE( FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid), EXIST=FileExists ) 
+        IF(FileExists) THEN
+          CALL MPI_ALLREDUCE(myid, maxid, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+        ELSE
+          CALL MPI_ALLREDUCE(0, maxid, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+        END IF
+        ntasks = maxid+1
 
-	READ(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
-	READ(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
-	READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
-	READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
-	READ(117+myid,*) XN,YN
-	CLOSE(117+myid)
+        IF(FileExists) THEN
+          OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
 
+          READ(117+myid,*) NN,NTOT,NTOL,NTOR,NTOF,NTOB,BCC
+          READ(117+myid,*) NTOFL,NTOFR,NTOBL,NTOBR
+          READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
+          READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
+          READ(117+myid,*) XN,YN
+          CLOSE(117+myid)
+        END IF
+
+        IF(XN*YN > ntasks) CALL FatalError("Some REST0 files missing!")
+        IF(XN*YN < ntasks) CALL Warn("Number of REST0 files doesn't match XN*YN, taking latter.")
+        ntasks = XN*YN
+        CALL RedefineMPI(ntasks,myid)
+ 
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         CALL MPI_ALLGATHER(NTOR,1,MPI_INTEGER,&
-        PTR,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PTR,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         CALL MPI_ALLGATHER(NTOB,1,MPI_INTEGER,&
-        PTB,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        PTB,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
  
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+        NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
 	DO I=1,NTOT+NTOL+NTOR+NTOF+NTOB+NTOFL+NTOFR+NTOBL+NTOBR
@@ -483,10 +500,10 @@ END IF
         tag=131
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Send(EFR,NTOR,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFL,NTOL,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.lt.(YN-1)*ntasks/YN) THEN
  	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
@@ -519,10 +536,10 @@ END IF
         tag=132
         IF (myid.lt.(YN-1)*ntasks/YN)&
         CALL MPI_Send(EFF,NTOF,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN)&
         CALL MPI_Recv(EFB,NTOB,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
  	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
@@ -555,10 +572,10 @@ END IF
         tag=133
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Send(EFFL,NTOFL,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Recv(EFBR,NTOBR,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
 
         IF (myid.lt.(YN-1)*ntasks/YN&
@@ -597,10 +614,10 @@ END IF
         IF (myid.lt.(YN-1)*ntasks/YN&
         .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Send(EFFR,NTOFR,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFBL,NTOBL,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.ge.ntasks/YN) THEN
  	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
@@ -663,10 +680,10 @@ END IF
         tag=142
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(UTL,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-1
       source=myid+1
@@ -674,10 +691,10 @@ END IF
         tag=144
       IF (MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(UTR,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN
       source=myid-ntasks/YN
@@ -685,10 +702,10 @@ END IF
         tag=145
       IF (myid.lt.(YN-1)*ntasks/YN)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN)&
       CALL MPI_Recv(UTB,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN
       source=myid+ntasks/YN
@@ -696,10 +713,10 @@ END IF
         tag=146
       IF (myid.ge.ntasks/YN)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN)&
       CALL MPI_Recv(UTF,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN-1
       source=myid+ntasks/YN+1
@@ -707,11 +724,11 @@ END IF
         tag=147
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN&
       .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(UTFR,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid-ntasks/YN+1
       source=myid+ntasks/YN-1
@@ -719,10 +736,10 @@ END IF
         tag=148
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(UTFL,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN-1
       source=myid-ntasks/YN+1
@@ -730,10 +747,10 @@ END IF
         tag=149
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(UTBR,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       dest=myid+ntasks/YN+1
       source=myid-ntasks/YN-1
@@ -742,10 +759,10 @@ END IF
       IF (myid.lt.(YN-1)*ntasks/YN&
       .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_WORLD,ierr)
+      dest,tag,MPI_COMM_ACTIVE,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(UTBL,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_WORLD,stat,ierr)
+      source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
       !TODO  TIME 2
       CALL CPU_TIME(TT(2))
@@ -800,7 +817,7 @@ END IF
         FXCFR,FXFFR,FXCBR,FXFBR)
 
 
-        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
 
         CALL CPU_TIME(TT2)
 	TS1=TS1+(TT2-TT1)
@@ -1015,28 +1032,28 @@ END IF
  27	CONTINUE
 
         IF (RY.EQ.1) THEN
-        CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(MGH,MGH0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(MGH,MGH0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
         END IF
 
 !	IF (RY.EQ.REST*STEPS0+1) THEN
 
 	IF (RY.EQ.RY0) THEN
-        CALL MPI_ALLREDUCE(ENM0,ENMS0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(ENM0,ENMS0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
 	ENDIF
 
  	IF (MOD(RY,100).EQ.0) THEN
-        CALL MPI_ALLREDUCE(KIN,KINS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(KIN2,KINS2,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(ENM,ENMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(MGH,MGHS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
-        CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(KIN,KINS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(KIN2,KINS2,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(ENM,ENMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(MGH,MGHS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
  	IF (myid.EQ.0) WRITE(612,*) T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
       	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0
 
@@ -1144,10 +1161,10 @@ END IF
         tag=131
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Send(EFR,NTOR,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFL,NTOL,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN) THEN
         DO I=1,NTOF
@@ -1182,10 +1199,10 @@ END IF
         tag=132
         IF (myid.lt.(YN-1)*ntasks/YN)&
         CALL MPI_Send(EFF,NTOF,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN)&
         CALL MPI_Recv(EFB,NTOB,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
         DO I=1,NTOFL
@@ -1220,10 +1237,10 @@ END IF
         tag=133
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Send(EFFL,NTOFL,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Recv(EFBR,NTOBR,MPI_DOUBLE_PRECISION,& 
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
         DO I=1,NTOFR
@@ -1259,10 +1276,10 @@ END IF
         IF (myid.lt.(YN-1)*ntasks/YN&
         .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
         CALL MPI_Send(EFFR,NTOFR,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_WORLD,ierr)
+        dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
         CALL MPI_Recv(EFBL,NTOBL,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_WORLD,stat,ierr)
+        source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
 !        IF (myid.gt.(ntasks-1)/YN) THEN
 !        DO I=1,NTOB
@@ -1365,17 +1382,17 @@ END IF
           tag=151
           IF (myid.NE.0)&
           CALL MPI_Send(UT,6*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_WORLD,ierr)
+          dest,tag,MPI_COMM_ACTIVE,ierr)
 
           tag=152
           IF (myid.NE.0)&
           CALL MPI_Send(NAN,3*NTOT,MPI_INTEGER,&
-          dest,tag,MPI_COMM_WORLD,ierr)
+          dest,tag,MPI_COMM_ACTIVE,ierr)
 
           tag=161
           IF (myid.NE.0)&
           CALL MPI_Send(NRXF,3*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_WORLD,ierr)
+          dest,tag,MPI_COMM_ACTIVE,ierr)
 
           IF (myid.EQ.0) THEN
   	  NRY=INT(RY/OUTINT)
@@ -1387,13 +1404,13 @@ END IF
           source=KK
 
           tag=151
-          CALL MPI_Recv(UTW,6*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
+          CALL MPI_Recv(UTW,6*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
           tag=152
-          CALL MPI_Recv(NANW,3*NTOTW(source),MPI_INTEGER,source,tag,MPI_COMM_WORLD,stat,ierr)
+          CALL MPI_Recv(NANW,3*NTOTW(source),MPI_INTEGER,source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
           tag=161
-          CALL MPI_Recv(NRXFW,3*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
+          CALL MPI_Recv(NRXFW,3*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
           DO I=1,PNN(source)
 	  X=NRXFW(1,I)+UTW(6*I-5)
@@ -1476,14 +1493,14 @@ END IF
 !
 !        dest=0
 !	tag=171
-!        IF (myid.NE.0) CALL MPI_Send(CCN,NN,MPI_DOUBLE_PRECISION,dest,tag,MPI_COMM_WORLD,ierr)
+!        IF (myid.NE.0) CALL MPI_Send(CCN,NN,MPI_DOUBLE_PRECISION,dest,tag,MPI_COMM_ACTIVE,ierr)
 !
 !        IF (myid.EQ.0) THEN
 !	OPEN(UNIT=112, FILE='frag',STATUS='UNKNOWN')
 !         DO KK=1,ntasks-1
 !         source=KK
 !         tag=171
-!         CALL MPI_Recv(CCNW,NN,MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
+!         CALL MPI_Recv(CCNW,NN,MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
 !           DO I=1,NN
 !           CCN(I)=CCN(I)+CCNW(I)
 !	   END DO
@@ -1519,7 +1536,7 @@ END IF
 
         CALL WriteRestart()
 
-!        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+!        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
 !        IF (myid.EQ.0) CALL CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
 
         CALL MPI_FINALIZE(rc)

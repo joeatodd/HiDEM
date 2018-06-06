@@ -179,6 +179,10 @@ CALL MPI_BARRIER(MPI_COMM_WORLD, ierr)
 IF(efficiency < 0.8) CALL FatalError("Too inefficient. Run with the right number of cores!")
 IF(xn*yn > ntasks) CALL FatalError("Programming Error: Not enough cores!")
 
+ntasks = xn*yn
+
+CALL RedefineMPI(ntasks,myid)
+
 !nb is the number of boxes in both the x and y direction
 ip=0
 m=MOD(myid,ntasks/YN)
