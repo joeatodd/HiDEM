@@ -204,8 +204,10 @@ Do i=1+nb*m,nb+nb*m !x step
               x=x0(1,k1) + Float(i-1)*b
 !             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
 !             If (bed(xk,yk).ne.0.0.and.bed(xk,yk+1).ne.0.0.and.bed(xk+1,yk).ne.0.0.and.bed(xk+1,yk+1).ne.0.0) then
-!             If ((z.ge.bint+mint.or.z.ge.wl).and.z.le.sint.and.(sint-bint).gt.SCL) Then
-             If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.(abs(z-wl).lt.4.0*SCL.and.bint.lt.wl))) then
+
+              !TODO - unhardcode this
+!             If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.(abs(z-wl).lt.4.0*SCL.and.bint.lt.wl))) then
+             IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
 
                !undercut shape functions
              lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
