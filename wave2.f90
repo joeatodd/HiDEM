@@ -1518,7 +1518,8 @@ END IF
 !	ENDIF
 
         IF (MOD(RY,1000).EQ.0) THEN
-	IF (myid.EQ.0) WRITE(*,*) RY,MML/MLOAD,BCC
+21          FORMAT(" TStep: ",I10," Max Load Ratio: ",F10.5," Bonds Broken: ",I10)
+	IF (myid.EQ.0) WRITE(*,21) RY,MML/MLOAD,BCC
 !	IF (BCC.NE.0) WRITE(700+myid,16) T, BCC
 	BCC=0
 	ENDIF
