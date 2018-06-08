@@ -1,6 +1,8 @@
 # The Helsinki Discrete Element Model (HiDEM) #
 
-Author: Jan Åström
+Author: Jan Åström, Maintainer: Joe Todd
+
+This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating fracture and calving at marine terminating glaciers. 
 
 ## Compilation ##
 
@@ -20,7 +22,7 @@ This initial geometry file is specified in the input file as 'Geometry File':
 
 `Geometry File = "mass3.dat"`
 
-head of a sample mass3.dat file:
+Head of a sample mass3.dat file:
 
 ```
 15851
@@ -33,13 +35,11 @@ head of a sample mass3.dat file:
 
 Replace no data with zero
 
-scale friction down 
-
-adjust the waterline
+Adjust the waterline (lowest point in domain must be non-negative)
 
 Choose the number of cores
 
-do something to the restitution coefficient
+Do something to the restitution coefficient
 
 Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
@@ -49,11 +49,13 @@ e.g. `mpirun -n 70 HiDEM`
 
 An example PBS job script is provided in example.job
 
+HiDEM partitions the model domain into squares in the XY plane, automatically computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
+
 ## simulation blow up ##
 
 if the simulation explodes (particles moving too far):
 
-Change DMP and DMP2 - multiply by two? High values for damping would be 16E4 and 8E4
+Set a higher 'translational damping' or 'rotational damping' in the input file - multiply by two? Very high values for damping might be e.g. 16E4 and 8E4
 
 Add drag near the bed
 
