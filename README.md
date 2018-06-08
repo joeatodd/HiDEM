@@ -4,6 +4,10 @@ Author: Jan Åström, Maintainer: Joe Todd
 
 This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
 
+<p align="center">
+<img src="https://i.imgur.com/LqkPXJe.png" width="400" alt="Rink Glacier with Melange">
+</p>
+
 See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://youtu.be/wXMK0e2isM4).
 
 ## Compilation ##
@@ -287,3 +291,5 @@ Seems to get rid of UTP prediction, damping
 
 
 ## TO DO ##
+
+Improve the partitioning scheme
