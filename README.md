@@ -2,7 +2,7 @@
 
 Author: Jan Åström, Maintainer: Joe Todd
 
-This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating fracture and calving at marine terminating glaciers. 
+This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
 
 ## Compilation ##
 
@@ -10,7 +10,7 @@ HiDEM can be compiled using one of the compilation scripts in this directory.
 
 `./compile_cray.sh`
 
-## input files ##
+## Input Files ##
 
 On starting, HiDEM reads the name of an input file from HIDEM\_STARTINFO (e.g. 'inp.dat').
 
@@ -51,23 +51,25 @@ An example PBS job script is provided in example.job
 
 HiDEM partitions the model domain into squares in the XY plane, automatically computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
 
-## simulation blow up ##
+## Troubleshooting ##
 
-if the simulation explodes (particles moving too far):
+If the simulation explodes (particles moving too far):
 
-Set a higher 'translational damping' or 'rotational damping' in the input file - multiply by two? Very high values for damping might be e.g. 16E4 and 8E4
+* Set a higher `Translational Damping` or `Rotational Damping` in the input file - multiply by two? Very high values for damping might be e.g. 16E4 and 8E4
 
-Add drag near the bed
+* Set `Fracture After Time = 50.0` or so, to allow the simulation to settle before permitting fracture
 
-Change the timestep
+* Add drag near the bed
 
-Change fric scale factor in input - changes bed friction
+* Change the timestep
 
-Avoid friction gradients
+* Change fric scale factor in input - changes bed friction
 
-Avoid geometry gradients
+* Avoid friction gradients
 
-Kill all motion every x timesteps
+* Avoid geometry gradients
+
+* Kill all motion every x timesteps
 
 ## Files etc ##
 
