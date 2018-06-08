@@ -163,8 +163,8 @@ YN = CEILING(1.0*ny/nb)
 efficiency = (1.0 * xn * yn)/ntasks
 
 IF(myid==0) THEN
-5 FORMAT('XN: ',I3, ' YN: ',I3,' ncores: ',I4)
-  WRITE(*,5) xn,yn,xn * yn
+5 FORMAT('Boxes per core side:',I3,' XN: ',I3, ' YN: ',I3,' ncores: ',I4)
+  WRITE(*,5) nb,xn,yn,xn * yn
 6 FORMAT('Running using ',I3,' of ',I3,' cores.')
   WRITE(*,6) xn * yn,ntasks
 7 FORMAT('This is ',F5.1,'% efficient.')

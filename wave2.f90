@@ -86,7 +86,7 @@
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
         INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists
+        LOGICAL :: BedZOnly,FileExists,PrintTimes
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
         CALL MPI_INIT(rc)
@@ -97,6 +97,8 @@
         CALL MPI_COMM_RANK(MPI_COMM_WORLD, myid, rc)
         CALL MPI_COMM_SIZE(MPI_COMM_WORLD, ntasks, rc)
         ntasks_init = ntasks
+
+        PrintTimes = .FALSE.
 
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
@@ -1374,8 +1376,10 @@ END IF
  !output
 	IF (MOD(RY,OUTINT).EQ.1) THEN
 
-20 FORMAT(" Times: ",11F4.1)
-          WRITE(*,20) TTCUM
+          IF(PrintTimes) THEN
+20          FORMAT(" Times: ",11F7.1)
+            WRITE(*,20) TTCUM
+          END IF
 
           dest=0
 
@@ -1532,7 +1536,6 @@ END IF
         CLOSE(930)
 
         CALL CPU_TIME(T2)
-	WRITE(*,*) 'TIME=',T2-T1,TS1
 
         CALL WriteRestart()
 
