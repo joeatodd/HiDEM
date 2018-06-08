@@ -108,15 +108,11 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
 
 * Set `Fracture After Time = 50.0` or so, to allow the simulation to settle before permitting fracture
 
-* Add drag near the bed
-
-* Change the timestep
-
 * Change `friction scale` in input - this scales the bed friction
 
-* Avoid friction gradients
+* Change the `timestep`
 
-* Avoid geometry gradients
+* Smooth gradients in basal friction or geometry (in `geometry file`)
 
 * Kill all motion every x timesteps
 
@@ -141,9 +137,9 @@ These are part of the compiled code:
 
 ### Other Files ###
 
-ave*.f - these compute averages of something  
+ave*.f - these compute averages of various outputs
 
-*.job - job scripts for torque  
+*.job - job scripts for PBS
 
 compile_*.sh - compilation scripts
 
@@ -154,18 +150,18 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Parameter | VarName | Description |
 | --------- | ------- | ----------- |
 | Run Name  | RUNNAME | The name of the simulation (prepended to output filenames) |
-| Work Directory | wrkdir | The subdirectory in which to store working files (must exist!) |
-| Results Directory | resdir | The subdirection in which to store result files (must exist!) |
+| Work Directory | wrkdir | The subdirectory in which to store working files (directory must exist!) |
+| Results Directory | resdir | The subdirectory in which to store result files (directory must exist!) |
 | Geometry File | geomfile | The name of the file which defines the geometry (see above) |
 | Density | RHO | The density of the material (ice) |
 | Water Density | RHOW | The density of the water in which the ice floats |
 | Gravity | GRAV | Magnitude of gravity (positive!) |
-| Backwall Pressure | PRESS | optional backwall pressure    |
+| Backwall Pressure | PRESS | optional backwall/water pressure (not yet properly implemented!)|
 | Submarine Melt    | MELT  | optional basal melt rate passed to fibg3 for altering domain shape   |
 | UC                | UC    | optional frontal melt rate   |
 | Timestep          | DT    | timestep size   |
 | Width             | S     | beam width (relative to unit particle)   |
-| Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between butting particles (or bonded particles?)   |
+| Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between connected particles   |
 | Size              | LS    | Something to do with the fcc lattice 'box size'   |
 | Domain Inclination | SUB   | Angle of the domain vs gravity vector, not used    |
 | Water Line   | WL    | Sea level for buoyancy calc   |
