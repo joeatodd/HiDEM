@@ -4,6 +4,8 @@ Author: Jan Åström, Maintainer: Joe Todd
 
 This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
 
+See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://youtu.be/wXMK0e2isM4).
+
 ## Compilation ##
 
 HiDEM can be compiled using one of the compilation scripts in this directory.
@@ -45,15 +47,36 @@ Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
 ## Running the model ##
 
-e.g. `mpirun -n 70 HiDEM`
+The model runs in parallel using MPI, so the simulation should be started using `mpirun` or `aprun`:
+
+```
+mpirun -n 70 HiDEM
+```
 
 An example PBS job script is provided in example.job
 
-HiDEM partitions the model domain into squares in the XY plane, automatically computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
+HiDEM automatically partitions the model domain into squares in the XY plane, computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
+
+The user may specify a run name which is preprended on all output files:
+
+`Run Name = Example_Simulation`
+
+#### Restarting ####
+
+It is possible to restart one run from another:
+
+`Restart = 1`
+
+If the run name has changed, specify the run from which to restart:
+
+```
+Run Name = Example_Simulation_Part2
+Restart from Run Name = Example_Simulation
+```
 
 ## Troubleshooting ##
 
-If the simulation explodes (particles moving too far):
+If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (particles moving too far):
 
 * Set a higher `Translational Damping` or `Rotational Damping` in the input file - multiply by two? Very high values for damping might be e.g. 16E4 and 8E4
 
@@ -63,7 +86,7 @@ If the simulation explodes (particles moving too far):
 
 * Change the timestep
 
-* Change fric scale factor in input - changes bed friction
+* Change `friction scale` in input - this scales the bed friction
 
 * Avoid friction gradients
 
@@ -184,18 +207,12 @@ make sure the bed is buffered beyond the edge of the ice, and define these regio
 | NRXFL,... | initial position of particles in the partition to the left   |
 
 
-## OUTPUT - jyr files and STR files ##
+## Output - JYR and STR files ##
 
-List position of all particles in x,y,z, every 2 seconds.  
+JYR files list the position of all particles in x,y,z, every 2 seconds.  
 Read this in paraview quite easily.  
 
-STR file:  
-
-midpoint  
-strain  
-
-for each node connection in initial geometry (including broken bonds)  
-
+STR file list the midpoint position and strain of each *bond* between two particles, for each node connection in initial geometry (including broken bonds)  
 
 dtop* files - these show the total energy in the system for different parts  
 
@@ -250,11 +267,9 @@ For the bed: get bed.csv, read it in same as other CSVs
 then apply Delaunay2D filter.  
 
 
-
 ## Changes made by Jan since commit ##
 
 Got rid of: UTPP, VELO, D, MAXDT,XIND,YIND  
-DAMP1,DAMP2,DRAG,BEDZONLY,MAXUT  <- but did I add these? yes  
 
 The change means BEDZONLY=TRUE is implicit  
 
@@ -272,6 +287,3 @@ Seems to get rid of UTP prediction, damping
 
 
 ## TO DO ##
-
-Allow user to specify restart prefix (i.e. look for files [prefix]_REST0*, etc)
-
