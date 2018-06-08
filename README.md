@@ -310,4 +310,20 @@ Seems to get rid of UTP prediction, damping
 
 ## TO DO ##
 
-Improve the partitioning scheme
+ * Improve the partitioning scheme
+
+ * Get rid of redundant code using pointers
+
+ * Test/example case
+
+ * Move code to src
+
+ * Add CHANGELOG
+
+ * BC strategy
+
+ ## Notes ##
+
+Domain needs to be orientated in XY because:
+
+Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask Jan)
