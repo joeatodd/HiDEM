@@ -37,6 +37,28 @@ Head of a sample mass3.dat file:
 1.000000000000000000e+02	0.000000000000000000e+00	9.248503686919999609e+02	9.248503686919999609e+02	9.248503686919999609e+02	4.768270480512356758e+07
 ```
 
+## Important Points ##
+
+#### Typical simulation domains: ####
+
+* 100m x 100m * 100m - typical particle size 2-10m
+* 100km x 100km * 1km - typical particle size 30-100m
+
+#### Boundary conditions: ####
+
+* Domain in x-y plane
+* Main flow in y-direction
+* Forces acting on edge should be defined
+
+#### Particle size: ####
+
+* Should have at least 10 particles in thickness direction (preferably 20-30).
+* Maximum ~10 million particles
+* Max timestep size scales with particle size:
+  * Too long timestep => instability
+  * Too short timestep => long execution times
+  
+
 ## Getting data ready ##
 
 Replace no data with zero
@@ -98,21 +120,26 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
 
 * Kill all motion every x timesteps
 
-## Files etc ##
+## Files, Variables and Parameters ##
+
+### HiDEM Source Code ###
 
 These are part of the compiled code:
 
-wave2.f90
-dist.f
-circ.f
-effload.f
-amat.f
-tmat.f
-ttmat.f
-kmat.f
-glas.f90
-ranmar.f
-dt.f90
+| File | Description |
+| --------- | ----------- |
+|wave2.f90 | The main program |
+|dist.f | Efficiently finding neighbouring particles which may interact |
+|circ.f | Confirms which particles are in contact and computes forces |
+|effload.f | Computes elastic forces in particle beams |
+|amat.f | Called by effload, does integration |
+|tmat.f, ttmat.f | Rotation matrices |
+|kmat.f | Stiffness matrix computation |
+|glas.f90 | Computing the FCC lattice, dense packing |
+|ranmar.f | Random number generator |
+|dt.f90 | Called by glas.f90, finds and write connections to FSfiles |
+
+### Other Files ###
 
 ave*.f - these compute averages of something  
 
@@ -122,16 +149,6 @@ compile_*.sh - compilation scripts
 
 rc2.f90, rc3.f90 - compute the calved size distrib  
 
-wave2.f90 - the main program  
-dist.f - efficiently finding neighbouring particles which may interact  
-circ.f - confirms which particles are in contact and computes forces  
-effload.f - computes elastic forces in particle beams  
-amat.f - called by effload, does integration  
-tmat.f, ttmat.f - rotation matrices  
-kmat.f - stiffness matrix computation  
-glas.f90 - computing the FCC lattice, dense packing  
-ranmar.f - random number generator  
-dt.f90 - called by glas.f90, finds and write connections to FSfiles  
 
 ### inp.dat parameters ###
 | Parameter | VarName | Description |
