@@ -16,11 +16,11 @@
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
 
-	SUBROUTINE DIST(NNA,UT,ND,NCL,NDR,NRXF,
-     1	NDL,NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,NRXFF,
-     1	NRXFB,UTB,UTF,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN,
-     1	NRXFBL,NRXFBR,NRXFFL,NRXFFR,NDLFL,NDLFR,NDLBR,NDLBL,
-     1	NDFL,NDFR,NDBR,NDBL,UTBL,UTBR,UTFL,UTFR)
+	SUBROUTINE DIST(NNA,UT,ND,NCL,NDR,NRXF, &
+     	NDL,NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,NRXFF, &
+     	NRXFB,UTB,UTF,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN, &
+     	NRXFBL,NRXFBR,NRXFFL,NRXFFR,NDLFL,NDLFR,NDLBR,NDLBL, &
+     	NDFL,NDFR,NDBR,NDBL,UTBL,UTBR,UTFL,UTFR)
 
 	IMPLICIT NONE
         include 'mpif.h'
@@ -49,8 +49,8 @@
 	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)
 
 
-c	OPEN(UNIT=10,FILE='TSR',STATUS='UNKNOWN')
-c	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
+!	OPEN(UNIT=10,FILE='TSR',STATUS='UNKNOWN')
+!	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
 
 	ND=0
 	NDR=0
@@ -63,7 +63,7 @@ c	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
 	NCL=0
 	RT=SCL*SCL*3.5
 
-	DO 100 I=1,NNA-1
+	DO I=1,NNA-1
          DX1=UT(6*I-5)
          DY1=UT(6*I-4)
          DZ1=UT(6*I-3)
@@ -84,7 +84,7 @@ c	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
 	  NDL(2,ND)=J
  	  ENDIF
 	 END DO
- 100	CONTINUE
+        END DO
 
       IF (MOD(myid,ntasks/YN).ne.0) THEN
 	DO I=1,PNN(myid-1)
@@ -264,8 +264,8 @@ c	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
 	 END DO
 	 END IF
 
-      IF (myid.lt.(YN-1)*ntasks/YN
-     1.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
+      IF (myid.lt.(YN-1)*ntasks/YN &
+           .AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) THEN
 	DO I=1,PNN(myid+ntasks/YN+1)
           DX1=UTFR(6*I-5)
           DY1=UTFR(6*I-4)
