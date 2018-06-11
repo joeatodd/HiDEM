@@ -126,6 +126,7 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
   - `compilation` - example compilation scripts
   - `job_scripts` - example PBS scripts
   - `io` - fortran programs for modifying input
+  - `paraview` - macros for working with HiDEM data in Paraview
 
 ### HiDEM Source Code ###
 
