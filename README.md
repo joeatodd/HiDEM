@@ -322,6 +322,10 @@ Seems to get rid of UTP prediction, damping
 
  * BC strategy
 
+ * KIND=dp?
+
+ * Translate & Rotate input
+
  ## Notes ##
 
 Domain needs to be orientated in XY because:
