@@ -85,6 +85,14 @@
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
         INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
+
+!       TODO - Implement these pointers!
+        INTEGER, POINTER :: NTOPtr, NDPtr, NDLPtr1(:,:), NDLPtr2(:,:)
+        INTEGER, POINTER :: FXPtr, FXFPtr1(:,:), FXFPtr2(:,:), FXCPtr1(:,:), FXCPtr2(:,:)
+        INTEGER, POINTER :: NANPtr1(:,:),NANPtr2(:,:)
+        REAL, POINTER :: UTPtr1(:), UTPtr2(:), NRXPtr1(:), NRXPtr2(:), NRXFPtr1(:), NRXFPtr2(:)
+        REAL, POINTER :: EPtr1(:), EPtr2(:), EFPtr1(:), EFPtr2(:)
+
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,PrintTimes
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
@@ -237,6 +245,10 @@ END IF
 	IF (REST.EQ.0) THEN
 
 	RY0=1
+
+!TODO - automatically translate and rotate the input data 
+!     (interp required <- either at load time or within BIPINT)
+!     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
 	CALL FIBG3(LS,NN,NTOT,NTOL,NTOR,NTOF,NTOB,NTOFR,NTOBR,NTOFL,NTOBL,&
