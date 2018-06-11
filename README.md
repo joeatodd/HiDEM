@@ -12,9 +12,9 @@ See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://
 
 ## Compilation ##
 
-HiDEM can be compiled using one of the compilation scripts in this directory.
+On Cray systems, HiDEM can be compiled using the script `compile.sh`.
 
-`./compile_cray.sh`
+Additional compilation scripts are located in scripts/compilation.
 
 ## Input Files ##
 
@@ -118,6 +118,15 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
 
 ## Files, Variables and Parameters ##
 
+### Structure of the repository ###
+
+* `src` - all the code required to compile the HiDEM binary.
+* Within the `scripts` directory:
+  - `analysis` - various fortran and python scripts for post-processing
+  - `compilation` - example compilation scripts
+  - `job_scripts` - example PBS scripts
+  - `io` - fortran programs for modifying input
+
 ### HiDEM Source Code ###
 
 These are part of the compiled code:
@@ -138,10 +147,6 @@ These are part of the compiled code:
 ### Other Files ###
 
 ave*.f - these compute averages of various outputs
-
-*.job - job scripts for PBS
-
-compile_*.sh - compilation scripts
 
 rc2.f90, rc3.f90 - compute the calved size distrib  
 

@@ -1,0 +1,16 @@
+## [2.0.0] - Unreleased
+### Added
+	- Automatic computation of domain partitioning
+	- 'Run Name' parameter, appended to all output data
+	- 'Restart from Run Name' to make restarting easier
+	- 'Work Directory' and 'Results Directory' for organising output
+
+### Changed
+	- Format of input file (now specified as "Param Name = Value" rather than ordered list)
+	- Reorganise code into directories (src, scripts, etc)
+	- Unhardcoded density, gravity, geometry input file, etc
+	- Convert most source from F77 to F90
+	- Move to semantic versioning (2.0 -> 2.0.0)
+
+## [1.0] - 24/05/2018
+	- Initial release of existing code
