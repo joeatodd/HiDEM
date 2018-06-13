@@ -217,8 +217,8 @@ Do i=1+nb*m,nb+nb*m !x step
              lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
              UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
 !             If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
-             If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
-             If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
+             ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
+             ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
 
              ip=ip+1
 	     xo(1,ip) = x0(1,k1) + Float(i-1)*b	
@@ -230,8 +230,8 @@ Do i=1+nb*m,nb+nb*m !x step
              if (xo(1,ip).lt.minx) minx=xo(1,ip)
              if (xo(2,ip).lt.miny) miny=xo(2,ip)
              if (xo(3,ip).lt.minz) minz=xo(3,ip)
-             EndIF
-             EndIF
+             ! EndIF
+             ! EndIF
              EndIF
 !             EndIF
 	  EndDo
