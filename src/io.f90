@@ -78,9 +78,10 @@ CONTAINS
      IF(readstat < 0) EXIT
      incount = incount+1
 
-     i = INDEX(TRIM(buff),'!')
-     IF(i>0) CYCLE
-
+     !Ignore comments and blank lines
+     IF(INDEX(TRIM(buff),'!') > 0) CYCLE
+     IF (LEN_TRIM(buff) == 0) CYCLE
+ 
      i = INDEX(buff,'=')
      IF(i==0) PRINT *,'Format error in input file on line: ',incount
 

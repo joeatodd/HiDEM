@@ -1518,10 +1518,10 @@ END IF
 !	ENDIF
 
         IF (MOD(RY,1000).EQ.0) THEN
-21          FORMAT(" TStep: ",I10," Max Load Ratio: ",F10.5," Bonds Broken: ",I10)
-	IF (myid.EQ.0) WRITE(*,21) RY,MML/MLOAD,BCC
-!	IF (BCC.NE.0) WRITE(700+myid,16) T, BCC
-	BCC=0
+21          FORMAT(" TStep: ",I10," Simulation time: ",F10.5," secs")
+          !IF (myid.EQ.0) WRITE(*,21) RY,MML/MLOAD,BCC
+          IF (myid.EQ.0) WRITE(*,21) RY,T
+          BCC=0
 	ENDIF
 
         !TODO  TIME 11
