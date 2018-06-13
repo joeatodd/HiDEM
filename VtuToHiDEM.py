@@ -13,10 +13,10 @@ from scipy.interpolate import Rbf
 ######################
 
 def usage():
-    print("Usage: " + sys.argv[0] + " -i input.pvtu -b bed_dem_file -t transform_file (optional)")
+    print("Usage: " + sys.argv[0] + " -i input.pvtu -b bed_dem_file  -p param_file -t transform_file (optional)")
 
 try:
-	opts, args = getopt.getopt(sys.argv[1:],"i:b:t:h")
+	opts, args = getopt.getopt(sys.argv[1:],"i:b:p:t:h")
 except getopt.GetoptError:
 	usage()
 	sys.exit(2)
@@ -24,6 +24,7 @@ except getopt.GetoptError:
 got_infile = False
 got_beddem = False
 got_transform = False
+got_param = False
 
 for opt, arg in opts:
 	if(opt =="-i"):
@@ -35,11 +36,14 @@ for opt, arg in opts:
 	if(opt =="-t"):
 		transform_file = arg
 		got_transform = True
+	if(opt =="-p"):
+		param_file = arg
+		got_param = True
 	elif(opt == "-h"):
 		usage()
 		sys.exit(2)
 
-if(not(got_infile) or not(got_beddem)):
+if(not(got_infile) or not(got_beddem) or not(got_param)):
 	usage()
 	sys.exit(2)
 
@@ -49,6 +53,43 @@ determine_transform = not got_transform
 ### Parameters ####
 ###################
 
+
+# maps label to attribute name and types
+label_attr_map = {
+       "front_orientation:": ["front_orientation", float, float, float],
+        "upstream_extent:": [ "upstream_extent", float],
+        "downstream_extent:": [ "downstream_extent", float],
+        "grid_res:": [ "grid_res", float],
+    "front_id:": [ "front_id", int],
+    "bed_id:": [ "bed_id", int],
+    "surf_id:": [ "surf_id", int]
+}
+
+class Params(object):
+    def __init__(self, input_file_name):
+        with open(input_file_name, 'r') as input_file:
+            for line in input_file:
+                if "#" in line: continue
+                if line == "\n": continue
+                row = line.split()
+                label = row[0]
+                data = row[1:]  # rest of row is data list
+
+                attr = label_attr_map[label][0]
+                datatypes = label_attr_map[label][1:]
+
+                values = [(datatypes[i](data[i])) for i in range(len(data))]
+                self.__dict__[attr] = values if len(values) > 1 else values[0]
+
+params = Params(param_file)
+print params.downstream_extent
+print params.upstream_extent
+print params.front_orientation
+print params.front_id
+print params.bed_id
+print params.surf_id
+print params.grid_res
+
 #result_file = sys.argv[1]
 # bed_dem_file = "BedOut.xyz"
 # transform_file = "StoreCalving3D_Sik1_PlaM1_BasM1_PluM1_10__precalve0021.transform"
@@ -56,22 +97,27 @@ determine_transform = not got_transform
 
 
 #vector normal to calving front
-front_orientation = [-0.9008556490535132, -0.43411876205523897, 0.0]
+#front_orientation = [-0.9008556490535132, -0.43411876205523897, 0.0]
+front_orientation = params.front_orientation
 
+#the new origin
+upstream_extent = params.upstream_extent
+downstream_extent = params.downstream_extent
+grid_res = params.grid_res
 
 #Define the grid for HiDEM (Store front)
 
-#how far upstream behind the front do we want to go?
-upstream_extent = 5000.0
-#how far into the fjord do we want bathy?
-downstream_extent = 1000.0
-#required resolution
-grid_res = 50.0
+# #how far upstream behind the front do we want to go?
+# upstream_extent = 5000.0
+# #how far into the fjord do we want bathy?
+# downstream_extent = 1000.0
+# #required resolution
+# grid_res = 50.0
 
 #the geometry IDs of the BCs
-front_id = 1
-bed_id = 5
-surf_id = 6
+front_id = params.front_id
+bed_id = params.bed_id
+surf_id = params.surf_id
 
 #the value to replace unfound values - is this used??
 bed_nanval = 0.0
