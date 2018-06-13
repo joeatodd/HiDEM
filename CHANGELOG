@@ -4,6 +4,7 @@
 	- 'Run Name' parameter, appended to all output data
 	- 'Restart from Run Name' to make restarting easier
 	- 'Work Directory' and 'Results Directory' for organising output
+	- Synthetic test case
 
 ### Changed
 	- Format of input file (now specified as "Param Name = Value" rather than ordered list)

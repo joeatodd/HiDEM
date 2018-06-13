@@ -71,6 +71,12 @@ Do something to the restitution coefficient
 
 Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
 
+## Test Case ##
+
+A test case is provided in the `test` directory. This is a simple rectangular domain with a sloping upper surface. This simulation will produce fracturing behaviour within a 6 hour simulation on 130 CPUs. The user should edit `example.job` to provide a valid PBS budget account, and the correct number of nodes and cores (currently 6, 130) depending on system architecture (cores per node).
+
+The behaviour of the test case can be changed by modifying `Max Load` and `Friction Scale` in inp.dat.
+
 ## Running the model ##
 
 The model runs in parallel using MPI, so the simulation should be started using `mpirun` or `aprun`:
