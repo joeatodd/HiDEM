@@ -193,7 +193,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Drag Coefficient        | DRAG  | The drag coefficient   |
 | Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   |
 | Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   |
-| Maximum Displacement       | MAXUT | The maximum velocity of particles (particles faster than this may be frozen if this is turned on)   |
+| Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   |
 | Fracture After Time | FRACTIME | Fracture is permitted after this time. |
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
