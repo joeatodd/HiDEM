@@ -3,8 +3,9 @@ import math
 import sys
 import getopt
 from paraview.simple import *
-from vtk.util.numpy_support import vtk_to_numpy
-import vtk
+#from vtk.util.numpy_support import vtk_to_numpy
+from paraview.numpy_support import vtk_to_numpy
+import paraview.vtk as vtk
 from scipy import interpolate as interp
 from scipy.interpolate import Rbf
 
@@ -326,10 +327,18 @@ frontthresh.Scalars = ['CELLS', 'GeometryIds']
 frontthresh.ThresholdRange = [100+front_id, 100+front_id]
 frontdata = servermanager.Fetch(frontthresh)
 
+calculatorf = Calculator(Input=frontthresh)
+calculatorf.Function = '-1'
+calculatorf.ResultArrayName = 'gl'
+
 bedthresh = Threshold(Input=transform1)
 bedthresh.Scalars = ['CELLS', 'GeometryIds']
 bedthresh.ThresholdRange = [100+bed_id, 100+bed_id]
 beddata = servermanager.Fetch(bedthresh)
+
+calculatorb = Calculator(Input=bedthresh)
+calculatorb.Function = '((groundedmask>-0.5)*2) - 1'
+calculatorb.ResultArrayName = 'gl'
 
 surfthresh = Threshold(Input=transform1)
 surfthresh.Scalars = ['CELLS', 'GeometryIds']
@@ -337,7 +346,7 @@ surfthresh.ThresholdRange = [100+surf_id, 100+surf_id]
 surfdata = servermanager.Fetch(surfthresh)
 
 #group the bed and front for ice surface extraction
-bedfront = GroupDatasets(Input=[frontthresh, bedthresh])
+bedfront = GroupDatasets(Input=[calculatorf, calculatorb])
 bedfrontdata = servermanager.Fetch(bedfront)
 
 #flatten base/front group
@@ -352,7 +361,6 @@ flatbase.ScaleFactor = -1.0
 #and resample onto plane
 baseresamp = ResampleWithDataset(Input=flatbase,
     Source=SamplePlane)
-
 
 #flatten ice surface
 calculator2 = Calculator(Input=surfthresh)
@@ -373,7 +381,7 @@ baseplane_points = vtk_to_numpy(baseresampdata.GetPoints().GetData())
 baseplane_z = vtk_to_numpy(baseresampdata.GetPointData().GetArray("zvec"))[:,-1]
 baseplane_slip = vtk_to_numpy(baseresampdata.GetPointData().GetArray("slip coefficient 2"))
 baseplane_mask = vtk_to_numpy(baseresampdata.GetPointData().GetArray("vtkValidPointMask"))
-baseplane_grounded = vtk_to_numpy(baseresampdata.GetPointData().GetArray("groundedmask"))
+baseplane_grounded = vtk_to_numpy(baseresampdata.GetPointData().GetArray("gl"))
 
 #fetch surf data
 surfresampdata = servermanager.Fetch(surfresamp)
@@ -453,7 +461,6 @@ final_slip = final_slip / (1.0E-6/(365.25*24*60*60))
 final_slip[final_slip < 0.0] = -final_slip[final_slip < 0.0]
 
 #Where there's no ice, set surf=base=bed
-
 
 #translate Z
 final_bed += z_translate
