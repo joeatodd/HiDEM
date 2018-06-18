@@ -97,10 +97,10 @@ for j,f in enumerate(infiles[1:]):
 
     #stdev = np.std(strate)
 
-    plt.matshow(np.flipud(sx_side.T),vmax=0.01)
+    plt.matshow(np.flipud(sx_side.T),vmin=0.0, vmax=0.01,cmap='jet')
     plt.savefig(f+"_side.png")
     plt.close()
 
-    plt.matshow(sx_plan,vmax=0.01)
+    plt.matshow(sx_plan,vmin=0.0, vmax=0.01,cmap='jet')
     plt.savefig(f+"_plan.png")
     plt.close()
