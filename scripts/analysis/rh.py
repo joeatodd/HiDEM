@@ -26,13 +26,15 @@ for opt, arg in opts:
         sys.exit(2)
 
 #read files
-str1 = np.genfromtxt(str1_file)
-str2 = np.genfromtxt(str2_file)
+str1 = np.fromfile(str1_file,sep=" ").reshape((-1,4))
+str2 = np.fromfile(str2_file,sep=" ").reshape((-1,4))
 
 #get the strain 'rate'
 strate = str2[:,3] - str1[:,3]
 
-extent = [min(str1[:,0]), max(str1[:,0]), min(str1[:,1]), max(str1[:,1]), min(str1[:,2]), max(str1[:,2])]
+extent_min = str1[:,:-1].min(0)
+extent_max = str1[:,:-1].max(0)
+extent = [extent_min[0],extent_max[0],extent_min[1],extent_max[1],extent_min[2],extent_max[2]]
 
 dx = 60.0
 dz = 60.0

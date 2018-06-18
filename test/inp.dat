@@ -1,0 +1,22 @@
+Run Name = "HiDEM_test"
+Geometry File = "test_geometry.dat"
+Work Directory = "./work"
+Results Directory = "./Results"
+Density = 930.0
+Water Density = 1030.0
+Gravity = 9.81
+Water Line = 100.0
+Grid = 25.0
+Scale = 20.0
+Timestep = 1.0E-4
+Output Interval = 20000
+No Timesteps = 5000000
+Bed Stiffness Constant = 1.0E8
+Bed Z Only = False
+
+!Allow the domain some time to settle:
+Fracture After Time = 40.0
+
+!Changing these two parameters will alter model behaviour:
+Max Load = 0.0002
+Friction Scale = 1.0

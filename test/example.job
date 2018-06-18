@@ -1,0 +1,11 @@
+#!/bin/bash --login
+#PBS -N HiDEMSim
+#PBS -l select=6
+#PBS -l walltime=06:00:00
+#PBS -A [your_budget_account]
+export PBS_O_WORKDIR=$(readlink -f $PBS_O_WORKDIR)
+cd $PBS_O_WORKDIR
+export OMP_NUM_THREADS=1
+
+mkdir -p ./Results ./work
+aprun -n 130 $PBS_O_WORKDIR/HiDEM 1> LOG_$PBS_JOBID 2> ERRLOG_$PBS_JOBID

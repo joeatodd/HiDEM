@@ -26,7 +26,8 @@ CONTAINS
 
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime)
+      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
+      StrictDomain)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL*8 :: fractime
@@ -34,7 +35,7 @@ CONTAINS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
-   LOGICAL :: BedZOnly
+   LOGICAL :: BedZOnly,StrictDomain
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -62,7 +63,7 @@ CONTAINS
    DRAG = 1.0E1
    OUTINT = 20000
    RESOUTINT = 20000
-   MAXUT = 5.0E3
+   MAXUT = 1.0E6
    GRAV = 9.81
    RHO = 900.0
    RHOW = 1030.0
@@ -71,6 +72,7 @@ CONTAINS
    wrkdir = './'
    resdir = './'
    fractime = 40.0
+   StrictDomain = .TRUE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -78,9 +80,10 @@ CONTAINS
      IF(readstat < 0) EXIT
      incount = incount+1
 
-     i = INDEX(TRIM(buff),'!')
-     IF(i>0) CYCLE
-
+     !Ignore comments and blank lines
+     IF(INDEX(TRIM(buff),'!') > 0) CYCLE
+     IF (LEN_TRIM(buff) == 0) CYCLE
+ 
      i = INDEX(buff,'=')
      IF(i==0) PRINT *,'Format error in input file on line: ',incount
 
@@ -169,6 +172,8 @@ CONTAINS
        READ(VarValue,*) BedZOnly
      CASE("fracture after time")
        READ(VarValue,*) fractime
+     CASE("Strict Domain Interpolation")
+       READ(VarValue,*) StrictDomain
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -189,7 +194,7 @@ CONTAINS
    END IF
 
    IF(myid==0) THEN
-     PRINT *,'---------------Input Vars-----------------'
+     PRINT *,'--------------------Input Vars----------------------'
      WRITE(*,'(A,A)') "Run Name = ",TRIM(runname)
      IF(REST == 1) WRITE(*,'(A,A)') "Restarting from Run Name = ",TRIM(restname)
      WRITE(*,'(A,A)') "Geometry File = ",TRIM(geomfile)
@@ -226,7 +231,7 @@ CONTAINS
      WRITE(*,'(A,I0)') "No Timesteps = ",STEPS0
      WRITE(*,'(A,F9.2)') "Grid = ",GRID
      WRITE(*,'(A,F9.2)') "Fracture After Time = ",fractime
-     PRINT *,'---------------End Input------------------'
+     PRINT *,'----------------------------------------------------'
    END IF
 END SUBROUTINE ReadInput
 

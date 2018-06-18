@@ -71,7 +71,7 @@
 	INTEGER P,BCC,FXC,NCL,NDR,NDF,NDB
 	INTEGER NDFL,NDBL,NDFR,NDBR
 	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
-	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)!,XIND,YIND
+	INTEGER NDLFR(2,NODC),NDLBR(2,NODC),XIND,YIND
 	REAL*8 KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL*8 WENS,GSUMS,DPES,BCES
 	REAL*8 XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -94,7 +94,8 @@
         REAL, POINTER :: EPtr1(:), EPtr2(:), EFPtr1(:), EFPtr2(:)
 
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists,PrintTimes
+        LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain
+        LOGICAL, ALLOCATABLE :: LostParticle(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
         CALL MPI_INIT(rc)
@@ -139,7 +140,7 @@ END IF
 
         CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, DAMP2, &
-             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime)
+             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime,StrictDomain)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -252,7 +253,8 @@ END IF
 
         !Go to glas.f90 to make the grid
 	CALL FIBG3(LS,NN,NTOT,NTOL,NTOR,NTOF,NTOB,NTOFR,NTOBR,NTOFL,NTOBL,&
-        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC)
+        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC,&
+        StrictDomain)
 
 	write(*,17) myid,NTOL,NTOT,NTOR,NTOF,NTOB,NTOFL,NTOFR,NTOBL,NTOBR
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
@@ -368,7 +370,11 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
-	END IF
+        END IF !Restart
+
+        !Keep track of any particles which leave the domain
+        ALLOCATE(LostParticle(nn))
+        LostParticle = .FALSE.
 
         !Set bed -1000.0 everywhere
         DO I=-100,2000
@@ -847,7 +853,8 @@ END IF
 	GSUM=0.0
 	ENM=0.0
 
-	DO 27 I=1,NN
+	DO I=1,NN !Cycle over particles
+
         !TODO  TIME 6
         CALL CPU_TIME(TT(6))
         IF(I>1) THEN
@@ -972,19 +979,22 @@ END IF
 
         !Check that particles haven't left the domain
         !and freeze them if they have!
-         ! XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
-         ! YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
-         ! IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
-         !     ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
-         !     ABS(UTP(6*I-3)) > MAXUT) THEN
-         !   UTP(6*I-5) = UT(6*I-5)
-         !   UTP(6*I-4) = UT(6*I-4)
-         !   UTP(6*I-3) = UT(6*I-3)
-         !   UTP(6*I-2) = UT(6*I-2)
-         !   UTP(6*I-1) = UT(6*I-1)
-         !   UTP(6*I-0) = UT(6*I-0)
-         !   PRINT *, myid, " Lost a particle : ",I," at time: ",T
-         ! END IF
+         XIND = INT((NRXF(1,I) + UTP(6*I-5))/GRID)
+         YIND = INT((NRXF(2,I) + UTP(6*I-4))/GRID)
+         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
+             ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
+             ABS(UTP(6*I-3)) > MAXUT) THEN
+           UTP(6*I-5) = UT(6*I-5)
+           UTP(6*I-4) = UT(6*I-4)
+           UTP(6*I-3) = UT(6*I-3)
+           UTP(6*I-2) = UT(6*I-2)
+           UTP(6*I-1) = UT(6*I-1)
+           UTP(6*I-0) = UT(6*I-0)
+           IF(.NOT. LostParticle(I)) THEN
+             PRINT *, myid, " Lost a particle : ",I," at time: ",T
+             LostParticle(i) = .TRUE.
+           END IF
+         END IF
 
 !	IF (X.LT.4000.0.AND.Y.LT.4000.0) THEN
 !	IF ((ZB.GT.WL-2.0*SCL.OR.Z-ZB.LT.5.0*SCL).AND.ABS(Z-ZB).LT.2.0*SCL) THEN
@@ -1043,7 +1053,8 @@ END IF
        CALL CPU_TIME(TT(9))
        TTCUM(9) = TTCUM(9) + (TT(9) - TT(8))
 
- 27	CONTINUE
+       END DO !loop over particles
+
 
         IF (RY.EQ.1) THEN
         CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
@@ -1530,10 +1541,10 @@ END IF
 !	ENDIF
 
         IF (MOD(RY,1000).EQ.0) THEN
-21          FORMAT(" TStep: ",I10," Max Load Ratio: ",F10.5," Bonds Broken: ",I10)
-	IF (myid.EQ.0) WRITE(*,21) RY,MML/MLOAD,BCC
-!	IF (BCC.NE.0) WRITE(700+myid,16) T, BCC
-	BCC=0
+21          FORMAT(" TStep: ",I10," Simulation time: ",F10.5," secs")
+          !IF (myid.EQ.0) WRITE(*,21) RY,MML/MLOAD,BCC
+          IF (myid.EQ.0) WRITE(*,21) RY,T
+          BCC=0
 	ENDIF
 
         !TODO  TIME 11
@@ -1556,6 +1567,9 @@ END IF
 !        IF (myid.EQ.0) CALL CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
 
         CALL MPI_FINALIZE(rc)
+
+        DEALLOCATE(LostParticle)
+
   	STOP
 
 CONTAINS

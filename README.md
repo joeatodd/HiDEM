@@ -37,6 +37,10 @@ Head of a sample mass3.dat file:
 1.000000000000000000e+02	0.000000000000000000e+00	9.248503686919999609e+02	9.248503686919999609e+02	9.248503686919999609e+02	4.768270480512356758e+07
 ```
 
+Note: To avoid spurious single particles appearing at the edge of the domain, interpolation of 
+particle locations is not permitted where not all 4 supporting points have valid surface and bed
+values. To permit this, set `	    Strict Domain Interpolation = False`.
+
 ## Important Points ##
 
 #### Typical simulation domains: ####
@@ -70,6 +74,12 @@ Choose the number of cores
 Do something to the restitution coefficient
 
 Point to the input file (e.g. testinp.dat) using HIDEM_STARTINFO
+
+## Test Case ##
+
+A test case is provided in the `test` directory. This is a simple rectangular domain with a sloping upper surface. This simulation will produce fracturing behaviour within a 6 hour simulation on 130 CPUs. The user should edit `example.job` to provide a valid PBS budget account, and the correct number of nodes and cores (currently 6, 130) depending on system architecture (cores per node).
+
+The behaviour of the test case can be changed by modifying `Max Load` and `Friction Scale` in inp.dat.
 
 ## Running the model ##
 
@@ -126,6 +136,7 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
   - `compilation` - example compilation scripts
   - `job_scripts` - example PBS scripts
   - `io` - fortran programs for modifying input
+  - `paraview` - macros for working with HiDEM data in Paraview
 
 ### HiDEM Source Code ###
 
@@ -186,10 +197,11 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Drag Coefficient        | DRAG  | The drag coefficient   |
 | Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   |
 | Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   |
-| Maximum Displacement       | MAXUT | The maximum velocity of particles (particles faster than this may be frozen if this is turned on)   |
+| Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   |
 | Fracture After Time | FRACTIME | Fracture is permitted after this time. |
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
+| Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
 
 ### mass3.dat ####
 
