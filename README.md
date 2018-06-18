@@ -37,6 +37,10 @@ Head of a sample mass3.dat file:
 1.000000000000000000e+02	0.000000000000000000e+00	9.248503686919999609e+02	9.248503686919999609e+02	9.248503686919999609e+02	4.768270480512356758e+07
 ```
 
+Note: To avoid spurious single particles appearing at the edge of the domain, interpolation of 
+particle locations is not permitted where not all 4 supporting points have valid surface and bed
+values. To permit this, set `	    Strict Domain Interpolation = False`.
+
 ## Important Points ##
 
 #### Typical simulation domains: ####
@@ -197,6 +201,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Fracture After Time | FRACTIME | Fracture is permitted after this time. |
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
+| Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
 
 ### mass3.dat ####
 

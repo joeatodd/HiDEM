@@ -4,7 +4,7 @@
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,&
-     maxy,maxz,minx,miny,minz,ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC)
+     maxy,maxz,minx,miny,minz,ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC,StrictDomain)
 
 Implicit none
 INCLUDE 'na90.dat'
@@ -15,6 +15,8 @@ Real*8 :: box,xo(3,1000000),b,maxx,maxy,maxz,minx,miny,minz,SCL
 INTEGER :: l,ND,ip,i,j,NDLC,NDRC,NDFC,NDBC,YN,XN,NDFRC,NDBRC,NDFLC,NDBLC
 INTEGER :: myid,ntasks,N1,N2,xk,yk
 CHARACTER(LEN=256) :: wrkdir,geomfile
+LOGICAL :: StrictDomain
+
 !Open(300,file='mass.dat',STATUS='OLD')
 OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
 
@@ -76,7 +78,7 @@ minz=1.0e+08
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*Dfloat(l) ! box size equal to fcc ground state
 
-CALL Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC)
+CALL Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
 
 CALL DT(ip,xo,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,wrkdir,SCL,YN)
 
@@ -91,7 +93,7 @@ End Subroutine
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC)
+SUBROUTINE Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
 
   USE INOUT
 
@@ -106,6 +108,7 @@ REAL*8 gridminx, gridmaxx, gridminy, gridmaxy
 !Real*8 z,surf(-100:3000,-100:3000),bed(-100:3000,-100:3000)
 REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV,nxny,YN_estimate, XN_estimate, efficiency
 INTEGER i,j,k,k1,k2,l,ip,myid,ntasks,m,nb,YN,XN,xk,yk,nx,ny,ierr
+LOGICAL :: StrictDomain
 
 !Open(1510+myid,file='tt'//na(myid))
 11    FORMAT(2I8,' ',2F14.7)
@@ -163,6 +166,8 @@ YN = CEILING(1.0*ny/nb)
 efficiency = (1.0 * xn * yn)/ntasks
 
 IF(myid==0) THEN
+  PRINT *, ' '
+  PRINT *, '-------------Domain Partitioning--------------------'
 5 FORMAT('Boxes per core side:',I3,' XN: ',I3, ' YN: ',I3,' ncores: ',I4)
   WRITE(*,5) nb,xn,yn,xn * yn
 6 FORMAT('Running using ',I3,' of ',I3,' cores.')
@@ -196,6 +201,10 @@ Do i=1+nb*m,nb+nb*m !x step
              y=(x0(2,k1) + Float(j-1)*b)/grid
              xk=INT((x0(1,k1) + Float(i-1)*b)/grid)
              yk=INT((x0(2,k1) + Float(j-1)*b)/grid)
+
+             !just beyond edge of geom def
+             IF(ANY(surf(xk:xk+1,yk:yk+1) == bed(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
+
              Call BIPINT(x-xk,y-yk,bed(xk,yk),bed(xk,yk+1),bed(xk+1,yk),bed(xk+1,yk+1),bint)
              Call BIPINT(x-xk,y-yk,surf(xk,yk),surf(xk,yk+1),surf(xk+1,yk),surf(xk+1,yk+1),sint)
              Call BIPINT(x-xk,y-yk,melt(xk,yk),melt(xk,yk+1),melt(xk+1,yk),melt(xk+1,yk+1),mint)
