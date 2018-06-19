@@ -235,6 +235,183 @@ CONTAINS
    END IF
 END SUBROUTINE ReadInput
 
+SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
+
+  USE MPI
+  INCLUDE 'na90.dat'
+
+  INTEGER :: NRY,ntasks,myid,NN,NNTot,Offset,i,PNN(:)
+  REAL*8 :: val, NRXF(:,:), UT(:),X,Y,Z
+  CHARACTER(LEN=256) :: resdir, runname
+  CHARACTER(LEN=1024) :: output_str
+  CHARACTER :: lfeed
+  REAL*8, ALLOCATABLE :: work_arr_dp(:)
+  REAL*4, ALLOCATABLE :: work_arr_sp(:)
+  INTEGER :: fh,subarray,ierr,testsum,contig_type,realsize
+  INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_mystart
+  LOGICAL :: DoublePrec
+
+  DoublePrec = .FALSE.
+  lfeed = CHAR(10) !line feed character
+
+  NN = PNN(myid+1)
+  NNtot = SUM(PNN(1:ntasks))
+  fh_mpi_offset = 0
+
+  !Compute positions
+  IF(DoublePrec) THEN
+    ALLOCATE(work_arr_dp(3*NN))
+    work_arr_dp = 0.0
+    DO i=1,NN
+      work_arr_dp((i-1)*3 + 1) = NRXF(1,i)+UT(6*I-5)
+      work_arr_dp((i-1)*3 + 2) = NRXF(2,i)+UT(6*I-4)
+      work_arr_dp((i-1)*3 + 3) = NRXF(3,i)+UT(6*I-3)
+    END DO
+  ELSE
+    ALLOCATE(work_arr_sp(3*NN))
+    work_arr_sp = 0.0
+    DO i=1,NN
+      work_arr_sp((i-1)*3 + 1) = NRXF(1,i)+UT(6*I-5)
+      work_arr_sp((i-1)*3 + 2) = NRXF(2,i)+UT(6*I-4)
+      work_arr_sp((i-1)*3 + 3) = NRXF(3,i)+UT(6*I-3)
+    END DO
+  END IF
+
+  !PRINT *,'Myid: ',myid,' Size,first,last testarr: ',SIZE(work_arr_dp),work_arr_dp(1), work_arr_dp(SIZE(work_arr_dp))
+ 
+  IF(DoublePrec) THEN
+    CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
+  ELSE
+    CALL MPI_TYPE_SIZE(MPI_REAL4, realsize, ierr)
+  END IF
+
+  fh_mystart=0
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystart = fh_mystart + PNN(i)*3*realsize
+  END DO
+  testsum = NNTot*3*realsize
+  !PRINT *,myid,' fh_mystart: ',fh_mystart, NN, testsum
+
+!-------------------------------------------------------------
+  IF(DoublePrec) THEN
+    CALL MPI_Type_Contiguous(3, MPI_DOUBLE_PRECISION, contig_type, ierr)
+  ELSE
+    CALL MPI_Type_Contiguous(3, MPI_REAL4, contig_type, ierr)
+  END IF
+  CALL MPI_Type_Commit(contig_type, ierr)
+!-------------------------------------------------------------
+
+  CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
+       MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
+
+  IF(myid==0) THEN
+
+    Offset = 0
+
+    !TODO - test endianness
+
+    WRITE( output_str,'(A)') '<?xml version="1.0"?>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+   
+    WRITE( output_str, '(A)') '<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '  <UnstructuredGrid>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A,I0,A)') '    <Piece NumberOfPoints="',NNtot,'" NumberOfCells="0">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '      <Points>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    IF(DoublePrec) THEN
+      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Float64" Name="Position" NumberOfComponents="3" format="appended" offset="',&
+           Offset,'"/>'//lfeed
+    ELSE
+      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Float32" Name="Position" NumberOfComponents="3" format="appended" offset="',&
+           Offset,'"/>'//lfeed
+    END IF
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '      </Points>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '      <Cells>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        <DataArray type="Int32" Name="connectivity" format="ascii">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        </DataArray>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        <DataArray type="Int32" Name="offsets" format="ascii">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        </DataArray>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        <DataArray type="UInt8" Name="types" format="ascii">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '        </DataArray>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '      </Cells>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '    </Piece>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '  </UnstructuredGrid>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A)') '  <AppendedData encoding="raw">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    CALL MPI_File_Write(fh, "_", 1, MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, INT(NNtot * KIND(val) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+
+    !Compute the length of the header...
+    CALL MPI_File_Get_Position(fh, fh_mpi_offset,ierr)
+    CALL MPI_File_Get_Byte_Offset(fh, fh_mpi_offset,fh_mpi_byte_offset,ierr)
+  END IF
+
+  !... and tell everyone else
+  CALL MPI_BCast(fh_mpi_byte_offset,1, MPI_OFFSET, 0, MPI_COMM_ACTIVE, ierr)
+
+  !Update cpu specific start point
+  fh_mystart = fh_mpi_byte_offset + fh_mystart
+
+  !Write the points (using collective I/O)
+  IF(DoublePrec) THEN
+    CALL MPI_File_Set_View(fh, fh_mystart, MPI_DOUBLE_PRECISION, contig_type, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Write_All(fh, work_arr_dp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
+  ELSE
+    CALL MPI_File_Set_View(fh, fh_mystart, MPI_REAL4, contig_type, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Write_All(fh, work_arr_sp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
+  END IF
+
+
+  !Reset the MPI I/O view to default (full file, read as bytes)
+  fh_mystart = 0
+  CALL MPI_File_Set_View(fh, fh_mystart, MPI_BYTE, MPI_BYTE, 'native', MPI_INFO_NULL, ierr)
+
+  IF(myid==0) THEN
+    !Write vtu footer to end of file
+    CALL MPI_File_Seek(fh, fh_mystart,MPI_SEEK_END,ierr)
+    WRITE( output_str,'(A)') lfeed//'  </AppendedData>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    WRITE( output_str,'(A)') '</VTKFile>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+  END IF
+
+  CALL MPI_File_Close(fh, ierr)
+
+END SUBROUTINE BinaryVTKOutput
+
  FUNCTION ToLowerCase(from) RESULT(to)
    !------------------------------------------------------------------------------
       CHARACTER(LEN=256)  :: from
@@ -303,7 +480,7 @@ END SUBROUTINE ReadInput
           CALL MPI_BARRIER(MPI_COMM_ACTIVE, ierr)
         ELSE
           PRINT *,'MPI process ',myid,' terminating because not required.'
-          CALL MPI_Finalize()
+          CALL MPI_Finalize(ierr)
           STOP
         END IF
 

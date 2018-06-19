@@ -1399,6 +1399,10 @@ END IF
  !output
 	IF (MOD(RY,OUTINT).EQ.1) THEN
 
+          NRY=INT(RY/OUTINT)
+          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
+
+
           IF(PrintTimes) THEN
 20          FORMAT(" Times: ",11F7.1)
             WRITE(*,20) TTCUM
@@ -1422,7 +1426,6 @@ END IF
           dest,tag,MPI_COMM_ACTIVE,ierr)
 
           IF (myid.EQ.0) THEN
-  	  NRY=INT(RY/OUTINT)
           OPEN(UNIT=910,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
           OPEN(UNIT=920,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.csv',STATUS='UNKNOWN')
 
