@@ -6,50 +6,59 @@ HiDEM_data = GetActiveSource()
 
 renderView1 = FindViewOrCreate('RenderView1', viewtype='RenderView')
 
-# Properties modified on HiDEM_data
-HiDEM_data.HaveHeaders = 0
-HiDEM_data.FieldDelimiterCharacters = ' '
-HiDEM_data.MergeConsecutiveDelimiters = 1
+glyph1 = Glyph(Input=HiDEM_data,
+    GlyphType='2D Glyph')
+glyph1.Scalars = ['POINTS', 'None']
+glyph1.Vectors = ['POINTS', 'None']
+glyph1.ScaleFactor = 645.2785175323487
+glyph1.GlyphTransform = 'Transform2'
+glyph1.GlyphMode = 'All Points'
+glyph1.GlyphType.GlyphType = 'Vertex'
 
-renderView1.Update()
-# create a new 'Table To Points'
-tableToPoints1 = TableToPoints(Input=HiDEM_data)
-tableToPoints1.XColumn = 'Field 0'
-tableToPoints1.YColumn = 'Field 1'
-tableToPoints1.ZColumn = 'Field 2'
+glyph1Display = Show(glyph1, renderView1)
+
+# trace defaults for the display properties.
+glyph1Display.Representation = 'Surface'
+glyph1Display.ColorArrayName = [None, '']
+glyph1Display.OSPRayScaleFunction = 'PiecewiseFunction'
+glyph1Display.SelectOrientationVectors = 'None'
+glyph1Display.ScaleFactor = 645.2785175323487
+glyph1Display.SelectScaleArray = 'None'
+glyph1Display.GlyphType = 'Arrow'
+glyph1Display.GlyphTableIndexArray = 'None'
+glyph1Display.GaussianRadius = 32.263925876617435
+glyph1Display.SetScaleArray = [None, '']
+glyph1Display.ScaleTransferFunction = 'PiecewiseFunction'
+glyph1Display.OpacityArray = [None, '']
+glyph1Display.OpacityTransferFunction = 'PiecewiseFunction'
+glyph1Display.DataAxesGrid = 'GridAxesRepresentation'
+glyph1Display.SelectionCellLabelFontFile = ''
+glyph1Display.SelectionPointLabelFontFile = ''
+glyph1Display.PolarAxes = 'PolarAxesRepresentation'
+
+Hide(HiDEM_data, renderView1)
+
+# hide data in view
+Hide(glyph1, renderView1)
+
+# set active source
+SetActiveSource(glyph1)
 
 # show data in view
-#tableToPoints1Display = Show(tableToPoints1, spreadSheetView1)
-tableToPoints1Display = Show(tableToPoints1, renderView1)
+glyph1Display = Show(glyph1, renderView1)
+
+# Properties modified on glyph1Display
+glyph1Display.RenderPointsAsSpheres = 1
+
+# Properties modified on glyph1Display
+glyph1Display.PointSize = 8.0
+
+renderView1.Update()
 
 # hide data in view
 #Hide(jYR00, spreadSheetView1)
 
 SetActiveView(renderView1)
-
-tableToPoints1Display.Representation = 'Surface'
-tableToPoints1Display.ColorArrayName = [None, '']
-tableToPoints1Display.OSPRayScaleFunction = 'PiecewiseFunction'
-tableToPoints1Display.SelectOrientationVectors = 'None'
-tableToPoints1Display.ScaleFactor = 647.6596292
-tableToPoints1Display.SelectScaleArray = 'None'
-tableToPoints1Display.GlyphType = 'Arrow'
-tableToPoints1Display.GlyphTableIndexArray = 'None'
-tableToPoints1Display.DataAxesGrid = 'GridAxesRepresentation'
-tableToPoints1Display.PolarAxes = 'PolarAxesRepresentation'
-tableToPoints1Display.GaussianRadius = 323.8298146
-tableToPoints1Display.SetScaleArray = [None, '']
-tableToPoints1Display.ScaleTransferFunction = 'PiecewiseFunction'
-tableToPoints1Display.OpacityArray = [None, '']
-tableToPoints1Display.OpacityTransferFunction = 'PiecewiseFunction'
-
-
-# Properties modified on renderView1
-#renderView1.EnableOSPRay = 1
-
-# Properties modified on tableToPoints1Display
-tableToPoints1Display.PointSize = 8.0
-tableToPoints1Display.RenderPointsAsSpheres = 1
 
 # reset view to fit data
 renderView1.ResetCamera()
