@@ -27,7 +27,7 @@ CONTAINS
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain)
+      StrictDomain, DoublePrec)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL*8 :: fractime
@@ -35,7 +35,7 @@ CONTAINS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
-   LOGICAL :: BedZOnly,StrictDomain
+   LOGICAL :: BedZOnly,StrictDomain,DoublePrec
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -73,6 +73,7 @@ CONTAINS
    resdir = './'
    fractime = 40.0
    StrictDomain = .TRUE.
+   DoublePrec = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -172,8 +173,10 @@ CONTAINS
        READ(VarValue,*) BedZOnly
      CASE("fracture after time")
        READ(VarValue,*) fractime
-     CASE("Strict Domain Interpolation")
+     CASE("strict domain interpolation")
        READ(VarValue,*) StrictDomain
+     CASE("double precision output")
+       READ(VarValue,*) DoublePrec
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -231,11 +234,12 @@ CONTAINS
      WRITE(*,'(A,I0)') "No Timesteps = ",STEPS0
      WRITE(*,'(A,F9.2)') "Grid = ",GRID
      WRITE(*,'(A,F9.2)') "Fracture After Time = ",fractime
+     WRITE(*,'(A,L)') "Double Precision Output = ",DoublePrec
      PRINT *,'----------------------------------------------------'
    END IF
 END SUBROUTINE ReadInput
 
-SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
+SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
@@ -251,7 +255,6 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
   INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_mystart
   LOGICAL :: DoublePrec
 
-  DoublePrec = .FALSE.
   lfeed = CHAR(10) !line feed character
 
   NN = PNN(myid+1)
@@ -372,7 +375,12 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     CALL MPI_File_Write(fh, "_", 1, MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
-    CALL MPI_File_Write(fh, INT(NNtot * KIND(val) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+
+    IF(DoublePrec) THEN
+      CALL MPI_File_Write(fh, INT(NNtot * KIND(work_arr_dp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    ELSE
+      CALL MPI_File_Write(fh, INT(NNtot * KIND(work_arr_sp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    END IF
 
     !Compute the length of the header...
     CALL MPI_File_Get_Position(fh, fh_mpi_offset,ierr)

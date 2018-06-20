@@ -94,7 +94,7 @@
         REAL, POINTER :: EPtr1(:), EPtr2(:), EFPtr1(:), EFPtr2(:)
 
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain
+        LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec
         LOGICAL, ALLOCATABLE :: LostParticle(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
@@ -140,7 +140,7 @@ END IF
 
         CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, DAMP2, &
-             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime,StrictDomain)
+             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime,StrictDomain,DoublePrec)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -1400,7 +1400,7 @@ END IF
 	IF (MOD(RY,OUTINT).EQ.1) THEN
 
           NRY=INT(RY/OUTINT)
-          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT)
+          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,DoublePrec)
 
 
           IF(PrintTimes) THEN
