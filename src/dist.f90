@@ -17,23 +17,13 @@
 ! *************************************************************************
 
 	SUBROUTINE DIST(NNA,UT,ND,NCL,NDR,NRXF, &
-     	NDL,NDLL,NDLR,NRXFL,NRXFR,UTL,UTR,NRXFF, &
-     	NRXFB,UTB,UTF,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN, &
-     	NRXFBL,NRXFBR,NRXFFL,NRXFFR,NDLFL,NDLFR,NDLBR,NDLBL, &
-     	NDFL,NDFR,NDBR,NDBL,UTBL,UTBR,UTFL,UTFR)
+     	NDL,NDLL,NDLR,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN, &
+     	NDLFL,NDLFR,NDLBR,NDLBL,NDFL,NDFR,NDBR,NDBL)
+
+        USE TypeDefs
 
 	IMPLICIT NONE
         include 'mpif.h'
-        include 'param.dat'
-	REAL*8 NRXF(3,NOMA),UT(NODM)
-	REAL*8 NRXFR(3,NOMA),UTR(NODM)
-	REAL*8 NRXFL(3,NOMA),UTL(NODM)
-	REAL*8 NRXFB(3,NOMA),UTB(NODM)
-	REAL*8 NRXFF(3,NOMA),UTF(NODM)
-	REAL*8 NRXFBL(3,NOMA),UTBL(NODM)
-	REAL*8 NRXFBR(3,NOMA),UTBR(NODM)
-	REAL*8 NRXFFL(3,NOMA),UTFL(NODM)
-	REAL*8 NRXFFR(3,NOMA),UTFR(NODM)
 	REAL*8 DX1,DX2,DY1,DY2,DZ1,DZ2
 	REAL*8 X1,X2,Y1,Y2,Z1,Z2
 	REAL*8 RC,SCL,RT
@@ -47,7 +37,8 @@
 	INTEGER NDLF(2,NODC),NDLB(2,NODC)
 	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
 	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)
-
+        TYPE(UT_t) :: UT
+        TYPE(NRXF_t) :: NRXF
 
 !	OPEN(UNIT=10,FILE='TSR',STATUS='UNKNOWN')
 !	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
@@ -64,19 +55,19 @@
 	RT=SCL*SCL*3.5
 
 	DO I=1,NNA-1
-         DX1=UT(6*I-5)
-         DY1=UT(6*I-4)
-         DZ1=UT(6*I-3)
- 	 X1=NRXF(1,I)+DX1
-	 Y1=NRXF(2,I)+DY1
-	 Z1=NRXF(3,I)+DZ1
+         DX1=UT%M(6*I-5)
+         DY1=UT%M(6*I-4)
+         DZ1=UT%M(6*I-3)
+ 	 X1=NRXF%M(1,I)+DX1
+	 Y1=NRXF%M(2,I)+DY1
+	 Z1=NRXF%M(3,I)+DZ1
 	 DO J=I+1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  ND=ND+1
@@ -88,19 +79,19 @@
 
       IF (MOD(myid,ntasks/YN).ne.0) THEN
 	DO I=1,PNN(myid-1)
-          DX1=UTL(6*I-5)
-          DY1=UTL(6*I-4)
-          DZ1=UTL(6*I-3)
- 	  X1=NRXFL(1,I)+DX1
-	  Y1=NRXFL(2,I)+DY1
-	  Z1=NRXFL(3,I)+DZ1
+          DX1=UT%L(6*I-5)
+          DY1=UT%L(6*I-4)
+          DZ1=UT%L(6*I-3)
+ 	  X1=NRXF%L(1,I)+DX1
+	  Y1=NRXF%L(2,I)+DY1
+	  Z1=NRXF%L(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NCL=NCL+1
@@ -113,19 +104,19 @@
 
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
 	DO I=1,PNN(myid+1)
-          DX1=UTR(6*I-5)
-          DY1=UTR(6*I-4)
-          DZ1=UTR(6*I-3)
- 	  X1=NRXFR(1,I)+DX1
-	  Y1=NRXFR(2,I)+DY1
-	  Z1=NRXFR(3,I)+DZ1
+          DX1=UT%R(6*I-5)
+          DY1=UT%R(6*I-4)
+          DZ1=UT%R(6*I-3)
+ 	  X1=NRXF%R(1,I)+DX1
+	  Y1=NRXF%R(2,I)+DY1
+	  Z1=NRXF%R(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDR=NDR+1
@@ -138,19 +129,19 @@
 
       IF (myid.lt.(YN-1)*ntasks/YN) THEN
 	DO I=1,PNN(myid+ntasks/YN)
-          DX1=UTF(6*I-5)
-          DY1=UTF(6*I-4)
-          DZ1=UTF(6*I-3)
- 	  X1=NRXFF(1,I)+DX1
-	  Y1=NRXFF(2,I)+DY1
-	  Z1=NRXFF(3,I)+DZ1
+          DX1=UT%F(6*I-5)
+          DY1=UT%F(6*I-4)
+          DZ1=UT%F(6*I-3)
+ 	  X1=NRXF%F(1,I)+DX1
+	  Y1=NRXF%F(2,I)+DY1
+	  Z1=NRXF%F(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDF=NDF+1
@@ -164,19 +155,19 @@
 
       IF (myid.ge.ntasks/YN) THEN
 	DO I=1,PNN(myid-ntasks/YN)
-          DX1=UTB(6*I-5)
-          DY1=UTB(6*I-4)
-          DZ1=UTB(6*I-3)
- 	  X1=NRXFB(1,I)+DX1
-	  Y1=NRXFB(2,I)+DY1
-	  Z1=NRXFB(3,I)+DZ1
+          DX1=UT%B(6*I-5)
+          DY1=UT%B(6*I-4)
+          DZ1=UT%B(6*I-3)
+ 	  X1=NRXF%B(1,I)+DX1
+	  Y1=NRXF%B(2,I)+DY1
+	  Z1=NRXF%B(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDB=NDB+1
@@ -190,19 +181,19 @@
 
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
 	DO I=1,PNN(myid-ntasks/YN-1)
-          DX1=UTBL(6*I-5)
-          DY1=UTBL(6*I-4)
-          DZ1=UTBL(6*I-3)
- 	  X1=NRXFBL(1,I)+DX1
-	  Y1=NRXFBL(2,I)+DY1
-	  Z1=NRXFBL(3,I)+DZ1
+          DX1=UT%BL(6*I-5)
+          DY1=UT%BL(6*I-4)
+          DZ1=UT%BL(6*I-3)
+ 	  X1=NRXF%BL(1,I)+DX1
+	  Y1=NRXF%BL(2,I)+DY1
+	  Z1=NRXF%BL(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDBL=NDBL+1
@@ -215,19 +206,19 @@
 
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
 	DO I=1,PNN(myid-ntasks/YN+1)
-          DX1=UTBR(6*I-5)
-          DY1=UTBR(6*I-4)
-          DZ1=UTBR(6*I-3)
- 	  X1=NRXFBR(1,I)+DX1
-	  Y1=NRXFBR(2,I)+DY1
-	  Z1=NRXFBR(3,I)+DZ1
+          DX1=UT%BR(6*I-5)
+          DY1=UT%BR(6*I-4)
+          DZ1=UT%BR(6*I-3)
+ 	  X1=NRXF%BR(1,I)+DX1
+	  Y1=NRXF%BR(2,I)+DY1
+	  Z1=NRXF%BR(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDBR=NDBR+1
@@ -241,19 +232,19 @@
 
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
 	DO I=1,PNN(myid+ntasks/YN-1)
-          DX1=UTFL(6*I-5)
-          DY1=UTFL(6*I-4)
-          DZ1=UTFL(6*I-3)
- 	  X1=NRXFFL(1,I)+DX1
-	  Y1=NRXFFL(2,I)+DY1
-	  Z1=NRXFFL(3,I)+DZ1
+          DX1=UT%FL(6*I-5)
+          DY1=UT%FL(6*I-4)
+          DZ1=UT%FL(6*I-3)
+ 	  X1=NRXF%FL(1,I)+DX1
+	  Y1=NRXF%FL(2,I)+DY1
+	  Z1=NRXF%FL(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDFL=NDFL+1
@@ -267,19 +258,19 @@
       IF (myid.lt.(YN-1)*ntasks/YN &
            .AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) THEN
 	DO I=1,PNN(myid+ntasks/YN+1)
-          DX1=UTFR(6*I-5)
-          DY1=UTFR(6*I-4)
-          DZ1=UTFR(6*I-3)
- 	  X1=NRXFFR(1,I)+DX1
-	  Y1=NRXFFR(2,I)+DY1
-	  Z1=NRXFFR(3,I)+DZ1
+          DX1=UT%FR(6*I-5)
+          DY1=UT%FR(6*I-4)
+          DZ1=UT%FR(6*I-3)
+ 	  X1=NRXF%FR(1,I)+DX1
+	  Y1=NRXF%FR(2,I)+DY1
+	  Z1=NRXF%FR(3,I)+DZ1
 	 DO J=1,NNA
-          DX2=UT(6*J-5)
-          DY2=UT(6*J-4)
-          DZ2=UT(6*J-3)
-	  X2=NRXF(1,J)+DX2
-	  Y2=NRXF(2,J)+DY2
-	  Z2=NRXF(3,J)+DZ2
+          DX2=UT%M(6*J-5)
+          DY2=UT%M(6*J-4)
+          DZ2=UT%M(6*J-3)
+	  X2=NRXF%M(1,J)+DX2
+	  Y2=NRXF%M(2,J)+DY2
+	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
 	  NDFR=NDFR+1

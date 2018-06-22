@@ -3,19 +3,22 @@
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(l,ip,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,maxx,&
+SUBROUTINE FIBG3(l,ip,ND,myid,maxx,&
      maxy,maxz,minx,miny,minz,ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC,StrictDomain)
+
+USE TypeDefs
 
 Implicit none
 INCLUDE 'na90.dat'
 !Real*8,ALLOCATABLE :: surf(:,:),bed(:,:)
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
-Real*8 :: box,xo(3,1000000),b,maxx,maxy,maxz,minx,miny,minz,SCL
-INTEGER :: l,ND,ip,i,j,NDLC,NDRC,NDFC,NDBC,YN,XN,NDFRC,NDBRC,NDFLC,NDBLC
+Real*8 :: box,xo(3,NOMA),b,maxx,maxy,maxz,minx,miny,minz,SCL
+INTEGER :: l,ip,i,j,YN,XN
 INTEGER :: myid,ntasks,N1,N2,xk,yk
 CHARACTER(LEN=256) :: wrkdir,geomfile
 LOGICAL :: StrictDomain
+TYPE(NTOT_t) :: ND
 
 !Open(300,file='mass.dat',STATUS='OLD')
 OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
@@ -80,7 +83,9 @@ box=2.0d0**(2.0d0/3.0d0)*Dfloat(l) ! box size equal to fcc ground state
 
 CALL Initializefcc(box,l,xo,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
 
-CALL DT(ip,xo,ND,NDLC,NDRC,NDFC,NDBC,NDFRC,NDBRC,NDFLC,NDBLC,myid,ntasks,wrkdir,SCL,YN)
+!TODO - DT determines ND(NTOT) and computes NRXF%F,B,etc 
+!but these are then reread from FS* files
+CALL DT(ip,xo,ND,myid,ntasks,wrkdir,SCL,YN)
 
 !DEALLOCATE (surf)
 !DEALLOCATE (bed)
@@ -103,7 +108,7 @@ INCLUDE 'mpif.h'
 
 !Real*8,ALLOCATABLE :: surf(:,:),bed(:,:)
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
-Real*8 xo(3,1000000),b,x0(3,4),box,maxx,maxy,maxz,minx,miny,minz,SCL
+Real*8 xo(3,NOMA),b,x0(3,4),box,maxx,maxy,maxz,minx,miny,minz,SCL
 REAL*8 gridminx, gridmaxx, gridminy, gridmaxy
 !Real*8 z,surf(-100:3000,-100:3000),bed(-100:3000,-100:3000)
 REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV,nxny,YN_estimate, XN_estimate, efficiency
@@ -230,6 +235,8 @@ Do i=1+nb*m,nb+nb*m !x step
              ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
 
              ip=ip+1
+             IF(ip > NOMA) CALL FatalError("NOMA not large enough (too many points)")
+
 	     xo(1,ip) = x0(1,k1) + Float(i-1)*b	
 	     xo(2,ip) = x0(2,k1) + Float(j-1)*b
 	     xo(3,ip) = x0(3,k1) + Float(k-1)*b
