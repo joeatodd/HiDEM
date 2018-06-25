@@ -87,7 +87,7 @@
         REAL, POINTER :: EPtr1(:), EPtr2(:), EFPtr1(:), EFPtr2(:)
 
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec
+        LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec,CSVOutput
         LOGICAL, ALLOCATABLE :: LostParticle(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
@@ -139,8 +139,9 @@ END IF
         !INFILE = 'testinp.dat'
 
         CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
-             RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, DAMP2, &
-             DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID,fractime,StrictDomain,DoublePrec)
+             RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
+             DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, &
+             fractime,StrictDomain,DoublePrec,CSVOutput)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -1388,23 +1389,24 @@ END IF
 !--------------- Start of output ----------------------
 
 	IF (MOD(RY,OUTINT).EQ.1) THEN
-          NRY=INT(RY/OUTINT)
-
-          !To spit out connection information & strain & EF0, need to pass:
-          ! NAN, NANF, NANB, etc
-          ! UT%M, UT%F, UT%FR etc
-          ! NTOT, NTOT % B, NTOT % F, etc
-          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
-               NeighbourID,NANS,NTOT,DoublePrec)
-          
-
-!--------------- CSV Output ----------------------
-
           IF(PrintTimes) THEN
 20          FORMAT(" Times: ",11F7.1)
             WRITE(*,20) TTCUM
           END IF
 
+          NRY=INT(RY/OUTINT)
+
+          IF(.NOT. CSVOutput) THEN
+
+          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
+               NeighbourID,NANS,NTOT,DoublePrec)
+          
+
+          CALL BinarySTROutput(NRY,resdir,runname,ntasks,myid,NRXF,UT,&
+               NeighbourID,NANS,NTOT,DoublePrec)
+          
+          ELSE
+          !--------------- CSV Output ----------------------
           dest=0
 
           tag=151
@@ -1482,9 +1484,12 @@ END IF
           END DO
 
           DO I=1,NTOT%M
-	  X=(NRXF%M(1,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-5)+NRXF%M(1,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-5))/2.0
-	  Y=(NRXF%M(2,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-4)+NRXF%M(2,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-4))/2.0
-	  Z=(NRXF%M(3,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-3)+NRXF%M(3,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-3))/2.0
+	  X=(NRXF%M(1,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-5)+&
+            NRXF%M(1,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-5))/2.0
+	  Y=(NRXF%M(2,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-4)+&
+            NRXF%M(2,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-4))/2.0
+	  Z=(NRXF%M(3,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-3)+&
+            NRXF%M(3,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-3))/2.0
 	  
 	N1=NANS % M(1,I)
 	N2=NANS % M(2,I)
@@ -1502,12 +1507,15 @@ END IF
           WRITE(920,12) X,Y,Z,STR
           END DO
 
-          ENDIF
+        ENDIF !myid==0
 
 !          CALL PSNET(NTOT%M,NN,myid,GL,WL,SUB,ntasks)
 	  CLOSE(910)
 	  CLOSE(920)
-	ENDIF
+
+        END IF !CSV or Binary output
+      
+      ENDIF !output interval
 
 !--------------- End of output --------------------
 

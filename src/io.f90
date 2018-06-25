@@ -29,7 +29,7 @@ CONTAINS
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain, DoublePrec)
+      StrictDomain, DoublePrec, CSVOutput)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL*8 :: fractime
@@ -37,7 +37,7 @@ CONTAINS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
-   LOGICAL :: BedZOnly,StrictDomain,DoublePrec
+   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -76,6 +76,7 @@ CONTAINS
    fractime = 40.0
    StrictDomain = .TRUE.
    DoublePrec = .FALSE.
+   CSVOutput = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -179,6 +180,8 @@ CONTAINS
        READ(VarValue,*) StrictDomain
      CASE("double precision output")
        READ(VarValue,*) DoublePrec
+     CASE("csv output")
+       READ(VarValue,*) CSVOutput
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -262,7 +265,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   CHARACTER :: lfeed
   REAL*8, ALLOCATABLE :: work_real_dp(:)
   REAL*4, ALLOCATABLE :: work_real_sp(:)
-  INTEGER :: fh,subarray,ierr,testsum,contig_type,realsize,intsize
+  INTEGER :: fh,ierr,testsum,contig_type,realsize,intsize
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_mystart(4)
   INTEGER, ALLOCATABLE :: work_int(:)
@@ -520,6 +523,163 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   CALL MPI_File_Close(fh, ierr)
 
 END SUBROUTINE BinaryVTKOutput
+
+SUBROUTINE BinarySTROutput(NRY,resdir,runname,ntasks,myid,NRXF,UT,&
+     NeighbourID,NANS,NTOT,DoublePrec)
+
+  USE MPI
+  INCLUDE 'na90.dat'
+
+  INTEGER :: NRY,ntasks,myid
+  CHARACTER(LEN=256) :: resdir, runname
+  TYPE(NAN_t), TARGET :: NANS
+  TYPE(NTOT_t) :: NTOT
+  TYPE(NEI_t) :: NeighbourID
+  TYPE(UT_t), TARGET :: UT
+  TYPE(NRXF_t), TARGET :: NRXF
+  LOGICAL :: DoublePrec
+  !----------------------------------
+  INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
+  INTEGER :: i,j,N1,N2
+  CHARACTER(LEN=1024) :: output_str
+  CHARACTER :: lfeed
+  REAL*8 X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
+  REAL*8, ALLOCATABLE :: work_real(:)
+  REAL*4, ALLOCATABLE :: work_real_sp(:)
+  REAL*8, POINTER :: NRXFPtr(:,:),UTPtr(:)
+  INTEGER :: fh,ierr,realsize
+  INTEGER :: ntotal,othertask
+  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart
+  INTEGER, POINTER :: NANSPtr(:,:)
+
+  lfeed = CHAR(10) !line feed character
+
+  IF(DoublePrec) THEN
+    CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
+  ELSE
+    CALL MPI_TYPE_SIZE(MPI_REAL4, realsize, ierr)
+  END IF
+
+  !Cross-partition beam ownership goes to lower partition no
+  !So we need: NTOT% M,R,FL,F,FR
+  Nbeams = NTOT%M+NTOT%R+NTOT%FL+NTOT%F+NTOT%FR
+
+  CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
+       1, MPI_INTEGER, MPI_COMM_ACTIVE, ierr)
+  NBeamsTot = SUM(PNBeams(1:ntasks))
+
+  fh_mystart = 0
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystart = fh_mystart + PNBeams(i)*4*realsize
+  END DO
+
+  ! Write all beams to work array
+  ALLOCATE(work_real(Nbeams*4))
+
+  counter = 0
+  DO i=1,5
+    SELECT CASE(i)
+    CASE (1)
+      othertask = myid
+      ntotal = NTOT%M
+      NANSPtr => NANS % M
+      NRXFPtr => NRXF % M
+      UTPtr => UT % M
+    CASE (2)
+      othertask = NeighbourID % R
+      ntotal = NTOT%R
+      NANSPtr => NANS % R
+      NRXFPtr => NRXF % R
+      UTPtr => UT % R
+    CASE (3)
+      othertask = NeighbourID % FL
+      ntotal = NTOT%FL
+      NANSPtr => NANS % FL
+      NRXFPtr => NRXF % FL
+      UTPtr => UT % FL
+    CASE (4)
+      othertask = NeighbourID % F
+      ntotal = NTOT%F
+      NANSPtr => NANS % F
+      NRXFPtr => NRXF % F
+      UTPtr => UT % F
+    CASE (5)
+      othertask = NeighbourID % FR
+      ntotal = NTOT%FR
+      NANSPtr => NANS % FR
+      NRXFPtr => NRXF % FR
+      UTPtr => UT % FR
+    END SELECT
+
+    IF(othertask == -1) CYCLE
+
+    DO j=1,ntotal
+      counter = counter + 1
+
+      N1=NANSPtr(1,j)
+      N2=NANSPtr(2,j)
+
+      !TODO - modify here, nrxf%M  and NRXFPtr, NAN??
+      X=(NRXFPtr(1,N1)+UTPtr(6*N1-5)+NRXF%M(1,N2)+UT%M(6*N2-5))/2.0
+      Y=(NRXFPtr(2,N1)+UTPtr(6*N1-4)+NRXF%M(2,N2)+UT%M(6*N2-4))/2.0
+      Z=(NRXFPtr(3,N1)+UTPtr(6*N1-3)+NRXF%M(3,N2)+UT%M(6*N2-3))/2.0
+
+      DDX=NRXFPtr(1,N1)+UTPtr(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
+      DDY=NRXFPtr(2,N1)+UTPtr(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
+      DDZ=NRXFPtr(3,N1)+UTPtr(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
+
+      DX=NRXFPtr(1,N1)-NRXF%M(1,N2)
+      DY=NRXFPtr(2,N1)-NRXF%M(2,N2)
+      DZ=NRXFPtr(3,N1)-NRXF%M(3,N2)
+      L=SQRT(DX**2+DY**2+DZ**2)
+      DL=SQRT(DDX**2+DDY**2+DDZ**2)
+      STR=(DL-L)/L
+
+      work_real(counter*4 - 3) = X
+      work_real(counter*4 - 2) = Y
+      work_real(counter*4 - 1) = Z
+      work_real(counter*4 - 0) = STR
+    END DO
+  END DO
+
+  CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.bin',&
+       MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
+
+  !root write out header info (count & type)
+  !everyone writes the string to get its size for offset...
+  IF(DoublePrec) THEN
+    WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float64'//lfeed
+  ELSE
+    WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float32'//lfeed
+  END IF
+
+  fh_header_offset = LEN_TRIM(output_str) !fortran characters are 1 byte
+  fh_mystart = fh_mystart + fh_header_offset
+
+  !... but only root writes it
+  IF(myid==0) THEN
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+  END IF
+
+  !Write the points (using collective I/O)
+  IF(DoublePrec) THEN
+    CALL MPI_File_Set_View(fh, fh_mystart, MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, &
+         'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Write_All(fh, work_real, Nbeams*4, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)
+  ELSE
+    CALL MPI_File_Set_View(fh, fh_mystart, MPI_REAL4, MPI_REAL4, &
+         'native', MPI_INFO_NULL, ierr)
+    ALLOCATE(work_real_sp(NBeams*4))
+    work_real_sp = work_real
+    CALL MPI_File_Write_All(fh, work_real_sp, NBeams*4, MPI_REAL4, MPI_STATUS_IGNORE, ierr)
+    DEALLOCATE(work_real_sp)
+  END IF
+
+  CALL MPI_File_Close(fh, ierr)
+
+END SUBROUTINE BinarySTROutput
 
  FUNCTION ToLowerCase(from) RESULT(to)
    !------------------------------------------------------------------------------

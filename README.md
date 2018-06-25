@@ -202,6 +202,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
 | Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
+| CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space! Default false)|
+| Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32). (doubles output filesize..., Default false)|
+
 
 ### mass3.dat ####
 
