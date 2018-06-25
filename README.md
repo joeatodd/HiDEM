@@ -246,6 +246,8 @@ make sure the bed is buffered beyond the edge of the ice, and define these regio
 
 ## Output - JYR and STR files ##
 
+By default the model produces particle information in .vtu format (readable in Paraview - use HiDEM_load.py macro) and bond strain information in binary format (readable by the python script rh.py). For CSV output, use the 'CSV Output' option in the inp.dat (beware this produces much larger files which make visualisation time consuming).
+
 JYR files list the position of all particles in x,y,z, every 2 seconds.  
 Read this in paraview quite easily.  
 
