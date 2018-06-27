@@ -245,7 +245,7 @@ CONTAINS
 END SUBROUTINE ReadInput
 
 SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
-     NeighbourID,NANS,NTOT,DoublePrec)
+     UTM,NeighbourID,NANS,NTOT,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
@@ -255,33 +255,36 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   TYPE(NAN_t), TARGET :: NANS
   TYPE(NTOT_t) :: NTOT
   TYPE(NEI_t) :: NeighbourID
-  TYPE(UT_t) :: UT
+  TYPE(UT_t) :: UT, UTM
   LOGICAL :: DoublePrec
   !----------------------------------
-  INTEGER :: NN,NNTot,NBeamsTot,counter,VTK_Offset
+  INTEGER :: NN,NNTot,NBeamsTot,counter,ms_counter,VTK_Offset
   INTEGER :: i,j,GlobalNNOffset(ntasks)
   REAL*8 :: X,Y,Z
-  CHARACTER(LEN=1024) :: output_str
+  CHARACTER(LEN=1024) :: output_str,datatype_str
   CHARACTER :: lfeed
-  REAL*8, ALLOCATABLE :: work_real_dp(:)
+  REAL*8, ALLOCATABLE :: work_real_dp(:), displacements(:)
   REAL*4, ALLOCATABLE :: work_real_sp(:)
   INTEGER :: fh,ierr,testsum,contig_type,realsize,intsize
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
-  INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_mystart(4)
+  INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(4), fh_mystarts(4)
   INTEGER, ALLOCATABLE :: work_int(:)
   INTEGER, POINTER :: NANSPtr(:,:)
-  LOGICAL :: OutputBeams
+  LOGICAL :: OutputBeams,OutputDisplacement
   TYPE(NRXF_t) :: NRXF
 
   lfeed = CHAR(10) !line feed character
+  OutputDisplacement = .TRUE.
 
   !Some MPI setup - define types and sizes
   IF(DoublePrec) THEN
     CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
     CALL MPI_Type_Contiguous(3, MPI_DOUBLE_PRECISION, contig_type, ierr)
+    datatype_str = "Float64"
   ELSE
     CALL MPI_TYPE_SIZE(MPI_REAL4, realsize, ierr)
     CALL MPI_Type_Contiguous(3, MPI_REAL4, contig_type, ierr)
+    datatype_str = "Float32"
   END IF
   CALL MPI_Type_Commit(contig_type, ierr)
   CALL MPI_TYPE_SIZE(MPI_INTEGER, intsize, ierr)
@@ -293,24 +296,13 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   NNtot = SUM(PNN(1:ntasks))
 
   !Compute point positions
-  IF(DoublePrec) THEN
-    ALLOCATE(work_real_dp(3*NN))
-    work_real_dp = 0.0
-    DO i=1,NN
-      work_real_dp((i-1)*3 + 1) = NRXF%M(1,i)+UT%M(6*I-5)
-      work_real_dp((i-1)*3 + 2) = NRXF%M(2,i)+UT%M(6*I-4)
-      work_real_dp((i-1)*3 + 3) = NRXF%M(3,i)+UT%M(6*I-3)
-    END DO
-  ELSE
-    ALLOCATE(work_real_sp(3*NN))
-    work_real_sp = 0.0
-    DO i=1,NN
-      work_real_sp((i-1)*3 + 1) = NRXF%M(1,i)+UT%M(6*I-5)
-      work_real_sp((i-1)*3 + 2) = NRXF%M(2,i)+UT%M(6*I-4)
-      work_real_sp((i-1)*3 + 3) = NRXF%M(3,i)+UT%M(6*I-3)
-    END DO
-  END IF
-
+  ALLOCATE(work_real_dp(3*NN))
+  work_real_dp = 0.0
+  DO i=1,NN
+    work_real_dp((i-1)*3 + 1) = NRXF%M(1,i)+UT%M(6*I-5)
+    work_real_dp((i-1)*3 + 2) = NRXF%M(2,i)+UT%M(6*I-4)
+    work_real_dp((i-1)*3 + 3) = NRXF%M(3,i)+UT%M(6*I-3)
+  END DO
 
   !------- Beam Info ----------
   IF(OutputBeams) THEN
@@ -324,7 +316,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     !Cross-partition beam ownership goes to lower 'mytask'
     !So we need: NTOT% M,R,FL,F,FR
     Nbeams = NTOT%M+NTOT%R+NTOT%FL+NTOT%F+NTOT%FR
-    PRINT *,myid,' debug, has ',NTOT%M,' own beams, ',Nbeams,' total.'
+    !PRINT *,myid,' debug, has ',NTOT%M,' own beams, ',Nbeams,' total.'
 
     CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
          1, MPI_INTEGER, MPI_COMM_ACTIVE, ierr)
@@ -373,27 +365,56 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     NBeamsTot = 0
   END IF
 
+  !---- particle displacement ----
+  IF(OutputDisplacement) THEN
+    ALLOCATE(displacements(3*NN))
+    displacements = 0.0
+    DO i=1,NN
+      displacements((i-1)*3 + 1) = UT%M(6*I-5) - UTM%M(6*I-5)
+      displacements((i-1)*3 + 2) = UT%M(6*I-4) - UTM%M(6*I-4)
+      displacements((i-1)*3 + 3) = UT%M(6*I-3) - UTM%M(6*I-3)
+    END DO
+  END IF
+
   !Compute offsets (global and cpu specific)
-  fh_mystart(1)=0
+  ms_counter = 1
+  fh_starts(ms_counter)=0
+  fh_mystarts(ms_counter)=0
 
   DO i=1,ntasks
     IF(i > myid) EXIT
-    fh_mystart(1) = fh_mystart(1) + PNN(i)*3*realsize
+    fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*3*realsize
   END DO
-  IF(myid /= 0) fh_mystart(1) = fh_mystart(1) + intsize !root writes an extra int at the start
+  IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
 
-  fh_mystart(2) = NNTot*3*realsize + intsize
+  ms_counter = ms_counter + 1
+  fh_starts(ms_counter) = NNTot*3*realsize + intsize
+  fh_mystarts(ms_counter) = fh_starts(ms_counter)
 
   IF(OutputBeams) THEN
 
     !connectivity (particles in beams)
     DO i=1,ntasks
       IF(i > myid) EXIT
-      fh_mystart(2) = fh_mystart(2) + PNBeams(i)*2*intsize
+      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNBeams(i)*2*intsize
     END DO
-    IF(myid /= 0) fh_mystart(2) = fh_mystart(2) + intsize !root writes an extra int at the start
+    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
 
-    fh_mystart(3) = (NNTot*3*realsize + intsize) + (NBeamsTot*2*intsize + intsize) !<- not used yet - root writes offsets & types
+    ms_counter = ms_counter + 1
+    fh_starts(ms_counter) = fh_starts(ms_counter-1) + (NBeamsTot*4*intsize + intsize*3) !<- extra offset because root writes offsets & types
+    fh_mystarts(ms_counter) = fh_starts(ms_counter)
+  END IF
+
+  IF(OutputDisplacement) THEN
+    DO i=1,ntasks
+      IF(i > myid) EXIT
+      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*3*realsize
+    END DO
+    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
+
+    ms_counter = ms_counter + 1
+    fh_starts(ms_counter) = fh_starts(ms_counter-1) + NNTot*3*realsize + intsize
+    fh_mystarts(ms_counter) = fh_starts(ms_counter)
   END IF
 
   CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
@@ -417,16 +438,13 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     WRITE( output_str,'(A,I0,A,I0,A)') '    <Piece NumberOfPoints="',NNtot,'" NumberOfCells="',NBeamsTot,'">'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
+    !--------- POINTS ------------------
+
     WRITE( output_str,'(A)') '      <Points>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    IF(DoublePrec) THEN
-      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Float64" Name="Position" NumberOfComponents="3" format="appended" offset="',&
-           VTK_Offset,'"/>'//lfeed
-    ELSE
-      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Float32" Name="Position" NumberOfComponents="3" format="appended" offset="',&
-           VTK_Offset,'"/>'//lfeed
-    END IF
+    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Position" NumberOfComponents="3" format="appended" offset="',&
+         VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
@@ -434,10 +452,12 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     WRITE( output_str,'(A)') '      </Points>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
+    !--------- CELLS (beams)------------------
+
     WRITE( output_str,'(A)') '      <Cells>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="connectivity" format="appended" offset="',VTK_Offset,'"/>'//lfeed !WHAT IS THIS?
+    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="connectivity" format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*2*intsize + intsize
 
@@ -451,6 +471,22 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
 
     WRITE( output_str,'(A)') '      </Cells>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    !--------- POINT DATA ------------------
+
+    WRITE( output_str,'(A)') '      <PointData>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement" NumberOfComponents="3" format="appended" offset="',&
+         VTK_Offset,'"/>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
+
+    WRITE( output_str,'(A)') '      </PointData>'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+    !----------- XML footer ----------------
 
     WRITE( output_str,'(A)') '    </Piece>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
@@ -472,22 +508,28 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   CALL MPI_BCast(fh_mpi_byte_offset,1, MPI_OFFSET, 0, MPI_COMM_ACTIVE, ierr)
 
   !Update cpu specific start points w/ header length
-  fh_mystart = fh_mpi_byte_offset + fh_mystart
+  fh_starts = fh_mpi_byte_offset + fh_starts
+  fh_mystarts = fh_mpi_byte_offset + fh_mystarts
+  ms_counter = 1
 
   !Write the points (using collective I/O)
   IF(DoublePrec) THEN
-    CALL MPI_File_Set_View(fh, fh_mystart(1), MPI_DOUBLE_PRECISION, contig_type, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION, contig_type, 'native', MPI_INFO_NULL, ierr)
     IF(myid==0) CALL MPI_File_Write(fh, INT(NNtot * KIND(work_real_dp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_real_dp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
   ELSE
-    CALL MPI_File_Set_View(fh, fh_mystart(1), MPI_REAL4, contig_type, 'native', MPI_INFO_NULL, ierr)
+    ALLOCATE(work_real_sp(SIZE(work_real_dp)))
+
+    work_real_sp = work_real_dp
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, contig_type, 'native', MPI_INFO_NULL, ierr)
     IF(myid==0) CALL MPI_File_Write(fh, INT(NNtot * KIND(work_real_sp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_real_sp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
   END IF
+  ms_counter = ms_counter + 1
 
   IF(OutputBeams) THEN
     !Find end of file, set view, write beam node nums, offsets, types
-    CALL MPI_File_Set_View(fh, fh_mystart(2), MPI_INTEGER, MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
     !Write byte count for connectivity
     IF(myid==0) CALL MPI_File_Write(fh, INT(NBeamsTot*KIND(work_int) * 2), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_int, NBeams*2, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
@@ -503,9 +545,32 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
       CALL MPI_File_Write(fh,NBeamsTot*KIND(work_int),1,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
       CALL MPI_File_Write(fh, (/(3,i=0,NBeamsTot-1)/),NBeamsTot ,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     END IF
+    ms_counter = ms_counter + 1
   END IF
 
+  IF(OutputDisplacement) THEN
+
+    !Find end of file, set view, write displacements
+    IF(DoublePrec) THEN
+      CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, 'native', MPI_INFO_NULL, ierr)
+      !Write byte count for connectivity
+      IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_real_dp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write_All(fh, displacements, NN*3, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)
+    ELSE
+
+      IF(ALLOCATED(work_real_sp)) DEALLOCATE(work_real_sp)
+      ALLOCATE(work_real_sp(SIZE(displacements)))
+      work_real_sp = displacements
+
+      CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, MPI_REAL4, 'native', MPI_INFO_NULL, ierr)
+      !Write byte count for connectivity
+      IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_real_sp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write_All(fh, work_real_sp, NN*3, MPI_REAL4, MPI_STATUS_IGNORE, ierr)
+    END IF
+    ms_counter = ms_counter + 1
+  END IF
   !---- Writing VTU Footer -----
+
 
   !Reset the MPI I/O view to default (full file, read as bytes)
   fh_mpi_offset = 0
@@ -521,6 +586,10 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
   END IF
 
   CALL MPI_File_Close(fh, ierr)
+
+
+  DEALLOCATE(work_real_dp)
+  IF(.NOT. DoublePrec) DEALLOCATE(work_real_sp)
 
 END SUBROUTINE BinaryVTKOutput
 

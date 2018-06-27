@@ -331,12 +331,6 @@ Seems to get rid of UTP prediction, damping
 
  * Get rid of redundant code using pointers
 
- * Test/example case
-
- * Move code to src
-
- * Add CHANGELOG
-
  * BC strategy
 
  * KIND=dp?

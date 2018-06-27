@@ -1399,7 +1399,7 @@ END IF
           IF(.NOT. CSVOutput) THEN
 
           CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
-               NeighbourID,NANS,NTOT,DoublePrec)
+               UTM,NeighbourID,NANS,NTOT,DoublePrec)
           
 
           CALL BinarySTROutput(NRY,resdir,runname,ntasks,myid,NRXF,UT,&
