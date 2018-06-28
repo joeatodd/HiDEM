@@ -1006,12 +1006,12 @@ END IF
 	ENDIF
 
         !No XY displacement of some nodes? 
-        IF (MOD(myid+1,ntasks/YN).eq.0) THEN
-        IF (X.GT.MAXX-250.0) THEN
-        UTP(6*I-5)=UT(6*I-5)
-        UTP(6*I-4)=UT(6*I-4)
-	ENDIF
-	ENDIF
+        ! IF (MOD(myid+1,ntasks/YN).eq.0) THEN
+        ! IF (X.GT.MAXX-250.0) THEN
+        ! UTP(6*I-5)=UT(6*I-5)
+        ! UTP(6*I-4)=UT(6*I-4)
+	! ENDIF
+	! ENDIF
 
 
        !Compute damping
