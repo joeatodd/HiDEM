@@ -42,14 +42,9 @@
         REAL*8 RHO,RHOW,GRAV, BedIntConst
         REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
-	INTEGER NDL(2,NODC),NDLL(2,NODC),NDLR(2,NODC)
-	INTEGER NDLF(2,NODC),NDLB(2,NODC),NANW(3,NOCON)
-	INTEGER FXF(2,NODC),REST,RY0,NM2
+	INTEGER NANW(3,NOCON)
+	INTEGER REST,RY0,NM2
 	INTEGER PTB(0:5000),PTR(0:5000)
-	INTEGER FXFL(2,NODC),FXFR(2,NODC),FXL,FXR,FXCF,FXCB
-	INTEGER FXFF(2,NODC),FXFB(2,NODC),FXCFL,FXCBL,FXCFR,FXCBR
-	INTEGER FXFFL(2,NODC),FXFBL(2,NODC)
-	INTEGER FXFFR(2,NODC),FXFBR(2,NODC)
 	REAL*8 M,MN,JS,DT,T,X,Y,CL,CN,E,GSUM,GSUM0
 	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT
 	INTEGER I,N,NL,NN,STEPS,IX,IM,MS,N1,N2,RY
@@ -60,11 +55,8 @@
 	REAL*8 TT(11),TTCUM(11)
 	INTEGER NNO,NS,SI,NNT,BCCS
 	INTEGER YNOD,LS,KK,STEPS0,YN,XN
-        INTEGER DST,ZNOD,J,XY,ND,O
-	INTEGER P,BCC,FXC,NCL,NDR,NDF,NDB
-	INTEGER NDFL,NDBL,NDFR,NDBR
-	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
-	INTEGER NDLFR(2,NODC),NDLBR(2,NODC),XIND,YIND
+        INTEGER DST,ZNOD,J,XY,O
+	INTEGER P,BCC,XIND,YIND
 	REAL*8 KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL*8 WENS,GSUMS,DPES,BCES
 	REAL*8 XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -92,11 +84,12 @@
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
         TYPE(NAN_t) :: NANS
-        TYPE(NTOT_t) :: NTOT
+        TYPE(NTOT_t) :: NTOT,FXC,ND
         TYPE(EF_t) :: EFS
         TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
         TYPE(NRXF_t) :: NRXF
+        TYPE(FXF_t) :: FXF,NDL
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -179,18 +172,9 @@ END IF
         DMP2=DAMP2*SCL**3.0
 
 !mpi stuff - boundaries
-	FXC=0
-	FXR=0
-	FXL=0
-	FXCF=0
-	FXCB=0
-	FXCFL=0
-	FXCFR=0
-	FXCBL=0
-	FXCBR=0
 
 	DO I=1,NOMA
-	FXF(1,I)=0
+	FXF%M(1,I)=0
         CCN(I)=0
 	EFC(I)=SCL*EF0
 	END DO
@@ -797,9 +781,7 @@ END IF
 
       !Every 250 steps, reconstruct neighbourhood list
 	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
-     	CALL DIST(NN,UT,ND,NCL,NDR,NRXF,NDL,&
-      	NDLL,NDLR,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN,&
-        NDLFL,NDLFR,NDLBR,NDLBL,NDFL,NDFR,NDBR,NDBL)
+     	CALL DIST(NN,UT,ND,NRXF,NDL,myid,ntasks,SCL,PNN,YN)
 	END IF
 
 !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
@@ -810,16 +792,9 @@ END IF
 
        !circ checks which particles are really in contact and computes the forces
 	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
-      	T,RY,DT,WE,EFC,FXF,FXC,NDR,NCL,NDL,&
-      	NDLL,NDLR,myid,ntasks,FXFL,FXFR,FXL,FXR,&
-      	FXCF,FXFF,NDLF,NDF,&
-        FXCB,FXFB,NDLB,NDB,LNN,YN,&
-        NDFL,NDFR,NDBL,NDBR,&
-      	FXCFR,FXCFL,FXCBR,FXCBL,&
-      	NDLFL,NDLFR,NDLBL,NDLBR,&
-        FXFFR,FXFFL,FXFBR,FXFBL,SCL)
+      	T,RY,DT,WE,EFC,FXF,FXC,NDL,myid,ntasks,LNN,YN,SCL)
 
-!      write(*,17) RY,myid,FXC,FXL,FXCB,FXCF,FXCFR,FXCFL,FXCBR,FXCBL
+!      write(*,17) RY,myid,FXC%M,FXC%L,FXC%B,FXC%F,FXC%FR,FXC%FL,FXC%BR,FXC%BL
 
        !TODO  TIME 4
        CALL CPU_TIME(TT(4))
@@ -828,10 +803,7 @@ END IF
        !Calculates elastic forces from beams. Stiffness matrix K
 	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
       	FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,&
-      	myid,ntasks,FXL,FXFL,FXR,FXFR,LNN,&
-        FXCF,FXFF,FXCB,FXFB,PNN,YN,&
-        FXCFL,FXFFL,FXCBL,FXFBL,&
-        FXCFR,FXFFR,FXCBR,FXFBR)
+      	myid,ntasks,LNN,PNN,YN)
 
 
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
@@ -1019,7 +991,8 @@ END IF
         UTP(6*I-4)=UT%M(6*I-4)
 	ENDIF
 
-        !No XY displacement of some nodes? 
+        !No XY displacement within 250.0 of lateral margin
+        !But this doesn't actually work because domain ain't square!
         IF (MOD(myid+1,ntasks/YN).eq.0) THEN
         IF (X.GT.MAXX-250.0) THEN
         UTP(6*I-5)=UT%M(6*I-5)

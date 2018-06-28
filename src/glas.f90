@@ -32,6 +32,7 @@ bed=1000.0
 
 !TODO pass through file once to check extent, then allocate bed, surf, melt
 ! then reread
+!TODO - error message if this file doesn't exist
 OPEN(400,file=TRIM(geomfile),STATUS='OLD')
 READ(400,*) N2
 DO I=1,N2
