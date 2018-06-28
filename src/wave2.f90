@@ -679,12 +679,18 @@ END IF
         CLOSE (117+myid)
 	ENDIF
 
+!============================================================
+!================= START THE TIME LOOP ======================
+!============================================================
+
         CALL CPU_TIME(T1)
 	TS1=0.0
 
         TTCUM=0.0
         TT=0.0
-	DO 100 RY=RY0,RY0+STEPS0 !START THE TIME LOOP
+
+
+	DO 100 RY=RY0,RY0+STEPS0 
 
         CALL CPU_TIME(TT1)
         TT(1) = TT1
@@ -695,7 +701,8 @@ END IF
       dest=myid+1
       source=myid-1
 
-!Send positions of particles to neighbouring partitions
+
+!----------------- Transmit positions to neighbouring parts ----------------
 
         tag=142
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
@@ -842,6 +849,11 @@ END IF
 	MGH=0.0
 	GSUM=0.0
 	ENM=0.0
+
+
+!------------------ Compute bed interaction, drag, gravity, buoyancy -------------------
+!------------------   and new displacement UTP -----------------------------------------
+
 
 	DO I=1,NN !Cycle over particles
 
@@ -1046,6 +1058,8 @@ END IF
        END DO !loop over particles
 
 
+!-------------- Gather and write energy -----------------
+
         IF (RY.EQ.1) THEN
         CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
         CALL MPI_ALLREDUCE(MGH,MGH0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
@@ -1085,7 +1099,7 @@ END IF
        CALL CPU_TIME(TT(10))
        TTCUM(10) = TTCUM(10) + (TT(10) - TT(9))
 
-!Check for fracture!
+!--------------- Check for fracture -------------------
 
 !internally
         DO I=1,NTOT%M
@@ -1562,6 +1576,10 @@ END IF
        TTCUM(11) = TTCUM(11) + (TT(11) - TT(10))
 
  100	CONTINUE !end of time loop
+
+!=========================================================
+!================= END OF TIME LOOP ======================
+!=========================================================
 
         OPEN(UNIT=930,FILE=TRIM(resdir)//'/RCK',STATUS='UNKNOWN')
         DO KK=0,ntasks-1

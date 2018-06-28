@@ -443,8 +443,8 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     WRITE( output_str,'(A)') '      <Points>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Position" NumberOfComponents="3" format="appended" offset="',&
-         VTK_Offset,'"/>'//lfeed
+    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Position"&
+         &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
@@ -457,15 +457,18 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     WRITE( output_str,'(A)') '      <Cells>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="connectivity" format="appended" offset="',VTK_Offset,'"/>'//lfeed
+    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="connectivity"&
+         &format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*2*intsize + intsize
 
-    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="offsets" format="appended" offset="',VTK_Offset,'"/>'//lfeed
+    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="offsets"&
+         &format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*intsize + intsize
 
-    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="types" format="appended" offset="',VTK_Offset,'"/>'//lfeed
+    WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="types"&
+         &format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*intsize + intsize
 
