@@ -12,7 +12,7 @@ MODULE TypeDefs
   END TYPE NAN_t
 
   TYPE NTOT_t
-     INTEGER :: M, L, R, F, B, FR, FL, BR, BL
+     INTEGER :: M=0, L=0, R=0, F=0, B=0, FR=0, FL=0, BR=0, BL=0
   END TYPE NTOT_t
 
   TYPE NRXF_t
@@ -34,5 +34,9 @@ MODULE TypeDefs
           FL(NODM), BR(NODM), BL(NODM)
   END TYPE UT_t
 
+  TYPE FXF_t
+     INTEGER :: M(2,NODC),L(2,NODC),R(2,NODC),F(2,NODC),B(2,NODC),&
+          FR(2,NODC),FL(2,NODC),BR(2,NODC),BL(2,NODC)
+  END TYPE FXF_t
 
 END MODULE TypeDefs

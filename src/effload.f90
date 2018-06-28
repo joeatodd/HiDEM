@@ -17,11 +17,7 @@
 ! *************************************************************************
 
 	SUBROUTINE EFFLOAD(S,NTOT,NN,T,DT,M,JS,DMP,DMP2,UT,UTM,R,EN,RY, &
-     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,&
-     myid,ntasks,FXL,FXFL,FXR,FXFR,L, &
-     FXCF,FXFF,FXCB,FXFB,PNN,YN, &
-     FXCFL,FXFFL,FXCBL,FXFBL, &
-     FXCFR,FXFFR,FXCBR,FXFBR)
+     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,myid,ntasks,L,PNN,YN)
 
         USE INOUT
         USE TypeDefs
@@ -32,25 +28,21 @@
 	REAL*8 A(NODM),C(NODM),F(NODM),D(NODM)
 	REAL*8 LNN
 	REAL*8 DUT(NODM),CT(NODC),EN(NODM),R(NODM)
-	INTEGER FXF(2,NODC),FXFL(2,NODC),FXFR(2,NODC)
-	INTEGER FXFF(2,NODC),FXFB(2,NODC),YN
-        INTEGER FXFFL(2,NODC),FXFBL(2,NODC)
-        INTEGER FXFFR(2,NODC),FXFBR(2,NODC)
 	REAL*8 DPE,S,E
 	REAL*8 T,DT,M,JS,L,ALF,DMP
 	REAL*8 G,X1,Y1,Z1,X2,Y2,Z2,TT(12,12)
 	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2,DMP2
 	REAL*8 DP,DP2
 	INTEGER N,NL,NB,N1,N2,X,XL,XR,PNN(0:5000)
-	INTEGER I,J,NN,RY,FXC,FXL,FXR,FXCF,FXCB
-	INTEGER FXCFL,FXCBL,FXCFR,FXCBR
+	INTEGER I,J,NN,RY,YN
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
         INTEGER myid,ntasks,ierr
         TYPE(NAN_t) :: NANS
         TYPE(EF_t) :: EFS
-        TYPE(NTOT_t) :: NTOT
+        TYPE(NTOT_t) :: NTOT,FXC
         TYPE(UT_t) :: UT, UTM
         TYPE(NRXF_t) :: NRXF
+        TYPE(FXF_t) :: FXF
 	DO I=1,6*NN
 	A(I)=0.0
 	D(I)=0.0
@@ -1277,9 +1269,9 @@
         ENDIF
 
 !-----------------------------------------------------------------
-	DO X=1,FXC
-	N1=FXF(1,X)
-	N2=FXF(2,X)
+	DO X=1,FXC%M
+	N1=FXF%M(1,X)
+	N2=FXF%M(2,X)
 	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%M(6*N1-5)-UT%M(6*N2-5)) &
      	-(UTM%M(6*N1-5)-UTM%M(6*N2-5)))
 	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%M(6*N1-4)-UT%M(6*N2-4)) &
@@ -1319,9 +1311,9 @@
 	ENDDO
 
         IF (MOD(myid,ntasks/YN).ne.0) THEN
-	DO X=1,FXL
-	N1=FXFL(1,X)
-	N2=FXFL(2,X)
+	DO X=1,FXC%L
+	N1=FXF%L(1,X)
+	N2=FXF%L(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%L(6*N1-5)) &
       	-(UTM%M(6*N2-5)-UTM%L(6*N1-5)))
 	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%L(6*N1-4)) &
@@ -1350,9 +1342,9 @@
 	ENDIF
 
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-	DO X=1,FXR
-	N1=FXFR(1,X)
-	N2=FXFR(2,X)
+	DO X=1,FXC%R
+	N1=FXF%R(1,X)
+	N2=FXF%R(2,X)
  	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%R(6*N1-5)) &
       	-(UTM%M(6*N2-5)-UTM%R(6*N1-5)))
 	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%R(6*N1-4)) &
@@ -1381,9 +1373,9 @@
 	ENDIF
 
         IF (myid.lt.(YN-1)*ntasks/YN) THEN
-        DO X=1,FXCF
-        N1=FXFF(1,X)
-        N2=FXFF(2,X)
+        DO X=1,FXC%F
+        N1=FXF%F(1,X)
+        N2=FXF%F(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%F(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%F(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%F(6*N1-4)) &
@@ -1412,9 +1404,9 @@
         ENDIF
 
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-        DO X=1,FXCFL
-        N1=FXFFL(1,X)
-        N2=FXFFL(2,X)
+        DO X=1,FXC%FL
+        N1=FXF%FL(1,X)
+        N2=FXF%FL(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%FL(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%FL(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%FL(6*N1-4)) &
@@ -1444,9 +1436,9 @@
 
         IF (myid.lt.(YN-1)*ntasks/YN &
       	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-        DO X=1,FXCFR
-        N1=FXFFR(1,X)
-        N2=FXFFR(2,X)
+        DO X=1,FXC%FR
+        N1=FXF%FR(1,X)
+        N2=FXF%FR(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%FR(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%FR(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%FR(6*N1-4)) &
@@ -1475,9 +1467,9 @@
         ENDIF
 
 	IF (myid.ge.ntasks/YN) THEN
-        DO X=1,FXCB
-	N1=FXFB(1,X)
-        N2=FXFB(2,X)
+        DO X=1,FXC%B
+	N1=FXF%B(1,X)
+        N2=FXF%B(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%B(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%B(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%B(6*N1-4)) &
@@ -1506,9 +1498,9 @@
         ENDIF
 
 	IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-        DO X=1,FXCBL
-	N1=FXFBL(1,X)
-        N2=FXFBL(2,X)
+        DO X=1,FXC%BL
+	N1=FXF%BL(1,X)
+        N2=FXF%BL(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%BL(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%BL(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%BL(6*N1-4)) &
@@ -1538,9 +1530,9 @@
 
 	IF (myid.ge.ntasks/YN &
      	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-        DO X=1,FXCBR
-	N1=FXFBR(1,X)
-        N2=FXFBR(2,X)
+        DO X=1,FXC%BR
+	N1=FXF%BR(1,X)
+        N2=FXF%BR(2,X)
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%BR(6*N1-5)) &
         -(UTM%M(6*N2-5)-UTM%BR(6*N1-5)))
         D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%BR(6*N1-4)) &

@@ -16,9 +16,7 @@
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
 
-	SUBROUTINE DIST(NNA,UT,ND,NCL,NDR,NRXF, &
-     	NDL,NDLL,NDLR,NDLF,NDLB,NDF,NDB,myid,ntasks,SCL,PNN,YN, &
-     	NDLFL,NDLFR,NDLBR,NDLBL,NDFL,NDFR,NDBR,NDBL)
+	SUBROUTINE DIST(NNA,UT,ND,NRXF,NDL,myid,ntasks,SCL,PNN,YN)
 
         USE TypeDefs
 
@@ -27,31 +25,25 @@
 	REAL*8 DX1,DX2,DY1,DY2,DZ1,DZ2
 	REAL*8 X1,X2,Y1,Y2,Z1,Z2
 	REAL*8 RC,SCL,RT
-	INTEGER NCL,NDR,NDF,NDB
-	INTEGER NDFL,NDBL
-	INTEGER NDFR,NDBR
 	INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
 	INTEGER myid,ntasks,ierr,YN
-	INTEGER NNA,ND,I,J,PNN(0:5000)
-	INTEGER NDL(2,NODC),NDLR(2,NODC),NDLL(2,NODC)
-	INTEGER NDLF(2,NODC),NDLB(2,NODC)
-	INTEGER NDLFL(2,NODC),NDLBL(2,NODC)
-	INTEGER NDLFR(2,NODC),NDLBR(2,NODC)
+	INTEGER NNA,I,J,PNN(0:5000)
         TYPE(UT_t) :: UT
         TYPE(NRXF_t) :: NRXF
-
+        TYPE(NTOT_t) :: ND
+        TYPE(FXF_t) :: NDL
 !	OPEN(UNIT=10,FILE='TSR',STATUS='UNKNOWN')
 !	OPEN(UNIT=11,FILE='TSL',STATUS='UNKNOWN')
 
-	ND=0
-	NDR=0
-	NDB=0
-	NDF=0
-	NDBR=0
-	NDFR=0
-	NDBL=0
-	NDFL=0
-	NCL=0
+	ND%M=0
+	ND%R=0
+	ND%B=0
+	ND%F=0
+	ND%BR=0
+	ND%FR=0
+	ND%BL=0
+	ND%FL=0
+	ND%L=0
 	RT=SCL*SCL*3.5
 
 	DO I=1,NNA-1
@@ -70,9 +62,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  ND=ND+1
-	  NDL(1,ND)=I
-	  NDL(2,ND)=J
+	  ND%M=ND%M+1
+	  NDL%M(1,ND%M)=I
+	  NDL%M(2,ND%M)=J
  	  ENDIF
 	 END DO
         END DO
@@ -94,9 +86,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NCL=NCL+1
-	  NDLL(1,NCL)=I
-	  NDLL(2,NCL)=J
+	  ND%L=ND%L+1
+	  NDL%L(1,ND%L)=I
+	  NDL%L(2,ND%L)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -119,9 +111,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDR=NDR+1
-	  NDLR(1,NDR)=I
-	  NDLR(2,NDR)=J
+	  ND%R=ND%R+1
+	  NDL%R(1,ND%R)=I
+	  NDL%R(2,ND%R)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -144,9 +136,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDF=NDF+1
-	  NDLF(1,NDF)=I
-	  NDLF(2,NDF)=J
+	  ND%F=ND%F+1
+	  NDL%F(1,ND%F)=I
+	  NDL%F(2,ND%F)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -170,9 +162,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDB=NDB+1
-	  NDLB(1,NDB)=I
-	  NDLB(2,NDB)=J
+	  ND%B=ND%B+1
+	  NDL%B(1,ND%B)=I
+	  NDL%B(2,ND%B)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -196,9 +188,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDBL=NDBL+1
-	  NDLBL(1,NDBL)=I
-	  NDLBL(2,NDBL)=J
+	  ND%BL=ND%BL+1
+	  NDL%BL(1,ND%BL)=I
+	  NDL%BL(2,ND%BL)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -221,9 +213,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDBR=NDBR+1
-	  NDLBR(1,NDBR)=I
-	  NDLBR(2,NDBR)=J
+	  ND%BR=ND%BR+1
+	  NDL%BR(1,ND%BR)=I
+	  NDL%BR(2,ND%BR)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -247,9 +239,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDFL=NDFL+1
-	  NDLFL(1,NDFL)=I
-	  NDLFL(2,NDFL)=J
+	  ND%FL=ND%FL+1
+	  NDL%FL(1,ND%FL)=I
+	  NDL%FL(2,ND%FL)=J
  	  ENDIF
 	 END DO
 	 END DO
@@ -273,9 +265,9 @@
 	  Z2=NRXF%M(3,J)+DZ2
 	  RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
 	  IF (RC.LT.RT) THEN
-	  NDFR=NDFR+1
-	  NDLFR(1,NDFR)=I
-	  NDLFR(2,NDFR)=J
+	  ND%FR=ND%FR+1
+	  NDL%FR(1,ND%FR)=I
+	  NDL%FR(2,ND%FR)=J
  	  ENDIF
 	 END DO
 	 END DO
