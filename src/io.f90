@@ -480,8 +480,8 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
     WRITE( output_str,'(A)') '      <PointData>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement" NumberOfComponents="3" format="appended" offset="',&
-         VTK_Offset,'"/>'//lfeed
+    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement"&
+         &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
