@@ -26,6 +26,7 @@
 
         USE INOUT
         USE TypeDefs
+        USE Lattice
 
 	IMPLICIT NONE
         INCLUDE 'mpif.h'
@@ -40,12 +41,13 @@
 	REAL*8 UTW(NODM),NRXFW(3,NOMA)
 	REAL*8 ENM0,ENMS0,POR,GRID
         REAL*8 RHO,RHOW,GRAV, BedIntConst
-        REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA)
+        REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA),BBox(6)
+        REAL*8, ALLOCATABLE :: PBBox(:,:)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
 	INTEGER NANW(3,NOCON)
 	INTEGER REST,RY0,NM2
 	INTEGER PTB(0:5000),PTR(0:5000)
-	REAL*8 M,MN,JS,DT,T,X,Y,CL,CN,E,GSUM,GSUM0
+	REAL*8 M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
 	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT
 	INTEGER I,N,NL,NN,STEPS,IX,IM,MS,N1,N2,RY
 	INTEGER PN,NRY,PNN(0:5000),NTOTW(0:5000),XK,YK,ZK
@@ -64,12 +66,13 @@
 	REAL*8 KX(12,12),KY(12,12),KZ(12,12),K(12,12)
 	REAL*8 DDX,DDY,DDZ,DX,DY,DZ,DL,DTX,DTY,DTZ
 	REAL*8 X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
-	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ,MAXUT
+	REAL*8 MAXX,MAXY,MAXZ,MAXUT
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG,fractime
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
         INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
+        INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),neighparts(:)
 
 !       TODO - Implement these pointers!
         INTEGER, POINTER :: NTOPtr, NDPtr, NDLPtr1(:,:), NDLPtr2(:,:)
@@ -101,6 +104,8 @@
         ntasks_init = ntasks
 
         PrintTimes = .FALSE.
+
+        ALLOCATE(PBBox(6,ntasks))
 
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
@@ -194,6 +199,7 @@ END IF
 
 !more MPI stuff...
 !square partitioning, (F)orward, (B)ack, (L)eft, (R)right, (FR) Forward Right, etc 
+	NRXF%M(:,:)=-1000.0
 	NRXF%L(:,:)=-1000.0
 	NRXF%R(:,:)=-1000.0
 	NRXF%F(:,:)=-1000.0
@@ -219,9 +225,21 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(LS,NN,NTOT,&
-        myid,MAXX,MAXY,MAXZ,MINX,MINY,MINZ,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC,&
+	CALL FIBG3(NN,NTOT,NRXF,particles_G, NCN, CN, CNPart, neighparts, &
+        neighcount, LS, myid,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC,&
         StrictDomain)
+
+ !TODO - test output of NCN, CN, particles_g, NRXF
+
+        CALL GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
+
+        PRINT *, myid,' neighparts: ',neighparts(1:neighcount)
+
+        MAXX = BBox(2)
+        MAXY = BBox(4)
+        MAXZ = BBox(6) !don't really use these...
+
+        PRINT *,myid,' Got ma bbox: ',PBBox(:,myid+1)
 
 	write(*,17) myid,NTOT%L,NTOT%M,NTOT%R,NTOT%F,NTOT%B,NTOT%FL,NTOT%FR,NTOT%BL,NTOT%BR
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
@@ -432,8 +450,6 @@ END IF
           VDP(IX)=SCL*SCL*DRAG
           ENDIF
         ENDIF
-
-
 	END DO
 	CLOSE (117+myid)
 
@@ -681,6 +697,10 @@ END IF
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
 
         !TODO  TIME 1
+
+        !TODO - Use this for passing relevant points
+        CALL GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
+
 
       dest=myid+1
       source=myid-1
@@ -1684,5 +1704,50 @@ CONTAINS
 	ENDIF
 
  END SUBROUTINE WriteRestart
+
+ SUBROUTINE GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
+   IMPLICIT NONE
+
+   INTEGER :: myid, ntasks, NN,i
+   TYPE(UT_t) :: UT
+   TYPE(NRXF_t) :: NRXF
+   !-----------------
+   INTEGER :: ierr
+   REAL*8 :: BBox(6),PBBox(6,ntasks),workarr(6*ntasks)
+   REAL*8 :: minx,maxx,miny,maxy,minz,maxz
+
+   minx = HUGE(minx)
+   miny = HUGE(miny)
+   minz = HUGE(minz)
+   maxx = -HUGE(maxx)
+   maxy = -HUGE(maxy)
+   maxz = -HUGE(maxz)
+   
+   DO i=1,NN
+     X=NRXF%M(1,i)+UT%M(6*i-5)
+     Y=NRXF%M(2,i)+UT%M(6*i-4)
+     Z=NRXF%M(3,i)+UT%M(6*i-3)
+     minx = MIN(minx, x)
+     miny = MIN(miny, y)
+     minz = MIN(minz, z)
+     maxx = MAX(maxx, x)
+     maxy = MAX(maxy, y)
+     maxz = MAX(maxz, z)
+   END DO
+
+   BBox(1) = minx
+   BBox(2) = maxx
+   BBox(3) = miny
+   BBox(4) = maxy
+   BBox(5) = minz
+   BBox(6) = maxz
+
+   CALL MPI_AllGather(BBox,6,MPI_DOUBLE_PRECISION,workarr,6,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
+
+   DO i=1,ntasks
+     PBBox(:,i) = workarr(((i-1)*6)+1:i*6)
+   END DO
+
+ END SUBROUTINE GetBBoxes
 END PROGRAM
 

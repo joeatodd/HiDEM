@@ -30,8 +30,8 @@ MODULE TypeDefs
   END TYPE NEI_t
 
   TYPE UT_t
-     REAL*8 :: M(NODM), L(NODM), R(NODM), F(NODM), B(NODM), FR(NODM),&
-          FL(NODM), BR(NODM), BL(NODM)
+     REAL*8 :: M(NODM)=0.0, L(NODM)=0.0, R(NODM)=0.0, F(NODM)=0.0,&
+          B(NODM)=0.0, FR(NODM)=0.0,FL(NODM)=0.0, BR(NODM)=0.0, BL(NODM)=0.0
   END TYPE UT_t
 
   TYPE FXF_t

@@ -1,10 +1,14 @@
+MODULE Lattice
+
+CONTAINS
+
 !defines and makes the FCC lattice - dense packing
 
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(l,ip,ND,myid,maxx,&
-     maxy,maxz,minx,miny,minz,ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC,StrictDomain)
+SUBROUTINE FIBG3(NN,NTOT,NRXF,particles_G,NCN,CN,CNPart,neighparts,neighcount,l,myid,&
+     ntasks,wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC,StrictDomain)
 
 USE TypeDefs
 
@@ -13,13 +17,14 @@ INCLUDE 'na90.dat'
 !Real*8,ALLOCATABLE :: surf(:,:),bed(:,:)
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
-Real*8 :: box,b,maxx,maxy,maxz,minx,miny,minz,SCL
-INTEGER :: l,ip,i,j,YN,XN
-INTEGER :: myid,ntasks,N1,N2,xk,yk
+Real*8 :: box,b,SCL
+INTEGER :: l,NN,i,j,YN,XN
+INTEGER :: myid,ntasks,N1,N2,xk,yk,neighcount
+INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),neighparts(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile
 LOGICAL :: StrictDomain
-TYPE(NTOT_t) :: ND
-
+TYPE(NTOT_t) :: NTOT
+TYPE(NRXF_t) :: NRXF
 !Open(300,file='mass.dat',STATUS='OLD')
 OPEN(510,file=TRIM(wrkdir)//'/NODFIL2')
 
@@ -45,19 +50,12 @@ DO I=1,N2
 ENDDO
 CLOSE(400)
 
-maxx=0.0
-maxy=0.0
-maxz=0.0
-minx=1.0e+08
-miny=1.0e+08
-minz=1.0e+08
-
 !box is never actualy used...
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
 
-CALL Initializefcc(box,l,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,wrkdir,&
+CALL Initializefcc(NN,NTOT,NRXF,particles_G, NCN, CN, CNPart, neighparts,neighcount,box,l,myid,ntasks,wrkdir,&
      SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
 
 CLOSE(510)
@@ -68,18 +66,17 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(box,l,ip,myid,maxx,maxy,maxz,minx,miny,minz,ntasks,wrkdir,&
-     SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
+SUBROUTINE Initializefcc(NN,NTOT,NRXF,particles_G, NCN, CN, CNPart, neighparts,neighcount,&
+     box,l,myid,ntasks,wrkdir,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
 
   USE INOUT
-  USE iso_c_binding
 
 Implicit None
 INCLUDE 'na90.dat'
 INCLUDE 'mpif.h'
 
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
-Real*8 b,x0(3,4),box,maxx,maxy,maxz,minx,miny,minz,SCL
+Real*8 b,x0(3,4),box,SCL
 REAL*8 gridminx, gridmaxx, gridminy, gridmaxy
 REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV,YN_estimate, XN_estimate, efficiency
 REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC
@@ -87,7 +84,7 @@ REAL*8, ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
 INTEGER i,j,k,k1,k2,l,ip,NN,myid,ntasks,m,nb,YN,XN,xk,yk,nx,ny,nbeams,ierr,pown
 INTEGER neighcount
-INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:), NCN(:),CN(:,:), CNPart(:,:),&
+INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:), NCN(:),CN(:,:),CNPart(:,:),&
      particles_G(:),neighparts(:)
 CHARACTER(LEN=256) :: wrkdir
 LOGICAL :: StrictDomain
@@ -99,6 +96,8 @@ INTEGER, ALLOCATABLE :: metis_options(:), particlepart(:)
 INTEGER, POINTER :: vwgt=>NULL(),vsize=>NULL(),adjwgt=>NULL(),xadj(:),adjncy(:)
 REAL*8, POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 
+TYPE(NTOT_t) :: NTOT
+TYPE(NRXF_t) :: NRXF
 
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
@@ -192,12 +191,6 @@ DO i=1,nx !x step
 	     xo(1,ip) = x0(1,k1) + REAL(i-1)*b	
 	     xo(2,ip) = x0(2,k1) + REAL(j-1)*b
 	     xo(3,ip) = x0(3,k1) + REAL(k-1)*b
-             if (xo(1,ip).gt.maxx) maxx=xo(1,ip)
-             if (xo(2,ip).gt.maxy) maxy=xo(2,ip)
-             if (xo(3,ip).gt.maxz) maxz=xo(3,ip)
-             if (xo(1,ip).lt.minx) minx=xo(1,ip)
-             if (xo(2,ip).lt.miny) miny=xo(2,ip)
-             if (xo(3,ip).lt.minz) minz=xo(3,ip)
              ! EndIF
              ! EndIF
              EndIF
@@ -281,7 +274,7 @@ IF(myid==0) THEN
   particlepart = particlepart - 1 !mpi partitions are zero indexed
 
   PRINT *,'obvjal: ',objval
-  PRINT *,'particlepart: ',MINVAL(particlepart), MAXVAL(particlepart), COUNT(particlepart==0),COUNT(particlepart==ntasks-1)
+  PRINT *,'particlepart: ',MINVAL(particlepart), MAXVAL(particlepart), COUNT(particlepart==0),COUNT(particlepart==ntasks)
   PRINT *,'--- METIS SUCCESS ---'
 
   DEALLOCATE(xadj,adjncy)
@@ -301,16 +294,19 @@ SharedNode = .FALSE.
 
 !Construct local arrays of: 
 ! - node connections (CN) 
-! - number of above (NCN)
+! - number of connections (NCN)
 ! - other node partitions (CNpart)
 ! - all partitions we share connections with (neighparts)
 counter = 0
 DO i=1,ip
   IF(particlepart(i)==myid) THEN
     counter = counter + 1
+
     particles_G(counter) = i
+    NRXF%M(:,counter) = xo(:,i) !our points
+
     NCN(counter) = NCN_All(i)
-    DO j=1,NCN_All(i)
+    DO j=1,NCN(counter)
       !CN_All, NCN_All
       CN(counter,j) = CN_All(i,j)
       pown = particlepart(CN_All(i,j))
@@ -334,7 +330,12 @@ PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
 
 !TODO - keep these?
 DEALLOCATE(NCN_All, CN_All)
-STOP
+
+!We return:
+! Our nodes initial locs  - NRXF
+! Our node global numbers - particles_G
+! Our connections - NCN, CN
+! Our neighparts - neighparts
 
 END SUBROUTINE Initializefcc
 
@@ -365,3 +366,5 @@ diz=diz/norm
 !if (diy.lt.-0.2) diy=-0.2
 End Subroutine
 
+
+END MODULE Lattice

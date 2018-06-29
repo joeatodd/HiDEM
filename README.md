@@ -342,3 +342,8 @@ Seems to get rid of UTP prediction, damping
 Domain needs to be orientated in XY because:
 
 Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask Jan)
+
+
+## METIS Conversion Notes ##
+
+NTOT%R previously computed by dt.f90, the total number of beams between our %M nodes and %R particles
