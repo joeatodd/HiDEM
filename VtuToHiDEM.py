@@ -8,6 +8,10 @@ from paraview.numpy_support import vtk_to_numpy
 import paraview.vtk as vtk
 from scipy import interpolate as interp
 from scipy.interpolate import Rbf
+import shapefile
+from shapely.geometry import shape, Point
+import shapely.affinity as shaf
+import timeit
 
 ######################
 ### Read Arguments ###
@@ -17,7 +21,7 @@ def usage():
     print("Usage: " + sys.argv[0] + " -i input.pvtu -b bed_dem_file  -p param_file -t transform_file (optional)")
 
 try:
-	opts, args = getopt.getopt(sys.argv[1:],"i:b:p:t:h")
+	opts, args = getopt.getopt(sys.argv[1:],"i:f:b:p:t:h")
 except getopt.GetoptError:
 	usage()
 	sys.exit(2)
@@ -26,21 +30,25 @@ got_infile = False
 got_beddem = False
 got_transform = False
 got_param = False
+got_fjordfile = False
 
 for opt, arg in opts:
 	if(opt =="-i"):
 		result_file = arg
 		got_infile = True
-	if(opt =="-b"):
+	elif(opt =="-f"):
+		fjord_file = arg
+		got_fjordfile = True
+	elif(opt =="-b"):
 		bed_dem_file = arg
 		got_beddem = True
-	if(opt =="-t"):
+	elif(opt =="-t"):
 		transform_file = arg
 		got_transform = True
-	if(opt =="-p"):
+	elif(opt =="-p"):
 		param_file = arg
 		got_param = True
-	elif(opt == "-h"):
+	else:
 		usage()
 		sys.exit(2)
 
@@ -359,6 +367,7 @@ flatbase.Vectors = ['POINTS', 'zvec']
 flatbase.ScaleFactor = -1.0
 
 #and resample onto plane
+print "Resampling base onto sample plane"
 baseresamp = ResampleWithDataset(Input=flatbase,
     Source=SamplePlane)
 
@@ -372,6 +381,7 @@ flatsurf.Vectors = ['POINTS', 'zvec']
 flatsurf.ScaleFactor = -1.0
 
 #and resample onto plane
+print "Resampling surf onto sample plane"
 surfresamp = ResampleWithDataset(Input=flatsurf,
     Source=SamplePlane)
 
@@ -389,50 +399,55 @@ surfplane_points = vtk_to_numpy(surfresampdata.GetPoints().GetData())
 surfplane_z = vtk_to_numpy(surfresampdata.GetPointData().GetArray("zvec"))[:,-1]
 surfplane_mask = vtk_to_numpy(surfresampdata.GetPointData().GetArray("vtkValidPointMask"))
 
+print "Finished resampling onto plane."
 
-#MODIFIED BED STRATEGY - SEE BELOW INSTEAD
+#the mask for valid glacier points
+glac_mask = (baseplane_mask == 1) & (surfplane_mask == 1)
+
 
 # # Bed DEM strategy:
-# #   For points on the glacier, it's necessary to interpolate twice:
-# #   1) Interp from bed DEM to Elmer mesh
-# #   2) Interp from Elmer mesh to HiDEM grid
-# #
-# #  BUT this will mean all HiDEM grid points which are ice free
-# #  will interp NaN. So:
-# #   3) for ice free nodes interpolate bed directly from dem
-# #
-# #  ALSO we should probably just set bed = base when GroundedMask > 0
-# #   4) set bed = base where grounded
-# #   5) for GL = -1, ensure base >= bed
-
-# ##interp bed from DEM file
-# # 1) first interp bed_dem to mesh_points
-# meshbedpoints = vtk_to_numpy(beddata.GetPoints().GetData())
-# meshbedinterp = interp.griddata(bed_dem[:,:-1], bed_dem[:,-1], (meshbedpoints[:,0], meshbedpoints[:,1]))
-
-# # 2) then interp mesh_points to new grid
-# gridmeshbedinterp = interp.griddata(meshbedpoints[:,:-1], meshbedinterp, (baseplane_points[:,0], baseplane_points[:,1]))
-
-# # 3) generate direct dem to grid interp for ice free points
-# #gridbedinterp = interp.griddata(bed_dem[:,:-1], bed_dem[:,-1], (baseplane_points[:,0], baseplane_points[:,1]))
-
-# #combine them all
-# #1)2)
-# final_bed = gridmeshbedinterp.copy()
-
-# #3)
-# #final_bed[baseplane_mask==0] = gridbedinterp[baseplane_mask==0]
-# final_bed[np.isnan(final_bed)] = gridbedinterp[np.isnan(final_bed)]
-
-# #4)
-# final_bed[(baseplane_grounded >= 0) & (baseplane_mask == 1)] = baseplane_z[(baseplane_grounded >= 0) & (baseplane_mask == 1)]
-
 
 # 1) Just set bed directly from DEM interp
 # 2) Then, at grounded ice points, set bed = base
 # 3) Finally ensuring that no ice sticks thru bed
 
-#1) interp from dem
+#MODIFIED FOR FJORD
+
+##############################
+#Read Polygon defining fjord #
+##############################
+
+if got_fjordfile:
+    fjord_shapefile = shapefile.Reader(fjord_file)
+    fjord_poly = fjord_shapefile.shapeRecords()[0].shape.__geo_interface__
+
+    fjord_shapely = shape(fjord_poly) #convert to shapely format
+
+    #rotate
+    fjord_shapely = shaf.rotate(fjord_shapely,rotate_angle,origin=(0,0)) 
+    #translate
+    fjord_shapely = shaf.translate(fjord_shapely,x_translate, y_translate)
+
+    print 'fjord centroid: ',fjord_shapely.centroid.xy
+
+    #Use a np vectorized function to find points in poly
+    def shapely_pip(x, y, poly):
+        return Point((x,y)).within(poly)
+    shapely_pipv = np.vectorize(shapely_pip)
+    fjord_mask = shapely_pipv(baseplane_points[:,0],baseplane_points[:,1],fjord_shapely)
+
+
+
+    #ensure no fjord mask where glac mask:
+    fjord_mask[glac_mask] = False
+
+    outside_mask = (~glac_mask) & (~fjord_mask)
+
+else:
+
+    outside_mask = ~glac_mask
+
+## Interpolate the bed from DEM
 gridbedinterp = interp.griddata(bed_dem[:,:-1], bed_dem[:,-1], (baseplane_points[:,0], baseplane_points[:,1]))
 final_bed = gridbedinterp.copy()
 #2) grounded points get ice height for bed
@@ -440,19 +455,28 @@ final_bed[baseplane_grounded > 0] = baseplane_z[baseplane_grounded > 0]
 #3) ensure no ice sticks through bed
 final_bed[(final_bed > baseplane_z) & (baseplane_mask == 1)] = baseplane_z[(final_bed > baseplane_z) & (baseplane_mask == 1)]
 
+
+#Set bed outside glacier/fjord to high value
+#BAD STRATEGY - to be replaced
+if False:
+    high_bed = 1.0E6
+    final_bed[outside_mask] = high_bed
+
 #the minimum bed height
 z_translate = -np.nanmin(final_bed)
 
-#the mask for valid glacier points
-test_mask = (baseplane_mask == 1) & (surfplane_mask == 1)
-
-#the final ice base data
+#Where there's no ice, set surf=base=bed
 final_base = baseplane_z.copy()
-final_base[~test_mask] = final_bed[~test_mask]
-
+final_base[~glac_mask] = final_bed[~glac_mask]
 
 final_surf = surfplane_z.copy()
-final_surf[~test_mask] = final_bed[~test_mask]
+final_surf[~glac_mask] = final_bed[~glac_mask]
+
+#in the fjord, set melange if desired
+do_melange = False
+if do_melange and got_fjordfile:
+    final_base[fjord_mask] = -50.0
+    final_surf[fjord_mask] = 5.0
 
 final_slip = baseplane_slip.copy()
 #scale the slip coeff from MPa-metres-years to SI
@@ -460,7 +484,10 @@ final_slip = final_slip / (1.0E-6/(365.25*24*60*60))
 
 final_slip[final_slip < 0.0] = -final_slip[final_slip < 0.0]
 
-#Where there's no ice, set surf=base=bed
+if False:
+    #set friction outside glacier/fjord area to high value
+    #Part of bad strategy from before
+    final_slip[outside_mask] = 1.0E10
 
 #translate Z
 final_bed += z_translate
