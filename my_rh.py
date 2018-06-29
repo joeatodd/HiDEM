@@ -6,26 +6,43 @@ import sys
 import matplotlib.pyplot as plt
 import math
 from glob import glob
-
+import re
 from timeit import default_timer as timer
 
 
 # get input files from user
 
 def usage():
-    print ("Usage: " + sys.argv[0] + " -i input_file_glob -b buffer_dist (m, optional) -n interval (process every nth)")
+    print ("Usage: " + sys.argv[0] + " -i input_file_glob -b buffer_dist (m, optional) -n interval (process every nth) -v max_str ")
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],"i:b:n:")
+    opts, args = getopt.getopt(sys.argv[1:],"i:b:n:lv:")
 except getopt.GetoptError:
     usage()
     sys.exit(2)
 
+def str_from_file(fname,legacy_input):
+    if(legacy_input):
+        the_data = np.fromfile(fname,sep=" ")
+    else:
+        count_re = re.compile("Count: ([0-9]*)")
+        type_re = re.compile('Type: ([a-zA-Z0-9]*)')
+
+        indata = open(fname, 'rb')
+        header = indata.readline()
+        num_count = int(count_re.search(header).group(1))
+        float_type = type_re.search(header).group(1).lower()
+        the_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*4)
+
+    return the_data.reshape((-1,4))
+
 #default buffer distance (added to max_x and max_y
 buff = 500.0
-dx = 30.0
+dx = 50.0
 buff_boxes = math.floor(buff/dx)
 interval = 1
+legacy_input = False
+vmax = 0.01
 
 for opt, arg in opts:
     if(opt =="-i"):
@@ -34,6 +51,10 @@ for opt, arg in opts:
         buff = arg
     elif(opt =='-n'):
         interval == arg
+    elif(opt =='-l'):
+        legacy_input = True
+    elif(opt =='-v'):
+        vmax = arg
     else:
         print "help"
         usage()
@@ -41,11 +62,15 @@ for opt, arg in opts:
 
 
 #Find the input files
-infiles = glob("*"+inglob+"*STR*.csv")
+if legacy_input:
+    infiles = glob("*"+inglob+"*STR*.csv")
+else:
+    infiles = glob("*"+inglob+"*STR*.bin")
+    
 infiles.sort()
 
 #Read the initial state
-str0 = np.fromfile(infiles[0],sep=" ").reshape((-1,4))
+str0 = str_from_file(infiles[0],legacy_input)
 
 extent_min = str0[:,:-1].min(0)
 extent_max = str0[:,:-1].max(0)
@@ -65,10 +90,10 @@ zz = np.arange(zmin,zmax+dx,dx)
 for j,f in enumerate(infiles[1:]):
     print f
 
-    str1 = np.fromfile(f,sep=" ").reshape((-1,4))
+    str1 = str_from_file(f,legacy_input)
 
     #get the strain 'rate'
-    strate = str1[:,3] - str0[:,3]
+    strate = abs(str1[:,3] - str0[:,3])
 
     sx_plan = np.zeros([len(xx), len(yy)])
     nx_plan = np.zeros([len(xx), len(yy)])
@@ -97,10 +122,10 @@ for j,f in enumerate(infiles[1:]):
 
     #stdev = np.std(strate)
 
-    plt.matshow(np.flipud(sx_side.T),vmin=0.0, vmax=0.01,cmap='jet')
+    plt.matshow(np.flipud(sx_side.T),vmin=0.0, vmax=vmax,cmap='jet')
     plt.savefig(f+"_side.png")
     plt.close()
 
-    plt.matshow(sx_plan,vmin=0.0, vmax=0.01,cmap='jet')
+    plt.matshow(sx_plan,vmin=0.0, vmax=vmax,cmap='jet')
     plt.savefig(f+"_plan.png")
     plt.close()
