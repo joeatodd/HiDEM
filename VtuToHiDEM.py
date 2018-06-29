@@ -447,6 +447,15 @@ else:
 
     outside_mask = ~glac_mask
 
+
+#Generate an integer mask to pass to HiDEM
+gen_mask = True and got_fjordfile
+print 'baseplane_z shape: ',baseplane_z.shape
+if gen_mask:
+    geommask = np.zeros(baseplane_z.size,dtype=int)
+    geommask[glac_mask] = 1
+    geommask[fjord_mask] = 2
+
 ## Interpolate the bed from DEM
 gridbedinterp = interp.griddata(bed_dem[:,:-1], bed_dem[:,-1], (baseplane_points[:,0], baseplane_points[:,1]))
 final_bed = gridbedinterp.copy()
@@ -455,12 +464,6 @@ final_bed[baseplane_grounded > 0] = baseplane_z[baseplane_grounded > 0]
 #3) ensure no ice sticks through bed
 final_bed[(final_bed > baseplane_z) & (baseplane_mask == 1)] = baseplane_z[(final_bed > baseplane_z) & (baseplane_mask == 1)]
 
-
-#Set bed outside glacier/fjord to high value
-#BAD STRATEGY - to be replaced
-if False:
-    high_bed = 1.0E6
-    final_bed[outside_mask] = high_bed
 
 #the minimum bed height
 z_translate = -np.nanmin(final_bed)
@@ -483,11 +486,6 @@ final_slip = baseplane_slip.copy()
 final_slip = final_slip / (1.0E-6/(365.25*24*60*60))
 
 final_slip[final_slip < 0.0] = -final_slip[final_slip < 0.0]
-
-if False:
-    #set friction outside glacier/fjord area to high value
-    #Part of bad strategy from before
-    final_slip[outside_mask] = 1.0E10
 
 #translate Z
 final_bed += z_translate
@@ -517,6 +515,7 @@ with open(outfile, 'wb') as output:
 		outstr += "%.9f" % final_base[i] + "\t"
 		outstr += "%.9f" % final_bed[i] + "\t"
 		outstr += "%.9f" % final_slip[i]
+                if(gen_mask): outstr += "\t"+"%i" % geommask[i]
 		outstr += "\n"
 		output.write(outstr)
 
