@@ -70,7 +70,7 @@
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG,fractime
 	REAL RAN(NOCON)
-        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
+        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
         INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
         INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),neighparts(:)
 
