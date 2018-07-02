@@ -37,7 +37,7 @@ CONTAINS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
-   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput
+   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -200,6 +200,11 @@ CONTAINS
    IF(.NOT. gotRestName .AND. REST == 1) THEN
      restname = runname
    END IF
+
+   !check the geometry file exists
+   INQUIRE( FILE=TRIM(geomfile), EXIST=FileExists ) 
+   IF(.NOT. FileExists) CALL FatalError("Geometry input file '"//TRIM(geomfile)//"' doesn't exist!")
+
 
    IF(myid==0) THEN
      PRINT *,'--------------------Input Vars----------------------'

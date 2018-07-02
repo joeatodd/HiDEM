@@ -42,7 +42,6 @@ bed(i,j)=1000.0
 ENDDO
 ENDDO
 
-!TODO - error message if this file doesn't exist
 Open(400,file=TRIM(geomfile),STATUS='OLD')
 READ(400,*) N2
 DO I=1,N2
