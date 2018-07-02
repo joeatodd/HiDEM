@@ -42,7 +42,7 @@
         REAL*8 RHO,RHOW,GRAV, BedIntConst
         REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
-	INTEGER NANW(3,NOCON)
+	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
 	INTEGER REST,RY0,NM2
 	INTEGER PTB(0:5000),PTR(0:5000)
 	REAL*8 M,MN,JS,DT,T,X,Y,CL,CN,E,GSUM,GSUM0
@@ -56,7 +56,7 @@
 	INTEGER NNO,NS,SI,NNT,BCCS
 	INTEGER YNOD,LS,KK,STEPS0,YN,XN
         INTEGER DST,ZNOD,J,XY,O
-	INTEGER P,BCC,XIND,YIND
+	INTEGER P,BCC,XIND,YIND,gridratio
 	REAL*8 KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL*8 WENS,GSUMS,DPES,BCES
 	REAL*8 XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -66,7 +66,8 @@
 	REAL*8 X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
 	REAL*8 MAXX,MAXY,MAXZ,MINY,MINX,MINZ,MAXUT
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
-	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG,fractime
+	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
+        REAL*8 fractime
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid
         INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
@@ -80,6 +81,7 @@
 
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec,CSVOutput
+        LOGICAL :: GeomMasked,FixLat,FixBack
         LOGICAL, ALLOCATABLE :: LostParticle(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
@@ -134,7 +136,7 @@ END IF
         CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
              DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, &
-             fractime,StrictDomain,DoublePrec,CSVOutput)
+             fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -367,12 +369,19 @@ END IF
         ENDDO
         ENDDO
 
+        !Geometry mask: 1=glacier, 2=fjord, 0=bedrock/outside domain
+        GEOMMASK = 0
+
         !Read the geometry and friction
         !into the grids BED, SUF, and FBED
         OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
         READ(400,*) NM2
 	DO I=1,NM2
-        READ(400,*) X,Y,S1,B2,B1,Z1
+        IF(GeomMasked) THEN
+          READ(400,*) X,Y,S1,B2,B1,Z1,mask
+        ELSE
+          READ(400,*) X,Y,S1,B2,B1,Z1
+        END IF
 !        X=X-2000.0
 !        Y=Y-7000.0
         XK=INT(X/GRID)
@@ -380,6 +389,7 @@ END IF
         IF (XK.GE.-100.AND.YK.GE.-100) BED(XK,YK)=B1
         IF (XK.GE.-100.AND.YK.GE.-100) SUF(XK,YK)=S1
         IF (XK.GE.-100.AND.YK.GE.-100) FBED(XK,YK)=FRIC*SCL*SCL*Z1
+        IF (XK.GE.-100.AND.YK.GE.-100.AND.GeomMasked) GEOMMASK(XK,YK)=mask
 
         !Previously had commented from here
         !------------
@@ -984,22 +994,29 @@ END IF
         ! UTP(6*I-0)=UT%M(6*I-0)
 	! ENDIF
 
-!	IF (X.LT.250.0.OR.Y.LT.250.0) THEN
-        !Backplane is fixed
-	IF (Y.LT.250.0) THEN
-        UTP(6*I-5)=UT%M(6*I-5)
-        UTP(6*I-4)=UT%M(6*I-4)
-	ENDIF
+        !This code allows glacier edge/inflow boundary to be frozen in XY
+        !TODO (esp for melange) - convert to contact BC/elastic rebound?
+        IF(FixBack .OR. FixLat) THEN
+          XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
+          YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
+          gridratio = INT(MAX(SCL/GRID,1.0))
 
-        !No XY displacement within 250.0 of lateral margin
-        !But this doesn't actually work because domain ain't square!
-        IF (MOD(myid+1,ntasks/YN).eq.0) THEN
-        IF (X.GT.MAXX-250.0) THEN
-        UTP(6*I-5)=UT%M(6*I-5)
-        UTP(6*I-4)=UT%M(6*I-4)
-	ENDIF
-	ENDIF
+          !Freeze if near back plane
+          IF(FixBack) THEN
+            IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
+              UTP(6*I-5)=UT%M(6*I-5)
+              UTP(6*I-4)=UT%M(6*I-4)
+            END IF
+          END IF
 
+          !Freeze if near edge of glacier
+          IF(FixLat) THEN
+            IF(ANY(GEOMMASK(XIND-(2*gridratio):XIND+(2*gridratio),YIND)==0)) THEN
+              UTP(6*I-5)=UT%M(6*I-5)
+              UTP(6*I-4)=UT%M(6*I-4)
+            END IF
+          END IF
+        END IF
 
        !Compute damping
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM%M(6*I-5))**2/(4*DT)

@@ -29,7 +29,7 @@ CONTAINS
  SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain, DoublePrec, CSVOutput)
+      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL*8 :: fractime
@@ -37,7 +37,8 @@ CONTAINS
    INTEGER :: myid, readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
-   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists
+   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
+        FixBack,GeomMasked
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -77,6 +78,9 @@ CONTAINS
    StrictDomain = .TRUE.
    DoublePrec = .FALSE.
    CSVOutput = .FALSE.
+   FixLat = .FALSE.
+   FixBack = .TRUE.
+   GeomMasked = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -168,6 +172,8 @@ CONTAINS
      CASE("geometry file")
        READ(VarValue,*) geomfile
        gotGeom = .TRUE.
+     CASE("geometry file has mask")
+       READ(VarValue,*) GeomMasked
      CASE("results directory")
        READ(VarValue,*) resdir
      CASE("bed stiffness constant")
@@ -182,6 +188,10 @@ CONTAINS
        READ(VarValue,*) DoublePrec
      CASE("csv output")
        READ(VarValue,*) CSVOutput
+     CASE("fixed lateral margins")
+       READ(VarValue,*) FixLat
+     CASE("fixed inflow margin")
+       READ(VarValue,*) FixBack
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -201,6 +211,10 @@ CONTAINS
      restname = runname
    END IF
 
+   IF(FixLat .AND. .NOT. GeomMasked) THEN
+     CALL FatalError("'Fixed Lateral Margin' requires a geometry file with mask")
+   END IF
+
    !check the geometry file exists
    INQUIRE( FILE=TRIM(geomfile), EXIST=FileExists ) 
    IF(.NOT. FileExists) CALL FatalError("Geometry input file '"//TRIM(geomfile)//"' doesn't exist!")
@@ -213,6 +227,7 @@ CONTAINS
      WRITE(*,'(A,A)') "Geometry File = ",TRIM(geomfile)
      WRITE(*,'(A,A)') "Work Directory = ",TRIM(wrkdir)
      WRITE(*,'(A,A)') "Results Directory = ",TRIM(resdir)
+     WRITE(*,'(A,L)') "Geometry File Has Mask = ",GeomMasked
      WRITE(*,'(A,F9.2)') "Backwall Pressure = ",PRESS
      WRITE(*,'(A,F9.2)') "Submarine Melt = ",MELT
      WRITE(*,'(A,F9.2)') "UC = ",UC
@@ -245,6 +260,9 @@ CONTAINS
      WRITE(*,'(A,F9.2)') "Grid = ",GRID
      WRITE(*,'(A,F9.2)') "Fracture After Time = ",fractime
      WRITE(*,'(A,L)') "Double Precision Output = ",DoublePrec
+     WRITE(*,'(A,L)') "Strict Domain Interpolation = ",StrictDomain
+     WRITE(*,'(A,L)') "Fixed Lateral Margins = ",FixLat
+     WRITE(*,'(A,L)') "Fixed Inflow Margin = ",FixBack
      PRINT *,'----------------------------------------------------'
    END IF
 END SUBROUTINE ReadInput
