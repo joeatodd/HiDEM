@@ -204,6 +204,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
 | CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space! Default false)|
 | Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32). (doubles output filesize..., Default false)|
+| Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' |
+| Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane |
+| Fixed Inflow Margin | FixBack | If true, particles near the inflow margin are not permitted to move in XY plane |
 
 
 ### mass3.dat ####
@@ -218,6 +221,7 @@ output transformation matrix which takes from Elmer domain to HiDEM domain.
 
 make sure the bed is buffered beyond the edge of the ice, and define these regions by setting surf and base equal to bed.  
 
+User may optionally specify a 'mask' column in geometry input file, which tells the model which regions are ice (=1), fjord (=2), bedrock(=0). This is required for imposing lateral boundary conditions (Fixed Lateral Margins).
 
 ### Internal variables ###
 
