@@ -99,6 +99,8 @@
         ENDIF
       END DO
 
+      !Passing UTM to neighbour partitions in every direction
+
       dest=myid+1
       source=myid-1
       tag=133
@@ -182,6 +184,8 @@
       source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
 !------------------------------------------------------
+      !Note - use of DUT here suggests N1 and N2 should be mutually 
+      !exclusive sets? but they aren't
         IF (MOD(myid,ntasks/YN).ne.0) THEN
   	DO X=1,NTOT%L
 	XL=NTOT%M+X

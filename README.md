@@ -244,8 +244,7 @@ User may optionally specify a 'mask' column in geometry input file, which tells 
 | MFIL | mass of particles - per particle |
 | JS | moment of rotational inertia |
 | NAN | list of connections between particles e.g. NAN(1:2,1) lists the two particle numbers which make up connection 1   |
-| NRXF | initial position of this partition's particles   |
-| NRXFL,... | initial position of particles in the partition to the left   |
+| NRXF%M,%F | initial position of the particles  |
 
 
 ## Output - JYR and STR files ##
@@ -350,4 +349,39 @@ Boundary conditions are applied in WSY (, WSX?) components (need to compute norm
 
 ## METIS Conversion Notes ##
 
-NTOT%R previously computed by dt.f90, the total number of beams between our %M nodes and %R particles
+NTOT %R - previously computed by dt.f90, the total number of beams between our %M nodes and %R particles
+
+ND - (NTOT_t) No. of potential particles interactions (computed by dist), this partition, other parts
+NDL(2,:) - (FXF_t) Particle IDs of potential interaction
+
+FXC %M, %R, - (NTOT_t) number of actual abutting interactions (computed by circ)
+FXF %M, %R, - (FXF_t) particle IDs of actually abutting particles
+
+FRX,FRY,FRZ(NOMA) - Force of interaction (per particle) - for cross-partition, FRX(N2) is computed, N1
+                    is not (because this is handled by the other partition), so FRX are only 
+		    of size (OUR PARTICLES)
+
+WE(:) - energy of particle interaction (only stored for one of the two particles?? - circ)
+
+NANS %M,%R(3,NOCON) - (NAN_t) particle nos. for each beam (only (2,NOCON) actually used!)
+
+EFS(:) %M, %R - (EF_t) the bond strength of each bond (per partition)
+
+In effload:
+
+DUT(NODM) - change in displacement (reused per partition)
+
+A,C,D,F(NODM) - per particle forces, only computed in effload for our partition (though the 
+	        computation requires info from other parts)
+
+CT(NODC) - beam displacement (12 DOFs * nocon) - but for *all* beams (inc between other parts)
+	   effload uses the offset (NTOT%M + NTOT%R..) to put CT in place
+
+
+
+
+NANS, N1, N2 issue - for e.g. NANS%L, the two particle numbers are *not* global 
+      	     	     (i.e. could be N1=1, N2=1, but in effload, they are treated as if they 
+		     are unique!) This is definitely a bug but in a test run it didn't seem to matter
+		     (i.e. the collision of IDs is rare)
+		     However, this should be fixed (actually DUT doesn't need to be large...)
