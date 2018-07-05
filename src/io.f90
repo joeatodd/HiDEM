@@ -26,7 +26,7 @@ MODULE INOUT
 
 CONTAINS
 
- SUBROUTINE ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
+ SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
       StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
@@ -34,7 +34,7 @@ CONTAINS
    REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL*8 :: fractime
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
-   INTEGER :: myid, readstat, i,incount
+   INTEGER :: readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
    LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
@@ -267,13 +267,13 @@ CONTAINS
    END IF
 END SUBROUTINE ReadInput
 
-SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
+SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
      UTM,NeighbourID,NANS,NTOT,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
 
-  INTEGER :: NRY,ntasks,myid,PNN(:)
+  INTEGER :: NRY,PNN(:)
   CHARACTER(LEN=256) :: resdir, runname
   TYPE(NAN_t), TARGET :: NANS
   TYPE(NTOT_t) :: NTOT
@@ -619,13 +619,13 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
 
 END SUBROUTINE BinaryVTKOutput
 
-SUBROUTINE BinarySTROutput(NRY,resdir,runname,ntasks,myid,NRXF,UT,&
+SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
      NeighbourID,NANS,NTOT,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
 
-  INTEGER :: NRY,ntasks,myid
+  INTEGER :: NRY
   CHARACTER(LEN=256) :: resdir, runname
   TYPE(NAN_t), TARGET :: NANS
   TYPE(NTOT_t) :: NTOT
@@ -824,11 +824,11 @@ END SUBROUTINE BinarySTROutput
 
     !Create the 'MPI_COMM_ACTIVE' communicator which includes only 
     !CPUs which are actually doing something
-    SUBROUTINE RedefineMPI(noprocs,myid)
+    SUBROUTINE RedefineMPI(noprocs)
 
       INCLUDE 'mpif.h'
 
-      INTEGER :: myid,i,noprocs, groupworld, groupactive,ierr
+      INTEGER :: i, noprocs, groupworld, groupactive,ierr
       INTEGER, ALLOCATABLE :: active_parts(:)
 
         CALL MPI_COMM_GROUP(MPI_COMM_WORLD, groupworld, ierr)

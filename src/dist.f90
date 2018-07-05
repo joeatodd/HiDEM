@@ -16,7 +16,7 @@
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
 
-	SUBROUTINE DIST(NNA,UT,ND,NRXF,NDL,myid,ntasks,SCL,PNN,YN)
+	SUBROUTINE DIST(NNA,UT,ND,NRXF,NDL,SCL,PNN,YN)
 
         USE TypeDefs
 
@@ -26,7 +26,7 @@
 	REAL*8 X1,X2,Y1,Y2,Z1,Z2
 	REAL*8 RC,SCL,RT
 	INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
-	INTEGER myid,ntasks,ierr,YN
+	INTEGER ierr,YN
 	INTEGER NNA,I,J,PNN(0:5000)
         TYPE(UT_t) :: UT
         TYPE(NRXF_t) :: NRXF

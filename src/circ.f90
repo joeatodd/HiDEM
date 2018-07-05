@@ -17,7 +17,7 @@
 ! *************************************************************************
 
 SUBROUTINE CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
-     T,IS,DT,WE,EFC,FXF,FXC,NDL,myid,ntasks,LNN,YN,SCL)
+     T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,YN,SCL)
 
         USE TypeDefs
 
@@ -29,7 +29,7 @@ SUBROUTINE CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
 	REAL*8 SX,SY,SZ,SUM,T,WE(NOMA),L0
 	REAL*8 DDEL,DWE,OWE,DT,ESUM,LNN
 	REAL*8 LS,LS2,DEL,SCL
-	INTEGER myid,ntasks,ierr,YN
+	INTEGER ierr,YN
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
 	REAL*8 RC,RCX,RCY,RCZ,FRX(NOMA),FRY(NOMA),FRZ(NOMA)
 	INTEGER NTOT,I,N1,N2,IS,NN

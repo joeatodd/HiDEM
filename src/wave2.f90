@@ -27,6 +27,7 @@
         USE INOUT
         USE TypeDefs
         USE Lattice
+        USE Utils
 
 	IMPLICIT NONE
         INCLUDE 'mpif.h'
@@ -45,11 +46,11 @@
         REAL*8, ALLOCATABLE :: PBBox(:,:)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
 	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
-	INTEGER REST,RY0,NM2
+	INTEGER REST,RY0,NM2,noprocs
 	INTEGER PTB(0:5000),PTR(0:5000)
 	REAL*8 M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
 	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT
-	INTEGER I,N,NL,NN,STEPS,IX,IM,MS,N1,N2,RY
+	INTEGER I,N,NL,NN,STEPS,IX,IM,MS,N1,N2,P1,RY
 	INTEGER PN,NRY,PNN(0:5000),NTOTW(0:5000),XK,YK,ZK
         REAL*8 L,ALF,MLOAD,DMP,VEL,G,S1,S2,M1,B1,B2
 	REAL*8 S,LOAD,DMP2,BCE,STR,I1,I2,ZB,ZS
@@ -72,8 +73,10 @@
         REAL*8 fractime
 	REAL RAN(NOCON)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
-        INTEGER rc,myid,ntasks,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT
-        INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),neighparts(:)
+        INTEGER rc,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT,&
+             NTOT
+        INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
+             neighparts(:), NANS(:,:)
 
 !       TODO - Implement these pointers!
         INTEGER, POINTER :: NTOPtr, NDPtr, NDLPtr1(:,:), NDLPtr2(:,:)
@@ -88,12 +91,14 @@
         LOGICAL, ALLOCATABLE :: LostParticle(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname
 
-        TYPE(NAN_t) :: NANS
-        TYPE(NTOT_t) :: NTOT,FXC,ND
+        TYPE(NAN_t) :: NANS_prev
+        TYPE(NTOT_t) :: NTOT_prev,FXC,ND
         TYPE(EF_t) :: EFS
         TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
+        TYPE(UT2_t) :: UT2, UTM2
         TYPE(NRXF_t) :: NRXF
+        TYPE(NRXF2_t) :: NRXF2
         TYPE(FXF_t) :: FXF,NDL
 
         CALL MPI_INIT(rc)
@@ -106,8 +111,6 @@
         ntasks_init = ntasks
 
         PrintTimes = .FALSE.
-
-        ALLOCATE(PBBox(6,ntasks))
 
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
@@ -138,7 +141,7 @@ END IF
         CLOSE(609)
         !INFILE = 'testinp.dat'
 
-        CALL ReadInput(INFILE, myid, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
+        CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
              DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, &
              fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
@@ -178,11 +181,11 @@ END IF
         DMP=DAMP1*SCL**3.0
         DMP2=DAMP2*SCL**3.0
 
-!mpi stuff - boundaries
+!initialize data
 
 	DO I=1,NOMA
-	FXF%M(1,I)=0
-        CCN(I)=0
+	FXF%M(1,I)=0 !particle proximity info
+        CCN(I)=0  !not used
 	EFC(I)=SCL*EF0
 	END DO
 
@@ -211,6 +214,17 @@ END IF
 	NRXF%BL(:,:)=-1000.0
 	NRXF%BR(:,:)=-1000.0
 
+!Initialize UT
+        UT%M(:) = 0.0
+        UT%L(:) = 0.0
+        UT%R(:) = 0.0
+        UT%F(:) = 0.0
+        UT%B(:) = 0.0
+        UT%FR(:) = 0.0
+        UT%FL(:) = 0.0
+        UT%BR(:) = 0.0
+        UT%BL(:) = 0.0
+
 !inclination of the domain - not really used
 
 	SSB=SIN(SUB*PI/2.0)
@@ -227,13 +241,21 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(NN,NTOT,NRXF,particles_G, NCN, CN, CNPart, neighparts, &
-        neighcount, LS, myid,ntasks,wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC,&
+	CALL FIBG3(NN,NTOT,NANS,NRXF2,particles_G, NCN, CN, CNPart, neighparts, &
+        neighcount, LS, wrkdir,geomfile,SCL,YN,XN,GRID,MELT,WL,UC,&
         StrictDomain)
+
+ PRINT *,myid,' made it out of FIBG3 alive!'
+
+        !Allocate point data structures & pointers
+        CALL PointDataInit(UT2,NN,part_expand)
+        CALL PointDataInit(UTM2,NN,part_expand)
 
  !TODO - test output of NCN, CN, particles_g, NRXF
 
-        CALL GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
+        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+
+        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
 
         PRINT *, myid,' neighparts: ',neighparts(1:neighcount)
 
@@ -243,60 +265,34 @@ END IF
 
         PRINT *,myid,' Got ma bbox: ',PBBox(:,myid+1)
 
-	write(*,17) myid,NTOT%L,NTOT%M,NTOT%R,NTOT%F,NTOT%B,NTOT%FL,NTOT%FR,NTOT%BL,NTOT%BR
+	write(*,17) myid,NTOT
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
 
         !NN - particles in each core
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
         PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
-        CALL MPI_ALLGATHER(NTOT % R,1,MPI_INTEGER,&
-        PTR,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
-
-        CALL MPI_ALLGATHER(NTOT % B,1,MPI_INTEGER,&
-        PTB,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
-
-        CALL MPI_ALLGATHER(NTOT % M,1,MPI_INTEGER,&
+        !TODO - links to CSV output - replace
+        CALL MPI_ALLGATHER(NTOT_prev % M,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+
+        PRINT *,myid,' checkpoint 2'
 
         !MATHS!
         !Iterate over: this part nodes, edge nodes
+
         ! CT - see notes - it's the cumulative translation of all the beams
-	DO I=1,NTOT%M+NTOT%L+NTOT%R+NTOT%F+NTOT%B+NTOT%FL+NTOT%FR+NTOT%BL+NTOT%BR
-	CT(12*I-11)=0.0
-	CT(12*I-10)=0.0
-	CT(12*I-9)=0.0
-	CT(12*I-8)=0.0
-	CT(12*I-7)=0.0
-	CT(12*I-6)=0.0
-	CT(12*I-5)=0.0
-	CT(12*I-4)=0.0
-	CT(12*I-3)=0.0
-	CT(12*I-2)=0.0
-	CT(12*I-1)=0.0
-	CT(12*I-0)=0.0
-	END DO
+        CT = 0.0
 
 	T=0 !T is time
 	ENM=0.0
 	WEN=0.0
 	ENM0=0
 
-	DO J=1,NN
-        VDP(J)=0.0     !VDP = drag coefficient
-	UT%M(6*J-5)=0.0  ! UT%M = current displacement
-	UT%M(6*J-4)=0.0
-	UT%M(6*J-3)=0.0
-	UT%M(6*J-2)=0.0
-	UT%M(6*J-1)=0.0
-	UT%M(6*J-0)=0.0
-	UTM%M(6*J-5)=0.0 ! UTM%M = previous displacement
-	UTM%M(6*J-4)=0.0
-	UTM%M(6*J-3)=0.0
-	UTM%M(6*J-2)=0.0
-	UTM%M(6*J-1)=0.0
-	UTM%M(6*J-0)=0.0
-	END DO
+        VDP = 0.0     !VDP = drag coefficient
+        UT%M = 0.0    ! UT%M = current displacement
+        UTM%M = 0.0   ! UTM%M = previous displacement
+
 
 	ELSE         !If restarting, read from restart file instead
 
@@ -313,33 +309,26 @@ END IF
         IF(FileExists) THEN
           OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
 
-          READ(117+myid,*) NN,NTOT % M,NTOT % L,NTOT % R,NTOT % F,NTOT % B,BCC
-          READ(117+myid,*) NTOT % FL,NTOT % FR,NTOT % BL,NTOT % BR
+          READ(117+myid,*) NN,NTOT,BCC
           READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
           READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
-          READ(117+myid,*) XN,YN
           CLOSE(117+myid)
         END IF
 
         IF(XN*YN > ntasks) CALL FatalError("Some REST0 files missing!")
         IF(XN*YN < ntasks) CALL Warn("Number of REST0 files doesn't match XN*YN, taking latter.")
-        ntasks = XN*YN
-        CALL RedefineMPI(ntasks,myid)
+        noprocs = XN*YN
+        CALL RedefineMPI(noprocs)
  
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
         PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
-        CALL MPI_ALLGATHER(NTOT % R,1,MPI_INTEGER,&
-        PTR,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
-
-        CALL MPI_ALLGATHER(NTOT % B,1,MPI_INTEGER,&
-        PTB,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
- 
-        CALL MPI_ALLGATHER(NTOT % M,1,MPI_INTEGER,&
+        !TODO - links to CSV output - replace
+        CALL MPI_ALLGATHER(NTOT_prev % M,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
-	DO I=1,NTOT%M+NTOT%L+NTOT%R+NTOT%F+NTOT%B+NTOT%FL+NTOT%FR+NTOT%BL+NTOT%BR
+	DO I=1,NTOT
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
       	CT(12*I-8),CT(12*I-7),CT(12*I-6)
 	READ(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),&
@@ -355,26 +344,38 @@ END IF
       	UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
 	END DO
 	CLOSE (117+myid)
+
+        !Read particle init pos from file if restarting
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
+	DO I=1,NN
+          READ(117+myid,*) IX,X,Y,Z,M
+          NRXF%M(1,IX)=X
+          NRXF%M(2,IX)=Y
+          NRXF%M(3,IX)=Z
+        END DO
+	CLOSE (117+myid)
+
         END IF !Restart
+        PRINT *,myid,' checkpoint 3'
 
 
         !Determine IDs of neighbouring partitions:
-        IF(myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
-             NeighbourID % BL = myid-ntasks/YN-1
-        IF(myid.ge.ntasks/YN) &
-             NeighbourID % B = myid-ntasks/YN
-        IF(myid.ge.ntasks/YN .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
-             NeighbourID % BR = myid-ntasks/YN + 1
-        IF(MOD(myid,ntasks/YN).ne.0) &
-             NeighbourID % L = myid-1
-        IF(MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
-             NeighbourID % R = myid+1
-        IF(myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
-             NeighbourID % FL = myid+ntasks/YN-1
-        IF(myid.lt.(YN-1)*ntasks/YN) &
-             NeighbourID % F = myid+ntasks/YN
-        IF(myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) &
-             NeighbourID % FR = myid+ntasks/YN+1
+        ! IF(myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
+        !      NeighbourID % BL = myid-ntasks/YN-1
+        ! IF(myid.ge.ntasks/YN) &
+        !      NeighbourID % B = myid-ntasks/YN
+        ! IF(myid.ge.ntasks/YN .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
+        !      NeighbourID % BR = myid-ntasks/YN + 1
+        ! IF(MOD(myid,ntasks/YN).ne.0) &
+        !      NeighbourID % L = myid-1
+        ! IF(MOD(myid,ntasks/YN).ne.ntasks/YN-1) &
+        !      NeighbourID % R = myid+1
+        ! IF(myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) &
+        !      NeighbourID % FL = myid+ntasks/YN-1
+        ! IF(myid.lt.(YN-1)*ntasks/YN) &
+        !      NeighbourID % F = myid+ntasks/YN
+        ! IF(myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).NE.ntasks/YN-1) &
+        !      NeighbourID % FR = myid+ntasks/YN+1
 
         !Keep track of any particles which leave the domain
         ALLOCATE(LostParticle(nn))
@@ -386,6 +387,8 @@ END IF
         BED(I,J)=-1000.0
         ENDDO
         ENDDO
+
+        PRINT *,myid,' checkpoint 4'
 
         !Geometry mask: 1=glacier, 2=fjord, 0=bedrock/outside domain
         GEOMMASK = 0
@@ -432,18 +435,15 @@ END IF
 	ENDDO
 	CLOSE(400)
 
- !Interpolation functions to smooth input data for particles
+        PRINT *,myid,' checkpoint 5'
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
+        !Initialize drag/friction
 	DO I=1,NN
-	READ(117+myid,*) IX,X,Y,Z,M
-	NRXF%M(1,IX)=X
-	NRXF%M(2,IX)=Y
-	NRXF%M(3,IX)=Z
-        MFIL(IX)=MN
-	X=NRXF%M(1,IX)+UT%M(6*IX-5)
-        Y=NRXF%M(2,IX)+UT%M(6*IX-4)
-        Z=NRXF%M(3,IX)+UT%M(6*IX-3)
+
+        MFIL(I)=MN
+	X=NRXF%M(1,I)+UT%M(6*I-5)
+        Y=NRXF%M(2,I)+UT%M(6*I-4)
+        Z=NRXF%M(3,I)+UT%M(6*I-3)
         I1=X/GRID-INT(X/GRID)
 	I2=Y/GRID-INT(Y/GRID)
         CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
@@ -451,243 +451,67 @@ END IF
         
         IF (ABS(ZB-Z).LT.SCL*2.0) THEN
         CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)),&
-        FBED(INT(X/GRID),INT(Y/GRID)+1),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(IX))
-!        IF (VDP(IX).GT.SCL*SCL*2.0e+07) VDP(IX)=SCL*SCL*2.0e+07
+        FBED(INT(X/GRID),INT(Y/GRID)+1),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
+!        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
         ELSE
           IF (Z.LT.WL) THEN
-          VDP(IX)=SCL*SCL*DRAG
+          VDP(I)=SCL*SCL*DRAG
           ELSE
-          VDP(IX)=SCL*SCL*DRAG
+          VDP(I)=SCL*SCL*DRAG
           ENDIF
         ENDIF
 	END DO
-	CLOSE (117+myid)
+
+!====================== FROM HERE ==========================
+
+!This code reads in connection information for each partition
+!and works out whether to randomise or receive the EFS value
+
+!TODO - create a function in lattice and use it to communicate req'd NRXF
+ PRINT *,myid,' about to go to ExchangeConnPoints'
+        CALL ExchangeConnPoints(NANS, NRXF2, neighparts, UT2)
+
+ PRINT *,myid,' about to go to ExchangeProxPoints'
+        !todo - move this - just for testing
+        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL)
+
+ PRINT *,myid,' finished exchange.'
 
  	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT%M
-          READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % M(1,I)=N1
-        NANS % M(2,I)=N2
-	I1=X1/GRID-INT(X1/GRID)
-	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-        SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-	 IF (REST.EQ.0) THEN
-          IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
- 	  EFS % M(I)=EF0
-	  ELSE
- 	  EFS % M(I)=0.1
-	  ENDIF
-	 ELSE
-	 EFS % M(I)=E
-	 ENDIF
-	END DO
-        CLOSE (117+myid)
+        DO I=1,NTOT
 
-        IF (MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % L
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % L(1,I)=N1
-        NANS % L(2,I)=N2
-	NRXF%L(1,N1)=X1
-	NRXF%L(2,N1)=Y1
-	NRXF%L(3,N1)=Z1
-	END DO
-        CLOSE (117+myid)
-	ENDIF
+          IF(REST==1) THEN
+            READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
+            NANS(1,I)=N1
+            NANS(2,I)=N2
+            NANS(3,I)=P1
+            EFS % M(I)=E
+          ELSE
+            ! X1 = ...
+            ! Y1 = ...
+            !TODO - could save time here if SLIN not specified
+            I1=X1/GRID-INT(X1/GRID)
+            I2=Y1/GRID-INT(Y1/GRID)
+            CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
+                 SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
 
-        IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % R
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % R(1,I)=N1
-        NANS % R(2,I)=N2
-	NRXF%R(1,N1)=X1
-	NRXF%R(2,N1)=Y1
-	NRXF%R(3,N1)=Z1
-	I1=X1/GRID-INT(X1/GRID)
-	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-        SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-	 IF (REST.EQ.0) THEN
-          !Setting porosity in domain - pre-existing damage
-          !POR - porosity
-	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
- 	  EFS % R(I)=EF0
-	  ELSE
- 	  EFS % R(I)=0.1
-          ENDIF
-	 ELSE
-	 EFS % R(I)=E
-	 ENDIF
-	END DO
-        CLOSE (117+myid)
-	ENDIF
+            IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
+              EFS % M(I)=EF0
+            ELSE
+              EFS % M(I)=0.1
+            ENDIF
+          END IF
 
-        dest=myid+1
-        source=myid-1
-        tag=131
-        IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Send(EFS % R,NTOT % R,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_ACTIVE,ierr)
-        IF (MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Recv(EFS % L,NTOT % L,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_ACTIVE,stat,ierr)
-
-        IF (myid.lt.(YN-1)*ntasks/YN) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % F
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % F(1,I)=N1
-        NANS % F(2,I)=N2
-	NRXF%F(1,N1)=X1
-	NRXF%F(2,N1)=Y1
-	NRXF%F(3,N1)=Z1
-	I1=X1/GRID-INT(X1/GRID)
-	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-        SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
- 	  EFS % F(I)=EF0
-	  ELSE
- 	  EFS % F(I)=0.1
-          ENDIF
-	 ELSE
-	 EFS % F(I)=E
-	 ENDIF
-	END DO
-        CLOSE (117+myid)
-	ENDIF
-
-        dest=myid+ntasks/YN
-        source=myid-ntasks/YN
-        tag=132
-        IF (myid.lt.(YN-1)*ntasks/YN)&
-        CALL MPI_Send(EFS % F,NTOT % F,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_ACTIVE,ierr)
-        IF (myid.ge.ntasks/YN)&
-        CALL MPI_Recv(EFS % B,NTOT % B,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_ACTIVE,stat,ierr)
-
-        IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % FL
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % FL(1,I)=N1
-        NANS % FL(2,I)=N2
-	NRXF%FL(1,N1)=X1
-	NRXF%FL(2,N1)=Y1
-	NRXF%FL(3,N1)=Z1
-	I1=X1/GRID-INT(X1/GRID)
-	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-        SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
- 	  EFS % FL(I)=EF0
-	  ELSE
- 	  EFS % FL(I)=0.1
-          ENDIF
-	 ELSE
-	 EFS % FL(I)=E
-	 ENDIF
         END DO
+
         CLOSE (117+myid)
-       ENDIF
 
-        dest=myid+ntasks/YN-1
-        source=myid-ntasks/YN+1
-        tag=133
-        IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Send(EFS % FL,NTOT % FL,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_ACTIVE,ierr)
-        IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Recv(EFS % BR,NTOT % BR,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_ACTIVE,stat,ierr)
+        !TODO here - share EFS as determined by lower partition number
 
 
-        IF (myid.lt.(YN-1)*ntasks/YN&
-      	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFR'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % FR
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % FR(1,I)=N1
-        NANS % FR(2,I)=N2
-	NRXF%FR(1,N1)=X1
-	NRXF%FR(2,N1)=Y1
-	NRXF%FR(3,N1)=Z1
-	I1=X1/GRID-INT(X1/GRID)
-	I2=Y1/GRID-INT(Y1/GRID)
-        CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-        SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-	 IF (REST.EQ.0) THEN
-	  IF (RAN(I).LT.1.0-POR.AND.ABS(Z1-ZS).LT.SLIN) THEN
- 	  EFS % FR(I)=EF0
-	  ELSE
- 	  EFS % FR(I)=0.1
-          ENDIF
-	 ELSE
-	 EFS % FR(I)=E
-	 ENDIF
-	END DO
-        CLOSE (117+myid)
-       ENDIF
 
+!======================== TO HERE ==========================
 
-       !Read the original positions of particles
-
-        dest=myid+ntasks/YN+1
-        source=myid-ntasks/YN-1
-        tag=134
-        IF (myid.lt.(YN-1)*ntasks/YN&
-        .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Send(EFS % FR,NTOT % FR,MPI_DOUBLE_PRECISION,&
-        dest,tag,MPI_COMM_ACTIVE,ierr)
-        IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Recv(EFS % BL,NTOT % BL,MPI_DOUBLE_PRECISION,&
-        source,tag,MPI_COMM_ACTIVE,stat,ierr)
-
-        IF (myid.ge.ntasks/YN) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % B
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % B(1,I)=N1
-        NANS % B(2,I)=N2
-	NRXF%B(1,N1)=X1
-	NRXF%B(2,N1)=Y1
-	NRXF%B(3,N1)=Z1
-	END DO
-        CLOSE (117+myid)
-	ENDIF
-
-        IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBL'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % BL
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % BL(1,I)=N1
-        NANS % BL(2,I)=N2
-	NRXF%BL(1,N1)=X1
-	NRXF%BL(2,N1)=Y1
-	NRXF%BL(3,N1)=Z1
-	END DO
-        CLOSE (117+myid)
-	ENDIF
-
-        IF (myid.ge.ntasks/YN&
-      	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
- 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBR'//na(myid),STATUS='UNKNOWN')
-        DO I=1,NTOT % BR
-        READ(117+myid,*) N1,N2,X1,Y1,Z1,X2,Y2,Z2,E
-        NANS % BR(1,I)=N1
-        NANS % BR(2,I)=N2
-	NRXF%BR(1,N1)=X1
-	NRXF%BR(2,N1)=Y1
-	NRXF%BR(3,N1)=Z1
-	END DO
-        CLOSE (117+myid)
-	ENDIF
 
 !============================================================
 !================= START THE TIME LOOP ======================
@@ -709,7 +533,7 @@ END IF
         !TODO  TIME 1
 
         !TODO - Use this for passing relevant points
-        CALL GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
+        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
 
 
       dest=myid+1
@@ -811,7 +635,7 @@ END IF
 
       !Every 250 steps, reconstruct neighbourhood list
 	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
-     	CALL DIST(NN,UT,ND,NRXF,NDL,myid,ntasks,SCL,PNN,YN)
+     	CALL DIST(NN,UT,ND,NRXF,NDL,SCL,PNN,YN)
 	END IF
 
 !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
@@ -822,7 +646,7 @@ END IF
 
        !circ checks which particles are really in contact and computes the forces
 	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
-      	T,RY,DT,WE,EFC,FXF,FXC,NDL,myid,ntasks,LNN,YN,SCL)
+      	T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,YN,SCL)
 
 !      write(*,17) RY,myid,FXC%M,FXC%L,FXC%B,FXC%F,FXC%FR,FXC%FL,FXC%BR,FXC%BL
 
@@ -831,9 +655,9 @@ END IF
        TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
 
        !Calculates elastic forces from beams. Stiffness matrix K
-	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
-      	FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,&
-      	myid,ntasks,LNN,PNN,YN)
+	CALL EFFLOAD(S,NTOT_prev,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
+      	FXF,FXC,VDP,DPE,EFS,NANS_prev,NRXF,MFIL,CT,&
+      	LNN,PNN,YN)
 
 
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
@@ -1112,9 +936,9 @@ END IF
 !--------------- Check for fracture -------------------
 
 !internally
-        DO I=1,NTOT%M
-	N1=NANS % M(1,I)
-	N2=NANS % M(2,I)
+        DO I=1,NTOT_prev%M
+	N1=NANS_prev % M(1,I)
+	N2=NANS_prev % M(2,I)
         IF (EFS % M(I).GT.0.0) THEN
 	DDX=NRXF%M(1,N1)+UT%M(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%M(2,N1)+UT%M(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1139,9 +963,9 @@ END IF
  	END DO
 
 !        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
-!        DO I=1,NTOT % L
-!	N1=NANS % L(1,I)
-!	N2=NANS % L(2,I)
+!        DO I=1,NTOT_prev % L
+!	N1=NANS_prev % L(1,I)
+!	N2=NANS_prev % L(2,I)
 !        IF (EFS % L(I).GT.0.0) THEN
 !	DDX=NRXF%L(1,N1)+UT%L(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 !	DDY=NRXF%L(2,N1)+UT%L(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1167,9 +991,9 @@ END IF
 !	ENDIF
 
         IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
-        DO I=1,NTOT % R
-	N1=NANS % R(1,I)
-	N2=NANS % R(2,I)
+        DO I=1,NTOT_prev % R
+	N1=NANS_prev % R(1,I)
+	N2=NANS_prev % R(2,I)
         IF (EFS % R(I).GT.0.0) THEN
 	DDX=NRXF%R(1,N1)+UT%R(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%R(2,N1)+UT%R(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1199,16 +1023,16 @@ END IF
         source=myid-1
         tag=131
         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Send(EFS % R,NTOT % R,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Send(EFS % R,NTOT_prev % R,MPI_DOUBLE_PRECISION,&
         dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Recv(EFS % L,NTOT % L,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Recv(EFS % L,NTOT_prev % L,MPI_DOUBLE_PRECISION,&
         source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN) THEN
-        DO I=1,NTOT % F
-	N1=NANS % F(1,I)
-	N2=NANS % F(2,I)
+        DO I=1,NTOT_prev % F
+	N1=NANS_prev % F(1,I)
+	N2=NANS_prev % F(2,I)
         IF (EFS % F(I).GT.0.0) THEN
 	DDX=NRXF%F(1,N1)+UT%F(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%F(2,N1)+UT%F(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1237,16 +1061,16 @@ END IF
         source=myid-ntasks/YN
         tag=132
         IF (myid.lt.(YN-1)*ntasks/YN)&
-        CALL MPI_Send(EFS % F,NTOT % F,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Send(EFS % F,NTOT_prev % F,MPI_DOUBLE_PRECISION,&
         dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN)&
-        CALL MPI_Recv(EFS % B,NTOT % B,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Recv(EFS % B,NTOT_prev % B,MPI_DOUBLE_PRECISION,&
         source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-        DO I=1,NTOT % FL
-	N1=NANS % FL(1,I)
-	N2=NANS % FL(2,I)
+        DO I=1,NTOT_prev % FL
+	N1=NANS_prev % FL(1,I)
+	N2=NANS_prev % FL(2,I)
         IF (EFS % FL(I).GT.0.0) THEN
 	DDX=NRXF%FL(1,N1)+UT%FL(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%FL(2,N1)+UT%FL(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1275,16 +1099,16 @@ END IF
         source=myid-ntasks/YN+1
         tag=133
         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Send(EFS % FL,NTOT % FL,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Send(EFS % FL,NTOT_prev % FL,MPI_DOUBLE_PRECISION,&
         dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Recv(EFS % BR,NTOT % BR,MPI_DOUBLE_PRECISION,& 
+        CALL MPI_Recv(EFS % BR,NTOT_prev % BR,MPI_DOUBLE_PRECISION,& 
         source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-        DO I=1,NTOT % FR
-	N1=NANS % FR(1,I)
-	N2=NANS % FR(2,I)
+        DO I=1,NTOT_prev % FR
+	N1=NANS_prev % FR(1,I)
+	N2=NANS_prev % FR(2,I)
         IF (EFS % FR(I).GT.0.0) THEN
 	DDX=NRXF%FR(1,N1)+UT%FR(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%FR(2,N1)+UT%FR(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1314,16 +1138,16 @@ END IF
         tag=134
         IF (myid.lt.(YN-1)*ntasks/YN&
         .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-        CALL MPI_Send(EFS % FR,NTOT % FR,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Send(EFS % FR,NTOT_prev % FR,MPI_DOUBLE_PRECISION,&
         dest,tag,MPI_COMM_ACTIVE,ierr)
         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-        CALL MPI_Recv(EFS % BL,NTOT % BL,MPI_DOUBLE_PRECISION,&
+        CALL MPI_Recv(EFS % BL,NTOT_prev % BL,MPI_DOUBLE_PRECISION,&
         source,tag,MPI_COMM_ACTIVE,stat,ierr)
 
 !        IF (myid.gt.(ntasks-1)/YN) THEN
-!        DO I=1,NTOT % B
-!	N1=NANS % B(1,I)
-!	N2=NANS % B(2,I)
+!        DO I=1,NTOT_prev % B
+!	N1=NANS_prev % B(1,I)
+!	N2=NANS_prev % B(2,I)
 !        IF (EFS % B(I).GT.0.0) THEN
 !	DDX=NRXF%B(1,N1)+UT%B(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 !	DDY=NRXF%B(2,N1)+UT%B(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1349,9 +1173,9 @@ END IF
 !	ENDIF
 
 !        IF (myid.gt.(ntasks-1)/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-!        DO I=1,NTOT % BL
-!	N1=NANS % BL(1,I)
-!	N2=NANS % BL(2,I)
+!        DO I=1,NTOT_prev % BL
+!	N1=NANS_prev % BL(1,I)
+!	N2=NANS_prev % BL(2,I)
 !        IF (EFS % BL(I).GT.0.0) THEN
 !	DDX=NRXF%BL(1,N1)+UT%BL(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 !	DDY=NRXF%BL(2,N1)+UT%BL(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1378,9 +1202,9 @@ END IF
 
 !        IF (myid.gt.(ntasks-1)/YN
 !     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-!        DO I=1,NTOT % BR
-!	N1=NANS % BR(1,I)
-!	N2=NANS % BR(2,I)
+!        DO I=1,NTOT_prev % BR
+!	N1=NANS_prev % BR(1,I)
+!	N2=NANS_prev % BR(2,I)
 !        IF (EFS % BR(I).GT.0.0) THEN
 !	DDX=NRXF%BR(1,N1)+UT%BR(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 !	DDY=NRXF%BR(2,N1)+UT%BR(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
@@ -1422,12 +1246,12 @@ END IF
 
           IF(.NOT. CSVOutput) THEN
 
-          CALL BinaryVTKOutput(NRY,resdir,runname,ntasks,myid,PNN,NRXF,UT,&
-               UTM,NeighbourID,NANS,NTOT,DoublePrec)
+          CALL BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
+               UTM,NeighbourID,NANS_prev,NTOT_prev,DoublePrec)
           
 
-          CALL BinarySTROutput(NRY,resdir,runname,ntasks,myid,NRXF,UT,&
-               NeighbourID,NANS,NTOT,DoublePrec)
+          CALL BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
+               NeighbourID,NANS_prev,NTOT_prev,DoublePrec)
           
           ELSE
           !--------------- CSV Output ----------------------
@@ -1440,7 +1264,7 @@ END IF
 
           tag=152
           IF (myid.NE.0)&
-          CALL MPI_Send(NANS % M,3*NTOT%M,MPI_INTEGER,&
+          CALL MPI_Send(NANS_prev % M,3*NTOT_prev%M,MPI_INTEGER,&
           dest,tag,MPI_COMM_ACTIVE,ierr)
 
           tag=161
@@ -1507,16 +1331,16 @@ END IF
           WRITE(910,12) X,Y,Z
           END DO
 
-          DO I=1,NTOT%M
-	  X=(NRXF%M(1,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-5)+&
-            NRXF%M(1,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-5))/2.0
-	  Y=(NRXF%M(2,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-4)+&
-            NRXF%M(2,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-4))/2.0
-	  Z=(NRXF%M(3,NANS % M(1,I))+UT%M(6*NANS % M(1,I)-3)+&
-            NRXF%M(3,NANS % M(2,I))+UT%M(6*NANS % M(2,I)-3))/2.0
+          DO I=1,NTOT_prev%M
+	  X=(NRXF%M(1,NANS_prev % M(1,I))+UT%M(6*NANS_prev % M(1,I)-5)+&
+            NRXF%M(1,NANS_prev % M(2,I))+UT%M(6*NANS_prev % M(2,I)-5))/2.0
+	  Y=(NRXF%M(2,NANS_prev % M(1,I))+UT%M(6*NANS_prev % M(1,I)-4)+&
+            NRXF%M(2,NANS_prev % M(2,I))+UT%M(6*NANS_prev % M(2,I)-4))/2.0
+	  Z=(NRXF%M(3,NANS_prev % M(1,I))+UT%M(6*NANS_prev % M(1,I)-3)+&
+            NRXF%M(3,NANS_prev % M(2,I))+UT%M(6*NANS_prev % M(2,I)-3))/2.0
 	  
-	N1=NANS % M(1,I)
-	N2=NANS % M(2,I)
+	N1=NANS_prev % M(1,I)
+	N2=NANS_prev % M(2,I)
 	DDX=NRXF%M(1,N1)+UT%M(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
 	DDY=NRXF%M(2,N1)+UT%M(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
 	DDZ=NRXF%M(3,N1)+UT%M(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
@@ -1533,7 +1357,7 @@ END IF
 
         ENDIF !myid==0
 
-!          CALL PSNET(NTOT%M,NN,myid,GL,WL,SUB,ntasks)
+!          CALL PSNET(NTOT_prev%M,NN,myid,GL,WL,SUB,ntasks)
 	  CLOSE(910)
 	  CLOSE(920)
 
@@ -1550,7 +1374,7 @@ END IF
 
 
 !	IF (RY.EQ.RY0+STEPS0) THEN
-!        CALL CRACK(NN,NTOT % M,CCN,EFS % M,NANS % M,NRXF%M,UT%M,WL,myid,ntasks,NANS % R,NTOT % R,EFS % R)
+!        CALL CRACK(NN,NTOT_prev % M,CCN,EFS % M,NANS_prev % M,NRXF%M,UT%M,WL,myid,ntasks,NANS_prev % R,NTOT_prev % R,EFS % R)
 !
 !        dest=0
 !	tag=171
@@ -1591,18 +1415,9 @@ END IF
 !================= END OF TIME LOOP ======================
 !=========================================================
 
-        OPEN(UNIT=930,FILE=TRIM(resdir)//'/RCK',STATUS='UNKNOWN')
-        DO KK=0,ntasks-1
-        WRITE(930,*) KK, NTOTW(KK),PNN(KK),PTR(KK),PTB(KK)
-        END DO
-        CLOSE(930)
-
         CALL CPU_TIME(T2)
 
         CALL WriteRestart()
-
-!        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
-!        IF (myid.EQ.0) CALL CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
 
         CALL MPI_FINALIZE(rc)
 
@@ -1615,15 +1430,14 @@ CONTAINS
  SUBROUTINE WriteRestart()
    ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')
-	WRITE(117+myid,*) NN,NTOT % M,NTOT % L,NTOT % R,NTOT % F,NTOT % B,BCC
-	write(117+myid,*) NTOT % FL,NTOT % FR,NTOT % BL,NTOT % BR
+	WRITE(117+myid,*) NN,NTOT,BCC
 	WRITE(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
 	WRITE(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
-	WRITE(117+myid,*) XN,YN
+
 	CLOSE (117+myid)
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST1'//na(myid),STATUS='UNKNOWN')
-	DO I=1,NTOT % M+NTOT % L+NTOT % R+NTOT % F+NTOT % B+NTOT % FL+NTOT % FR+NTOT % BL+NTOT % BR
+	DO I=1,NTOT
 	WRITE(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),CT(12*I-8),CT(12*I-7),CT(12*I-6)
 	WRITE(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),CT(12*I-2),CT(12*I-1),CT(12*I-0)
 	END DO
@@ -1636,135 +1450,27 @@ CONTAINS
 	END DO
 	CLOSE (117+myid)
 
- !NTOT - no connections
+ !NTOT_prev - no connections
  !NAN - the particle numbers (1 and 2), 2*ntot array
  !NRXF%M - the original locations of all the particles
  !EF - Youngs modulus
+
+!====================== FROM HERE ==========================
+
+ !TODO - need comms here to work out NRXF from other parts
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % M
-	WRITE(117+myid,*) NANS % M(1,SI),NANS % M(2,SI),NRXF%M(1,NANS % M(1,SI)),&
-      	   NRXF%M(2,NANS % M(1,SI)),NRXF%M(3,NANS % M(1,SI)),NRXF%M(1,NANS % M(2,SI)),&
-           NRXF%M(2,NANS % M(2,SI)),NRXF%M(3,NANS % M(2,SI)),EFS % M(SI)
+	DO SI=1,NTOT
+	WRITE(117+myid,*) NANS(1,SI),NANS(2,SI),NANS(3,SI),&
+           NRXF%M(1,NANS(1,SI)),NRXF%M(2,NANS(1,SI)),&
+           NRXF%M(3,NANS(1,SI)),NRXF%M(1,NANS(2,SI)),&
+           NRXF%M(2,NANS(2,SI)),NRXF%M(3,NANS(2,SI)),EFS % M(SI)
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % L
-	WRITE(117+myid,*) NANS % L(1,SI),NANS % L(2,SI),NRXF%L(1,NANS % L(1,SI)),&
-      	   NRXF%L(2,NANS % L(1,SI)),NRXF%L(3,NANS % L(1,SI)),NRXF%M(1,NANS % L(2,SI)),&
-           NRXF%M(2,NANS % L(2,SI)),NRXF%M(3,NANS % L(2,SI)),EFS % L(SI)
-	END DO
-	CLOSE (117+myid)
+!======================== TO HERE ==========================
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % R
-	WRITE(117+myid,*) NANS % R(1,SI),NANS % R(2,SI),NRXF%R(1,NANS % R(1,SI)),&
-      	   NRXF%R(2,NANS % R(1,SI)),NRXF%R(3,NANS % R(1,SI)),NRXF%M(1,NANS % R(2,SI)),&
-           NRXF%M(2,NANS % R(2,SI)),NRXF%M(3,NANS % R(2,SI)),EFS % R(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSF'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % F
-	WRITE(117+myid,*) NANS % F(1,SI),NANS % F(2,SI),NRXF%F(1,NANS % F(1,SI)),&
-      	   NRXF%F(2,NANS % F(1,SI)),NRXF%F(3,NANS % F(1,SI)),NRXF%M(1,NANS % F(2,SI)),&
-           NRXF%M(2,NANS % F(2,SI)),NRXF%M(3,NANS % F(2,SI)),EFS % F(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFL'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % FL
-	WRITE(117+myid,*) NANS % FL(1,SI),NANS % FL(2,SI),NRXF%FL(1,NANS % FL(1,SI)),&
-      	 NRXF%FL(2,NANS % FL(1,SI)),NRXF%FL(3,NANS % FL(1,SI)),NRXF%M(1,NANS % FL(2,SI)),&
-         NRXF%M(2,NANS % FL(2,SI)),NRXF%M(3,NANS % FL(2,SI)),EFS % FL(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSFR'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % FR
-	WRITE(117+myid,*) NANS % FR(1,SI),NANS % FR(2,SI),NRXF%FR(1,NANS % FR(1,SI)),&
-      	 NRXF%FR(2,NANS % FR(1,SI)),NRXF%FR(3,NANS % FR(1,SI)),NRXF%M(1,NANS % FR(2,SI)),&
-         NRXF%M(2,NANS % FR(2,SI)),NRXF%M(3,NANS % FR(2,SI)),EFS % FR(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSB'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % B
-	WRITE(117+myid,*) NANS % B(1,SI),NANS % B(2,SI),NRXF%B(1,NANS % B(1,SI)),&
-      	   NRXF%B(2,NANS % B(1,SI)),NRXF%B(3,NANS % B(1,SI)),NRXF%M(1,NANS % B(2,SI)),&
-           NRXF%M(2,NANS % B(2,SI)),NRXF%M(3,NANS % B(2,SI)),EFS % B(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBL'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % BL
-	WRITE(117+myid,*) NANS % BL(1,SI),NANS % BL(2,SI),NRXF%BL(1,NANS % BL(1,SI)),&
-      	 NRXF%BL(2,NANS % BL(1,SI)),NRXF%BL(3,NANS % BL(1,SI)),NRXF%M(1,NANS % BL(2,SI)),&
-         NRXF%M(2,NANS % BL(2,SI)),NRXF%M(3,NANS % BL(2,SI)),EFS % BL(SI)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FSBR'//na(myid),STATUS='UNKNOWN')
-	DO SI=1,NTOT % BR
-	WRITE(117+myid,*) NANS % BR(1,SI),NANS % BR(2,SI),NRXF%BR(1,NANS % BR(1,SI)),&
-      	 NRXF%BR(2,NANS % BR(1,SI)),NRXF%BR(3,NANS % BR(1,SI)),NRXF%M(1,NANS % BR(2,SI)),&
-         NRXF%M(2,NANS % BR(2,SI)),NRXF%M(3,NANS % BR(2,SI)),EFS % BR(SI)
-	END DO
-	CLOSE (117+myid)
-
-	IF (myid.EQ.0) THEN
-	OPEN(UNIT=117,FILE=TRIM(resdir)//'/crkd',STATUS='UNKNOWN')
-	DO SI=1,ntasks
-	WRITE(117,*) NTOTW(SI-1),PNN(SI-1),PTR(SI-1),PTB(SI-1)
-	END DO
-	CLOSE (117)
-	ENDIF
 
  END SUBROUTINE WriteRestart
 
- SUBROUTINE GetBBoxes(NRXF, UT, NN, myid, ntasks, BBox, PBBox)
-   IMPLICIT NONE
-
-   INTEGER :: myid, ntasks, NN,i
-   TYPE(UT_t) :: UT
-   TYPE(NRXF_t) :: NRXF
-   !-----------------
-   INTEGER :: ierr
-   REAL*8 :: BBox(6),PBBox(6,ntasks),workarr(6*ntasks)
-   REAL*8 :: minx,maxx,miny,maxy,minz,maxz
-
-   minx = HUGE(minx)
-   miny = HUGE(miny)
-   minz = HUGE(minz)
-   maxx = -HUGE(maxx)
-   maxy = -HUGE(maxy)
-   maxz = -HUGE(maxz)
-   
-   DO i=1,NN
-     X=NRXF%M(1,i)+UT%M(6*i-5)
-     Y=NRXF%M(2,i)+UT%M(6*i-4)
-     Z=NRXF%M(3,i)+UT%M(6*i-3)
-     minx = MIN(minx, x)
-     miny = MIN(miny, y)
-     minz = MIN(minz, z)
-     maxx = MAX(maxx, x)
-     maxy = MAX(maxy, y)
-     maxz = MAX(maxz, z)
-   END DO
-
-   BBox(1) = minx
-   BBox(2) = maxx
-   BBox(3) = miny
-   BBox(4) = maxy
-   BBox(5) = minz
-   BBox(6) = maxz
-
-   CALL MPI_AllGather(BBox,6,MPI_DOUBLE_PRECISION,workarr,6,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
-
-   DO i=1,ntasks
-     PBBox(:,i) = workarr(((i-1)*6)+1:i*6)
-   END DO
-
- END SUBROUTINE GetBBoxes
 END PROGRAM
 

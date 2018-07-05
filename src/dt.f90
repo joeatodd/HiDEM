@@ -19,7 +19,7 @@
 !Generates the info on the connections between particles (within and between partitions)
 !If two particles are closer than 1.6*SCL, they are connected. This should be predictable 
 !based on structure, but this code is nicely flexible (i.e. no prior info about structure required)
-	SUBROUTINE DT(NNA,xo,ND,myid,ntasks,wrkdir,SCL,YN)
+	SUBROUTINE DT(NNA,xo,ND,wrkdir,SCL,YN)
 
         USE INOUT
         USE TypeDefs
@@ -29,7 +29,7 @@
         include 'na90.dat'
 
 	REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC,SCL,NCN(NOMA),xo(3,NOMA)
-	INTEGER :: NNA,I,J,PNN(0:5000),YN,myid,ntasks,ierr
+	INTEGER :: NNA,I,J,PNN(0:5000),YN,ierr
 	INTEGER :: dest,source,tag,stat(MPI_STATUS_SIZE),comm
 	CHARACTER(LEN=256) :: wrkdir
         TYPE(NRXF_t) :: NRXF

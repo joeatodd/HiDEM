@@ -17,7 +17,7 @@
 ! *************************************************************************
 
 	SUBROUTINE EFFLOAD(S,NTOT,NN,T,DT,M,JS,DMP,DMP2,UT,UTM,R,EN,RY, &
-     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,myid,ntasks,L,PNN,YN)
+     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,L,PNN,YN)
 
         USE INOUT
         USE TypeDefs
@@ -32,11 +32,10 @@
 	REAL*8 T,DT,M,JS,L,ALF,DMP
 	REAL*8 G,X1,Y1,Z1,X2,Y2,Z2,TT(12,12)
 	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2,DMP2
-	REAL*8 DP,DP2
 	INTEGER N,NL,NB,N1,N2,X,XL,XR,PNN(0:5000)
 	INTEGER I,J,NN,RY,YN
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
-        INTEGER myid,ntasks,ierr
+        INTEGER ierr
         TYPE(NAN_t) :: NANS
         TYPE(EF_t) :: EFS
         TYPE(NTOT_t) :: NTOT,FXC

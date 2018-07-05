@@ -1,5 +1,9 @@
 MODULE TypeDefs
 
+  REAL*8 :: part_expand=0.5
+  INTEGER :: myid, ntasks
+  INTEGER, PARAMETER :: dp = SELECTED_REAL_KIND(12)
+
   INCLUDE 'param.dat'
 
   !Types are defined here to save passing large numbers of arguments.
@@ -20,6 +24,12 @@ MODULE TypeDefs
           FR(3,NOMA), FL(3,NOMA), BR(3,NOMA), BL(3,NOMA)
   END TYPE NRXF_t
 
+  TYPE NRXF2_t
+     REAL*8, ALLOCATABLE :: A(:,:)
+     REAL*8, POINTER :: M(:,:)=>NULL(), P(:,:)=>NULL()
+     INTEGER, ALLOCATABLE :: part(:)
+  END TYPE NRXF2_t
+
   TYPE EF_t
      REAL*8 :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&
           FL(NOCON),BR(NOCON),BL(NOCON)
@@ -30,13 +40,23 @@ MODULE TypeDefs
   END TYPE NEI_t
 
   TYPE UT_t
-     REAL*8 :: M(NODM)=0.0, L(NODM)=0.0, R(NODM)=0.0, F(NODM)=0.0,&
-          B(NODM)=0.0, FR(NODM)=0.0,FL(NODM)=0.0, BR(NODM)=0.0, BL(NODM)=0.0
+     REAL*8 :: M(NODM), L(NODM), R(NODM), F(NODM),&
+          B(NODM), FR(NODM),FL(NODM), BR(NODM), BL(NODM)
   END TYPE UT_t
+
+  TYPE UT2_t
+     REAL*8, ALLOCATABLE :: A(:)
+     REAL*8, POINTER :: M(:)=>NULL(), P(:)=>NULL()
+  END TYPE UT2_t
 
   TYPE FXF_t
      INTEGER :: M(2,NODC),L(2,NODC),R(2,NODC),F(2,NODC),B(2,NODC),&
           FR(2,NODC),FL(2,NODC),BR(2,NODC),BL(2,NODC)
   END TYPE FXF_t
 
+  TYPE PointEx_t
+     INTEGER :: partid,scount,rcount
+     INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
+     REAL*8, ALLOCATABLE :: S(:),R(:)
+  END TYPE PointEx_t
 END MODULE TypeDefs
