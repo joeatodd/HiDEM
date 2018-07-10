@@ -385,3 +385,23 @@ NANS, N1, N2 issue - for e.g. NANS%L, the two particle numbers are *not* global
 		     are unique!) This is definitely a bug but in a test run it didn't seem to matter
 		     (i.e. the collision of IDs is rare)
 		     However, this should be fixed (actually DUT doesn't need to be large...)
+
+Requirements for new strategy for storing and sharing data (node and beam)
+------------------------
+
+The following entities are passed in various places:
+
+NRXF
+UT/UTM
+EFS - randomly generated beam strength
+NANS - but only for old style CSV output, can/should be converted to an MPI_File_Write_all
+
+Decided:
+
+- NANS need only be (2,NOCON), and contain array references to NRXF, UT, UTM
+- NRXF, UT, UTM can contain 1) our particles, 2) beam connected particles and 3) proximal particles from other parts <- this allows NANS, FXF to be partition agnostic.
+- NANS doesn't need to know which are from where, but need to know this info for passing, so make:
+
+- PartInfo(2,NOCON): PartId, LocalID of each particle (-1 to identify blank spaces) in nrxf,ut,utm
+- InvPartInfo(Neighcount) % IDs, % ArrLoc  - effectively the inverse of above <- but does this cover connected & proximal particles?
+    maybe, % ConnCount, ConnIDs, ConnArrLoc, ProxCount, ProxIDs, ProxArrLoc?

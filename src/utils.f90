@@ -49,7 +49,14 @@ MODULE UTILS
         STOP
       END IF
 
-      ALLOCATE(NRXF%A(3,n_tot))
+      NRXF%mstrt = 1
+      NRXF%cstrt = 1 + n
+      NRXF%mstrt = 1 + n !no connected particles, initially
+      
+      ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot))
+
+      NRXF%PartInfo(:,:) = -1 !-1 = no point
+
       NRXF%A = 0.0
       NRXF%M => NRXF%A(:,1:n)
       NRXF%P => NRXF%A(:,n+1:UBOUND(NRXF%A,2))

@@ -26,9 +26,15 @@ MODULE TypeDefs
 
   TYPE NRXF2_t
      REAL*8, ALLOCATABLE :: A(:,:)
-     REAL*8, POINTER :: M(:,:)=>NULL(), P(:,:)=>NULL()
-     INTEGER, ALLOCATABLE :: part(:)
+     REAL*8, POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
+     INTEGER :: mstrt, cstrt, pstrt
+     INTEGER, ALLOCATABLE :: PartInfo(:,:)
   END TYPE NRXF2_t
+  
+  TYPE InvPartInfo_t
+     INTEGER, ALLOCATABLE :: ConnIDs(:), ConnLoc(:), ProxIDs(:), ProxLoc(:)
+     INTEGER :: CCount, PCount, NID
+  END TYPE InvPartInfo
 
   TYPE EF_t
      REAL*8 :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&
@@ -46,7 +52,7 @@ MODULE TypeDefs
 
   TYPE UT2_t
      REAL*8, ALLOCATABLE :: A(:)
-     REAL*8, POINTER :: M(:)=>NULL(), P(:)=>NULL()
+     REAL*8, POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
   END TYPE UT2_t
 
   TYPE FXF_t

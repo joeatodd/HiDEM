@@ -95,12 +95,13 @@ LOGICAL, ALLOCATABLE :: SharedNode(:)
 !metis stuff
 INTEGER :: objval,counter
 INTEGER, ALLOCATABLE :: metis_options(:), particlepart(:),counters(:)
-INTEGER, POINTER :: vwgt=>NULL(),vsize=>NULL(),adjwgt=>NULL(),xadj(:),adjncy(:)
+INTEGER, POINTER :: vwgt=>NULL(),vsize=>NULL(),adjwgt=>NULL(),xadj(:),adjncy(:),countptr
 REAL*8, POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF2_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
+TYPE(InvPartInfo_t) :: InvPartInfo(:)
 
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
@@ -315,8 +316,11 @@ DO i=1,ip
     counter = counter + 1
 
     particles_G(counter) = i
-    NRXF%M(:,counter) = xo(:,i) !our points
 
+    NRXF%M(:,counter) = xo(:,i) !our points
+    NRXF%PartInfo(1,counter) = myid !belong to our partition
+    NRXF%PartInfo(2,counter) = counter !with localID = counter
+    
     NCN(counter) = NCN_All(i)
     DO j=1,NCN(counter)
       !CN_All, NCN_All
@@ -373,6 +377,36 @@ DO k=1,2
   END DO
 END DO
 
+!Construct lookup arrays in NRXF for across partition beams
+ALLOCATE(InvPartInfo(neighcount))
+DO i=1,neighcount
+  ALLOCATE(InvPartInfo(i) % ConnIDs(100),&
+       InvPartInfo(i) % ConnLoc(100))
+  InvPartInfo(i) % ConnIDs = -1
+  InvPartInfo(i) % ConnLoc = -1
+  InvPartInfo(i) % ccount = 0
+  InvPartInfo(i) % pcount = 0
+  InvPartInfo(i) % NID = neighpart(j)
+END DO
+
+counter = NRXF%cstrt - 1
+DO j=1,neighcount
+  DO i=1,NTOT
+    IF (NANS(3,i) /= InvPartInfo(j) % NID) CYCLE
+    IF ANY(InvPartInfo(j) % ConnIDs = NANS(1,i)) CYCLE
+
+    countptr => InvPartInfo(j) % CCount
+    countptr = countptr + 1
+    counter = counter + 1
+
+    InvPartInfo(j) % ConnIDs(countptr) = NANS(1,i)
+    InvPartInfo(j) % ConnLocs(countptr) = counter
+
+    NRXF%PartInfo(counter,1) = InvPartInfo(j) % NID
+    NRXF%PartInfo(counter,2) = NANS(1,i)
+  END DO
+END DO
+
 !Write out my particle to nodfil
 12    FORMAT(I8,' ',4F14.7)
 OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
@@ -396,7 +430,7 @@ WRITE(*,*) 'NN=',NN,myid
 !TODO - keep these?
 DEALLOCATE(NCN_All, CN_All)
 
-CALL ExchangeConnPoints(NANS, NRXF, neighparts)
+CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
 !We return:
 ! Our nodes initial locs  - NRXF
@@ -485,19 +519,20 @@ End Subroutine
 
 !Determine and pass point information between partitions (based on beams/connections)
 !TODO - add UT!
-SUBROUTINE ExchangeConnPoints(NANS, NRXF, neighparts, UT)
+SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT)
 
   INCLUDE 'mpif.h'
   
   INTEGER, ALLOCATABLE :: NANS(:,:)
   TYPE(NRXF2_t) :: NRXF
-  INTEGER, ALLOCATABLE :: neighparts(:),stats(:)
+  TYPE(InvPartInfo_t) :: InvPartInfo(:)
   TYPE(UT2_t), OPTIONAL :: UT
   !--------------------
   INTEGER :: i,j,id,counter,neigh,neighcount,getcount,sendcount,ierr
+  INTEGER, ALLOCATABLE :: stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
 
-  neighcount = COUNT(neighparts /= -1)
+  neighcount = SIZE(InvPartInfo)
   ALLOCATE(PointEx(neighcount),stats(neighcount*2))
   stats = MPI_REQUEST_NULL
 
@@ -507,7 +542,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, neighparts, UT)
 
   !First exchange the particle IDs we need from other partitions
   DO i=1,neighcount
-    neigh = neighparts(i)
+    neigh = InvPartInfo(i) % NID
     getcount = COUNT(NANS(3,:) == neigh)
 
     PointEx(i) % partid = neigh
