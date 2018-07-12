@@ -119,26 +119,52 @@ MODULE UTILS
       INTEGER :: neighparts(:)
       INTEGER, OPTIONAL :: initsize_in
       !------------------------------
-      INTEGER :: initsize,i,neighcount
+      INTEGER :: initsize,i,j,neighcount
 
       neighcount = COUNT(neighparts /= -1)
 
-      initsize = 1000
+      initsize = 100
       IF(PRESENT(initsize_in)) initsize = initsize_in
 
-      ALLOCATE(InvPartInfo(neighcount))
+      ALLOCATE(InvPartInfo(0:ntasks-1))
+      DO i=0,ntasks-1
+        InvPartInfo(i) % NID = i
+        InvPartInfo(i) % ccount = 0
+        InvPartInfo(i) % pcount = 0
+      END DO
+
       DO i=1,neighcount
-          ALLOCATE(InvPartInfo(i) % ConnIDs(initsize),&
-               InvPartInfo(i) % ConnLocs(initsize))
-          InvPartInfo(i) % ConnIDs = -1
-          InvPartInfo(i) % ConnLocs = -1
-          InvPartInfo(i) % ccount = 0
-          InvPartInfo(i) % pcount = 0
-          InvPartInfo(i) % NID = neighparts(i)
+        j = neighparts(i)
+          ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
+               InvPartInfo(j) % ConnLocs(initsize))
+          InvPartInfo(j) % ConnIDs = -1
+          InvPartInfo(j) % ConnLocs = -1
+          InvPartInfo(j) % ccount = 0
+          InvPartInfo(j) % pcount = 0
+          InvPartInfo(j) % NID = j
       END DO
 
     END SUBROUTINE InvPartInfoInit
 
+    SUBROUTINE NewInvPartInfo(InvPartInfo, nid, initsize_in)
+      TYPE(InvPartInfo_t) :: InvPartInfo(0:)
+      INTEGER :: nid
+      INTEGER, OPTIONAL :: initsize_in
+      !--------------------
+      INTEGER :: initsize
+
+      initsize = 100
+      IF(PRESENT(initsize_in)) initsize = initsize_in
+
+      ALLOCATE(InvPartInfo(nid) % ConnIDs(initsize),&
+           InvPartInfo(nid) % ConnLocs(initsize))
+      InvPartInfo(nid) % ConnIDs = -1
+      InvPartInfo(nid) % ConnLocs = -1
+      InvPartInfo(nid) % ccount = 0
+      InvPartInfo(nid) % pcount = 0
+      InvPartInfo(nid) % NID = nid
+
+    END SUBROUTINE NewInvPartInfo
     SUBROUTINE ResizePointDataNRXF(NRXF,scale,do_M,do_C,do_P)
 
       TYPE(NRXF2_T), TARGET :: NRXF

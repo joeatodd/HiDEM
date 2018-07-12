@@ -490,28 +490,49 @@ END IF
 !================= START THE TIME LOOP ======================
 !============================================================
 
-        CALL CPU_TIME(T1)
-	TS1=0.0
+ CALL CPU_TIME(T1)
+ TS1=0.0
 
-        TTCUM=0.0
-        TT=0.0
+ TTCUM=0.0
+ TT=0.0
 
 
-	DO 100 RY=RY0,RY0+STEPS0 
+ DO 100 RY=RY0,RY0+STEPS0 
 
         CALL CPU_TIME(TT1)
         TT(1) = TT1
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
 
         !TODO  TIME 1
+        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, .FALSE.) !Don't pass NRXF...
 
+        
         !TODO - Use this for passing relevant points
         CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
 
+        IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
+        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL)
+        IF(DebugMode) PRINT *,myid,' finished  ExchangeProxPoints'
+
         CALL FindCollisions(NRXF2,UT2,NN,BBox,SCL,LNN)
 
-!============================ UT TRANSMIT ===============================
+!============================ Old Prox/Collision Strategy ===============================
+!Went like this:
+! 1) Exchange *all* UT from all neighbours
+! 2) Every 250 steps, check for near (but not neccesarily contacting points)
+! 3) Every step, check for collision/interaction, compute FRX,Y,Z, store IDs FXF
 
+!New strategy:
+! 1) Use BBoxes to determine possible prox swaps (list of prox neighbour parts)
+! 2) Swap nearby pionts using ExchangeProxPoints
+! 3) Store those NRXF/UT values somehow?   <- issue - we don't want to swap NRXF every 
+!                                             time, but sometimes NEW prox points will make this necessary
+! 4) Use octree search to search for collision/interaction (no need for every 250 steps malarky)
+!
+! Make use of InvPartInfo to confirm which points we already have/which we need
+!        All this would be easier if InvPartInfo exists for every partition (not just current neighbours) <- or linked list?
+! Note - do we need to use ExchangeConnPoints separately here, or do they form part of the same strategy? 
+  
       ! dest=myid+1
       ! source=myid-1
 
@@ -525,13 +546,6 @@ END IF
 
       !....... etc for every direction - REPLACE THIS
 
-!============================ END UT TRANSMIT ===============================
-
-      IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
-      CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL)
-      IF(DebugMode) PRINT *,myid,' finished  ExchangeProxPoints'
-
-!============================== END REPLACEMENT =============================
 
       !TODO  TIME 2
       CALL CPU_TIME(TT(2))
@@ -553,6 +567,8 @@ END IF
       	T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
 
 !      write(*,17) RY,myid,FXC%M,FXC%L,FXC%B,FXC%F,FXC%FR,FXC%FL,FXC%BR,FXC%BL
+
+!============================ END Old Prox/Collision Strategy ===============================
 
        !TODO  TIME 4
        CALL CPU_TIME(TT(4))

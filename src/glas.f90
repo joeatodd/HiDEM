@@ -85,7 +85,7 @@ REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
 REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL*8, ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
-INTEGER i,j,k,k1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
+INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
 INTEGER neighcount,NTOT
 INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
      particles_G(:),particles_L(:),neighparts(:), NANS(:,:),NANPart(:)
@@ -357,23 +357,30 @@ END DO
 !Note this fills the %PartInfo but doesn't actually fill the points
 !This is done by ExchangeConnPoints
 CALL InvPartInfoInit(InvPartInfo, neighparts)
+
 counter = NRXF%cstrt - 1
 DO j=1,neighcount
-  PRINT *,myid, 'neighbour ',j,' is ',InvPartInfo(j) % NID
+  n = neighparts(j)
+  IF(DebugMode) PRINT *,myid, 'neighbour ',j,' is ',InvPartInfo(n) % NID
   DO i=1,NTOT
-    IF (NANPart(i) /= InvPartInfo(j) % NID) CYCLE
-    IF (ANY(InvPartInfo(j) % ConnIDs == NANS(1,i))) CYCLE
+    IF (NANPart(i) /= InvPartInfo(n) % NID) CYCLE
+    IF (ANY(InvPartInfo(n) % ConnIDs == NANS(1,i))) CYCLE
 
-    countptr => InvPartInfo(j) % CCount
+    countptr => InvPartInfo(n) % CCount
     countptr = countptr + 1
     counter = counter + 1
 
+    IF(countptr > SIZE(InvPartInfo(n) % ConnIDs)) THEN
+      CALL ExpandIntArray(InvPartInfo(n) % ConnIDs)
+      CALL ExpandIntArray(InvPartInfo(n) % ConnLocs)
+    END IF
+
     !TODO - expand invpartinfo % connids etc if neccessary
-    InvPartInfo(j) % ConnIDs(countptr) = NANS(1,i) 
-    InvPartInfo(j) % ConnLocs(countptr) = counter
+    InvPartInfo(n) % ConnIDs(countptr) = NANS(1,i)
+    InvPartInfo(n) % ConnLocs(countptr) = counter
     
     IF(counter > SIZE(NRXF%PartInfo,2)) CALL ResizePointData(NRXF,1.5_8)
-    NRXF%PartInfo(1,counter) = InvPartInfo(j) % NID
+    NRXF%PartInfo(1,counter) = InvPartInfo(n) % NID
     NRXF%PartInfo(2,counter) = NANS(1,i)
   END DO
 END DO
@@ -382,17 +389,19 @@ NRXF%NC = counter-NRXF%cstrt
 !Change NANS to array loc:
 DO i=1,NTOT
   IF(NANpart(i) == myid) CYCLE
-  DO j=1,SIZE(InvPartInfo)
-    IF(InvPartInfo(j) % NID == NANPart(i)) EXIT
-    IF(j == SIZE(InvPartInfo)) CALL FatalError("Programming error finding part ID")
-  END DO
+  n = NANpart(i)
 
-  DO k=1,InvPartInfo(j)%CCount
-    IF(InvPartInfo(j) % ConnIDs(k) == NANS(1,i)) THEN
-      IF(DebugMode) PRINT *,myid,' setings nans ',i,' to ',&
-           InvPartInfo(j) % ConnLocs(k), NANPart(i), NANS(1,i)
+  IF(InvPartInfo(n)%CCount == 0) THEN
+    PRINT *,'programming error'
+    stop
+  END IF
 
-      NANS(1,i) = InvPartInfo(j) % ConnLocs(k)
+  DO k=1,InvPartInfo(n)%CCount
+    IF(InvPartInfo(n) % ConnIDs(k) == NANS(1,i)) THEN
+      ! IF(DebugMode) PRINT *,myid,' setings nans ',i,' to ',&
+      !      InvPartInfo(n) % ConnLocs(k), NANPart(i), NANS(1,i)
+
+      NANS(1,i) = InvPartInfo(n) % ConnLocs(k)
       EXIT
     END IF
   END DO
@@ -547,44 +556,45 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
   
   INTEGER, ALLOCATABLE :: NANS(:,:)
   TYPE(NRXF2_t) :: NRXF
-  TYPE(InvPartInfo_t) :: InvPartInfo(:)
+  TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   TYPE(UT2_t), OPTIONAL :: UT
   LOGICAL, OPTIONAL :: passNRXF
   !--------------------
-  INTEGER :: i,j,id,counter,loc,neigh,neighcount,getcount,sendcount,ierr
+  INTEGER :: i,j,id,counter,loc,neigh,getcount,sendcount,ierr
   INTEGER, ALLOCATABLE :: stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   LOGICAL :: doNRXF=.TRUE.
   
   IF(PRESENT(passNRXF)) doNRXF = passNRXF
 
-  neighcount = SIZE(InvPartInfo)
-  ALLOCATE(PointEx(neighcount),stats(neighcount*2))
+  ALLOCATE(PointEx(0:ntasks-1),stats(0:ntasks*2-1))
   stats = MPI_REQUEST_NULL
 
   IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  0'
 
   !First exchange the number of particles we need from other partitions
-  DO i=1,neighcount
+  DO i=0,ntasks-1
+    IF(InvPartInfo(i) % ccount == 0) CYCLE
     neigh = InvPartInfo(i) % NID
     PointEx(i) % rcount = InvPartInfo(i) % CCount
 
     CALL MPI_ISend(PointEx(i) % rcount,1,MPI_INTEGER,neigh,&
-         198,MPI_COMM_WORLD,stats(i*2-1),ierr)
+         198,MPI_COMM_WORLD,stats(i*2),ierr)
 
     CALL MPI_IRecv(PointEx(i) % scount,1,MPI_INTEGER,neigh,&
-         198,MPI_COMM_WORLD,stats(i*2),ierr)
+         198,MPI_COMM_WORLD,stats(i*2+1),ierr)
 
   END DO
 
   IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  1'
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
   !Now send the particle IDs we need to receive from other partitions (RecvIDs)
-  DO i=1,neighcount
+  DO i=0,ntasks-1
+    IF(InvPartInfo(i) % ccount == 0) CYCLE
     neigh = InvPartInfo(i) % NID
 
     sendcount = PointEx(i) % scount
@@ -599,22 +609,23 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
     PointEx(i) % RecvIDs = InvPartInfo(i) % ConnIDs(1:getcount)
 
     CALL MPI_ISend(PointEx(i) % RecvIDs,getcount,MPI_INTEGER,neigh,&
-         199,MPI_COMM_WORLD,stats(i*2-1),ierr)
+         199,MPI_COMM_WORLD,stats(i*2),ierr)
 
     CALL MPI_IRecv(PointEx(i) % SendIDs,sendcount,MPI_INTEGER,neigh,&
-         199,MPI_COMM_WORLD,stats(i*2),ierr)
+         199,MPI_COMM_WORLD,stats(i*2+1),ierr)
 
   END DO
 
   IF(DebugMode)  PRINT *,myid, ' ExchangeConnPoints Checkpoint:  2'
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
   IF(doNRXF) THEN
     !Now send the actual point locations
-    DO i=1,neighcount
+    DO i=0,ntasks-1
+      IF(InvPartInfo(i) % ccount == 0) CYCLE
       neigh = PointEx(i) % partid
       sendcount = PointEx(i) % scount
 
@@ -626,22 +637,24 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
       END DO
 
       CALL MPI_ISend(PointEx(i) % S, sendcount*3, MPI_DOUBLE_PRECISION,neigh,&
-           200,MPI_COMM_WORLD,stats(i*2-1), ierr)
+           200,MPI_COMM_WORLD,stats(i*2), ierr)
 
       getcount = PointEx(i) % rcount
       CALL MPI_IRecv(PointEx(i) % R, getcount*3, MPI_DOUBLE_PRECISION,neigh,&
-           200, MPI_COMM_WORLD,stats(i*2), ierr)
+           200, MPI_COMM_WORLD,stats(i*2+1), ierr)
 
     END DO
 
     IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  3'
 
     !Wait for the previous non-blocking sends, then reset stats
-    CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+    CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
     stats = MPI_REQUEST_NULL
 
     !Put the points in NRXF
-    DO i=1,neighcount
+    DO i=0,ntasks-1
+      IF(InvPartInfo(i) % ccount == 0) CYCLE
+
       neigh = PointEx(i) % partid
       getcount = PointEx(i) % rcount
 
@@ -650,7 +663,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
         NRXF%A(1,loc) = PointEx(i) % R(j*3 - 2)
         NRXF%A(2,loc) = PointEx(i) % R(j*3 - 1)
         NRXF%A(3,loc) = PointEx(i) % R(j*3 - 0)
-        IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
+        !IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
       END DO
     END DO
   END IF
@@ -660,7 +673,8 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
   IF(PRESENT(UT)) THEN
     
     !Send and receive UT
-    DO i=1,neighcount
+    DO i=0,ntasks-1
+      IF(InvPartInfo(i) % ccount == 0) CYCLE
       neigh = PointEx(i) % partid
       sendcount = PointEx(i) % scount
       getcount = PointEx(i) % rcount
@@ -680,20 +694,22 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
       END DO
 
       CALL MPI_ISend(PointEx(i) % S, sendcount*6, MPI_DOUBLE_PRECISION,neigh,&
-           201,MPI_COMM_WORLD,stats(i*2-1), ierr)
+           201,MPI_COMM_WORLD,stats(i*2), ierr)
 
       CALL MPI_IRecv(PointEx(i) % R, getcount*6, MPI_DOUBLE_PRECISION,neigh,&
-           201,MPI_COMM_WORLD,stats(i*2), ierr)
+           201,MPI_COMM_WORLD,stats(i*2+1), ierr)
     END DO
 
     !Wait for the previous non-blocking sends, then reset stats
-    CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+    CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
     stats = MPI_REQUEST_NULL
 
     IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  5'
 
     !Put the points in UT
-    DO i=1,neighcount
+    DO i=0,ntasks-1
+      IF(InvPartInfo(i) % ccount == 0) CYCLE
+
       neigh = PointEx(i) % partid
       getcount = PointEx(i) % rcount
       
@@ -709,14 +725,6 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
       END DO
     END DO
   END IF
-
-
-!  Deallocs - not really necessary
-  DO i=1,neighcount
-    DEALLOCATE(PointEx(i) % R, PointEx(i) % S, &
-         PointEx(i) % SendIDs,PointEx(i) % RecvIDs)
-  END DO
-  DEALLOCATE(PointEx)
 
   CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -869,23 +877,22 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
   REAL*8, ALLOCATABLE :: EFS(:)
   TYPE(NRXF2_t) :: NRXF
   !-----------------------------
-  INTEGER :: i,j,k,neigh,counter,neighcount,N1,N2,NTOT,ierr
+  INTEGER :: i,j,k,neigh,counter,N1,N2,NTOT,ierr
   INTEGER, ALLOCATABLE :: stats(:)
   LOGICAL :: Send
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
-  TYPE(InvPartInfo_t) :: InvPartInfo(:)
+  TYPE(InvPartInfo_t) :: InvPartInfo(0:)
 
-  neighcount = SIZE(InvPartInfo)
-
-  ALLOCATE(stats(neighcount*3), PointEx(neighcount))
+  ALLOCATE(stats(0:ntasks*2-1), PointEx(0:ntasks-1))
   stats = MPI_REQUEST_NULL
 
   IF(SIZE(EFS) /= SIZE(NANPart) .OR. SIZE(EFS) /= SIZE(NANS,2)) &
        CALL FatalError("Size mismatch in ExchangeEFS")
   NTOT = SIZE(NANPart)
 
-  DO i=1,neighcount
-    neigh = InvPartInfo(i) % NID
+  DO i=0,ntasks-1
+    IF(InvPartInfo(i) % ccount == 0) CYCLE
+    neigh = InvPartInfo(i) % NID ! == i...
     Send = (neigh < myid) 
 
     counter = 0
@@ -918,24 +925,25 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
     IF(Send) THEN
       CALL MPI_ISend(PointEx(i) % S,counter,MPI_DOUBLE_PRECISION,neigh,&
-           190,MPI_COMM_WORLD,stats(i*2-1),ierr)
+           190,MPI_COMM_WORLD,stats(i*2),ierr)
 
       CALL MPI_ISend(PointEx(i) % SendIDs,counter*2,MPI_INTEGER,neigh,&
-           191,MPI_COMM_WORLD,stats(i*2),ierr)
+           191,MPI_COMM_WORLD,stats(i*2+1),ierr)
 
     ELSE
       CALL MPI_IRecv(PointEx(i) % R,counter,MPI_DOUBLE_PRECISION,neigh,&
-           190,MPI_COMM_WORLD,stats(i*2-1),ierr)
+           190,MPI_COMM_WORLD,stats(i*2),ierr)
 
       CALL MPI_IRecv(PointEx(i) % RecvIDs,counter*2,MPI_DOUBLE_PRECISION,neigh,&
-           191,MPI_COMM_WORLD,stats(i*2),ierr)
+           191,MPI_COMM_WORLD,stats(i*2+1),ierr)
 
     END IF
   END DO
 
-  CALL MPI_WaitAll(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_WaitAll(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
 
-  DO i=1,neighcount
+  DO i=0,ntasks-1
+    IF(InvPartInfo(i) % ccount == 0) CYCLE
     neigh = InvPartInfo(i) % NID
     Send = (neigh < myid) 
     IF(Send) CYCLE
