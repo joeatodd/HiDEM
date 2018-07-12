@@ -3,6 +3,7 @@ MODULE TypeDefs
   REAL*8 :: part_expand=0.5
   INTEGER :: myid, ntasks
   INTEGER, PARAMETER :: dp = SELECTED_REAL_KIND(12)
+  LOGICAL :: DebugMode
 
   INCLUDE 'param.dat'
 
@@ -27,14 +28,14 @@ MODULE TypeDefs
   TYPE NRXF2_t
      REAL*8, ALLOCATABLE :: A(:,:)
      REAL*8, POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
-     INTEGER :: mstrt, cstrt, pstrt
+     INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
      INTEGER, ALLOCATABLE :: PartInfo(:,:)
   END TYPE NRXF2_t
   
   TYPE InvPartInfo_t
-     INTEGER, ALLOCATABLE :: ConnIDs(:), ConnLoc(:), ProxIDs(:), ProxLoc(:)
+     INTEGER, ALLOCATABLE :: ConnIDs(:), ConnLocs(:), ProxIDs(:), ProxLocs(:)
      INTEGER :: CCount, PCount, NID
-  END TYPE InvPartInfo
+  END TYPE InvPartInfo_t
 
   TYPE EF_t
      REAL*8 :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&

@@ -27,7 +27,7 @@ MODULE INOUT
 CONTAINS
 
  SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
-      RHO, RHOW, EF0, LS, SUB, GL, SLIN, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
+      RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
       StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
    REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
@@ -38,7 +38,7 @@ CONTAINS
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
         resdir,restname
    LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
-        FixBack,GeomMasked
+        FixBack,GeomMasked,doShearLine
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -56,6 +56,7 @@ CONTAINS
    SUB = 0.0
    GL = -100.0
    SLIN = 2000.0
+   doShearLine = .FALSE.
    MLOAD = 0.0002
    FRIC = 1.0
    REST = 0
@@ -130,6 +131,7 @@ CONTAINS
        READ(VarValue,*) GL
      CASE("shear line")
        READ(VarValue,*) SLIN
+       doShearLine = .TRUE.
      CASE("no timesteps")
        READ(VarValue,*) STEPS0
        gotSteps = .TRUE.
@@ -240,6 +242,7 @@ CONTAINS
      WRITE(*,'(A,I0)') "Size = ",LS
      WRITE(*,'(A,F9.2)') "Domain Inclination = ",SUB
      WRITE(*,'(A,F7.2)') "Grounding Line = ",GL
+     WRITE(*,'(A,L)') "Do Shear Line = ",doShearLine
      WRITE(*,'(A,F7.2)') "Shear Line = ",SLIN
      WRITE(*,'(A,ES12.5)') "Max Load = ",MLOAD
      WRITE(*,'(A,ES12.5)') "Friction Scale = ",FRIC

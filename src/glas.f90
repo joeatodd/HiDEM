@@ -13,8 +13,8 @@ CONTAINS
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,particles_G,NCN,CN,CNPart,neighparts,neighcount,l,&
-     wrkdir,geomfile,SCL,YN,XN,grid,melta,wl,UC,StrictDomain)
+SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,neighcount,l,&
+     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain)
 
   IMPLICIT NONE
   INCLUDE 'na90.dat'
@@ -23,13 +23,14 @@ SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,particles_G,NCN,CN,CNPart,neighparts,neighcou
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
 Real*8 :: box,b,SCL
-INTEGER :: l,NN,i,j,YN,XN
+INTEGER :: l,NN,i,j
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
-INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),neighparts(:),NANS(:,:)
+INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile
 LOGICAL :: StrictDomain
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF2_t) :: NRXF
+TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
 !Open(300,file='mass.dat',STATUS='OLD')
 
  12    FORMAT(2I8,' ',2F14.7)
@@ -57,8 +58,8 @@ CLOSE(400)
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
-CALL Initializefcc(NN,NTOT,NANS,NRXF,particles_G, NCN, CN, CNPart, neighparts,&
-     neighcount,box,l,wrkdir,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
+CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
+     neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain)
 
 CLOSE(400)
 
@@ -67,8 +68,8 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,particles_G, NCN, CN, CNPart, neighparts,neighcount,&
-     box,l,wrkdir,SCL,YN,XN,surf,bed,melt,grid,wl,UC,StrictDomain)
+SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
+     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain)
 
   !USE INOUT
 
@@ -79,15 +80,15 @@ SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,particles_G, NCN, CN, CNPart, neighpa
 
 Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real*8 b,x0(3,4),box,SCL
-REAL*8 gridminx, gridmaxx, gridminy, gridmaxy
-REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV,YN_estimate, XN_estimate, efficiency
-REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC
+REAL*8 gridminx, gridmaxx, gridminy, gridmaxy,T1,T2
+REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
+REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL*8, ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
-INTEGER i,j,k,k1,k2,l,ip,NN,nb,YN,XN,xk,yk,nx,ny,nbeams,ierr,pown
+INTEGER i,j,k,k1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
 INTEGER neighcount,NTOT
-INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:), NCN(:),CN(:,:),CNPart(:,:),&
-     particles_G(:),particles_L(:),neighparts(:), NANS(:,:)
+INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
+     particles_G(:),particles_L(:),neighparts(:), NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir
 LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: SharedNode(:)
@@ -101,7 +102,7 @@ REAL*8, POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF2_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
-TYPE(InvPartInfo_t) :: InvPartInfo(:)
+TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
 
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
@@ -203,49 +204,21 @@ DO i=1,nx !x step
       EndDo
 End Do
 
+IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
+IF(DebugMode) PRINT *,myid,' Finding connections...'
 
-!Find connections:
+CALL CPU_TIME(T1)
+CALL FindBeams(xo, ip, SCL, NCN_All, CN_All, nbeams)
+CALL CPU_TIME(T2)
 
-ALLOCATE(NCN_All(ip), CN_All(ip,12))
-nbeams = 0
-CN_All = 0
-NCN_All = 0
-
-DO I=1,ip
-  DO J=I+1,ip
-    X1=xo(1,I)
-    Y1=xo(2,I)
-    Z1=xo(3,I)
-    X2=xo(1,J)
-    Y2=xo(2,J)
-    Z2=xo(3,J)
-    RC=((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
-    IF (RC.LT.SCL*SCL*1.6) THEN
-      nbeams = nbeams + 1
-      NCN_All(I)=NCN_All(I)+1
-      NCN_All(J)=NCN_All(J)+1
-      CN_All(I,NCN_All(I)) = J
-      CN_All(J,NCN_All(J)) = I
-    ENDIF
-  END DO
-END DO
-
-! IF(myid==0) THEN
-!   OPEN(UNIT=210,FILE=TRIM(wrkdir)//'/FSGRAPH',STATUS='UNKNOWN')
-!   WRITE(210,*) ip, nbeams
-!   DO I=1,ip
-!     WRITE(210,*) CN_All(I,1:NCN_All(I))
-!   END DO
-
-!   CLOSE(210)
-! END IF
+PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
 ALLOCATE(ParticlePart(ip))
 IF(myid==0) THEN
 
   PRINT *,'About to metis'
   ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nbeams*2))
-
+  
   !Put particle connections into CRS format
   xadj = 0
   adjncy = 0
@@ -264,18 +237,21 @@ IF(myid==0) THEN
   metis_options(18) = 1 !fortran array numbering
 
   !Use METIS to partition the particles
-  CALL METIS_PartGraphKway(ip,1,xadj,adjncy,vwgt,vsize,adjwgt,ntasks,tpwgts, ubvec, metis_options,objval,particlepart)
+  CALL METIS_PartGraphKway(ip,1,xadj,adjncy,vwgt,vsize,adjwgt,ntasks,&
+       tpwgts, ubvec, metis_options,objval,particlepart)
 
   particlepart = particlepart - 1 !mpi partitions are zero indexed
 
-  PRINT *,'obvjal: ',objval
-  PRINT *,'particlepart: ',MINVAL(particlepart), MAXVAL(particlepart), COUNT(particlepart==0),COUNT(particlepart==ntasks-1)
-  PRINT *,'--- METIS SUCCESS ---'
-
+  IF(DebugMode) THEN
+    PRINT *,'obvjal: ',objval
+    PRINT *,'particlepart: ',MINVAL(particlepart), MAXVAL(particlepart), &
+         COUNT(particlepart==0),COUNT(particlepart==ntasks-1)
+    PRINT *,'--- METIS SUCCESS ---'
+  END IF
   DEALLOCATE(xadj,adjncy)
 END IF
 
-PRINT *,myid,' debug size particlepart: ',SIZE(particlepart), ip
+IF(DebugMode) PRINT *,myid,' debug size particlepart: ',SIZE(particlepart), ip
 
 CALL MPI_BCast(particlepart,ip,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
 
@@ -338,17 +314,17 @@ DO i=1,ip
   END IF
 END DO
 
-PRINT *,'DEBUG ',myid,' SUM PARTICLES_L ',SUM(particles_L),' min, max: ',&
+IF(DebugMode) PRINT *,'DEBUG ',myid,' SUM PARTICLES_L ',SUM(particles_L),' min, max: ',&
      MINVAL(particles_L),MAXVAL(particles_L)
-PRINT *,'DEBUG ',myid,' counted ',counter,' nodes, NN: ',NN
-PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(NCN),MAXVAL(NCN)
-PRINT *,'DEBUG ',myid,' neighparts: ',neighparts(1:neighcount)
+IF(DebugMode) PRINT *,'DEBUG ',myid,' counted ',counter,' nodes, NN: ',NN
+IF(DebugMode) PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(NCN),MAXVAL(NCN)
+IF(DebugMode) PRINT *,'DEBUG ',myid,' neighparts: ',neighparts(1:neighcount)
 
 DO i=1,NN
   IF(ANY(CNPart(i,1:NCN(i)) /= myid)) SharedNode(i) = .TRUE.
 END DO
 
-PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
+IF(DebugMode) PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
 
 !Construct an array of all connections:
 !(this differs from CN, which is the per-node connection info
@@ -357,7 +333,7 @@ PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
 counter = 0
 DO k=1,2
   IF(k==2) THEN
-    ALLOCATE(NANS(3,counter))
+    ALLOCATE(NANS(2,counter),NANPart(counter))
     NTOT = counter
     counter = 0
   END IF
@@ -370,7 +346,7 @@ DO k=1,2
         IF(k==2) THEN
           NANS(1,counter) = particles_L(CN(i,j)) !Note - folows convention N1 = other part
           NANS(2,counter) = i  !NANS = their/ourNN, ourNN, otherPart (usually myid though!)
-          NANS(3,counter) = CNPart(i,j)
+          NANpart(counter) = CNPart(i,j)
         END IF
       END IF
     END DO
@@ -378,44 +354,49 @@ DO k=1,2
 END DO
 
 !Construct lookup arrays in NRXF for across partition beams
-ALLOCATE(InvPartInfo(neighcount))
-DO i=1,neighcount
-  ALLOCATE(InvPartInfo(i) % ConnIDs(100),&
-       InvPartInfo(i) % ConnLoc(100))
-  InvPartInfo(i) % ConnIDs = -1
-  InvPartInfo(i) % ConnLoc = -1
-  InvPartInfo(i) % ccount = 0
-  InvPartInfo(i) % pcount = 0
-  InvPartInfo(i) % NID = neighpart(j)
-END DO
-
+!Note this fills the %PartInfo but doesn't actually fill the points
+!This is done by ExchangeConnPoints
+CALL InvPartInfoInit(InvPartInfo, neighparts)
 counter = NRXF%cstrt - 1
 DO j=1,neighcount
+  PRINT *,myid, 'neighbour ',j,' is ',InvPartInfo(j) % NID
   DO i=1,NTOT
-    IF (NANS(3,i) /= InvPartInfo(j) % NID) CYCLE
-    IF ANY(InvPartInfo(j) % ConnIDs = NANS(1,i)) CYCLE
+    IF (NANPart(i) /= InvPartInfo(j) % NID) CYCLE
+    IF (ANY(InvPartInfo(j) % ConnIDs == NANS(1,i))) CYCLE
 
     countptr => InvPartInfo(j) % CCount
     countptr = countptr + 1
     counter = counter + 1
 
-    InvPartInfo(j) % ConnIDs(countptr) = NANS(1,i)
+    !TODO - expand invpartinfo % connids etc if neccessary
+    InvPartInfo(j) % ConnIDs(countptr) = NANS(1,i) 
     InvPartInfo(j) % ConnLocs(countptr) = counter
-
-    NRXF%PartInfo(counter,1) = InvPartInfo(j) % NID
-    NRXF%PartInfo(counter,2) = NANS(1,i)
+    
+    IF(counter > SIZE(NRXF%PartInfo,2)) CALL ResizePointData(NRXF,1.5_8)
+    NRXF%PartInfo(1,counter) = InvPartInfo(j) % NID
+    NRXF%PartInfo(2,counter) = NANS(1,i)
   END DO
 END DO
+NRXF%NC = counter-NRXF%cstrt
 
-!Write out my particle to nodfil
-12    FORMAT(I8,' ',4F14.7)
-OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
-DO i=1,NN
-  WRITE(510+myid,12) i,NRXF%M(:,i),1.0
+!Change NANS to array loc:
+DO i=1,NTOT
+  IF(NANpart(i) == myid) CYCLE
+  DO j=1,SIZE(InvPartInfo)
+    IF(InvPartInfo(j) % NID == NANPart(i)) EXIT
+    IF(j == SIZE(InvPartInfo)) CALL FatalError("Programming error finding part ID")
+  END DO
+
+  DO k=1,InvPartInfo(j)%CCount
+    IF(InvPartInfo(j) % ConnIDs(k) == NANS(1,i)) THEN
+      IF(DebugMode) PRINT *,myid,' setings nans ',i,' to ',&
+           InvPartInfo(j) % ConnLocs(k), NANPart(i), NANS(1,i)
+
+      NANS(1,i) = InvPartInfo(j) % ConnLocs(k)
+      EXIT
+    END IF
+  END DO
 END DO
-CLOSE(510+myid)
-
-WRITE(*,*) 'NN=',NN,myid
 
 ! !TODO - need comms here
 ! OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
@@ -431,6 +412,48 @@ WRITE(*,*) 'NN=',NN,myid
 DEALLOCATE(NCN_All, CN_All)
 
 CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
+
+!Write out my particle to nodfil
+12    FORMAT(I8,' ',4F14.7,2I8)
+OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
+DO i=1,NN
+  WRITE(510+myid,12) i,NRXF%A(:,i),1.0
+END DO
+DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC
+  WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
+END DO
+CLOSE(510+myid)
+
+WRITE(*,*) 'NN=',NN,myid
+
+IF(DebugMode .AND. .FALSE.) THEN
+  rc_min = HUGE(rc_min)
+  rc_max = -HUGE(rc_max)
+
+  DO i=1,NTOT
+    RC = ((NRXF%A(1,NANS(1,i)) - NRXF%A(1,NANS(2,i)))**2.0 + &
+          (NRXF%A(2,NANS(1,i)) - NRXF%A(2,NANS(2,i)))**2.0 + &
+          (NRXF%A(3,NANS(1,i)) - NRXF%A(3,NANS(2,i)))**2.0) ** 0.5
+    rc_min = MIN(rc_min, RC)
+    rc_max = MAX(rc_max, RC)
+
+    IF(NRXF%A(1,NANS(1,i)) == 0.0 .AND. &
+         NRXF%A(2,NANS(1,i)) == 0.0 .AND. &
+         NRXF%A(3,NANS(1,i)) == 0.0) &
+         PRINT *,myid,' uninit point 1: ',i,NANS(1,i),NRXF%PartInfo(1,NANS(1,i))
+
+    IF(NRXF%A(1,NANS(2,i)) == 0.0 .AND. &
+         NRXF%A(2,NANS(2,i)) == 0.0 .AND. &
+         NRXF%A(3,NANS(2,i)) == 0.0) PRINT *,myid,' uninit point 2: ',i,NANS(2,i)
+
+    IF(rc < 50.0) PRINT *,myid,' short conn: ',rc,i,NANPart(i),NANS(1,i),&
+         NANS(2,i),NRXF%A(1,NANS(1,i)),NRXF%A(1,NANS(2,i))
+    IF(rc > 150.0) PRINT *,myid,' long conn: ',rc,i,NANPart(i),NANS(1,i),&
+         NANS(2,i),NRXF%A(1,NANS(1,i)),NRXF%A(1,NANS(2,i))
+  END DO
+
+  PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
+END IF
 
 !We return:
 ! Our nodes initial locs  - NRXF
@@ -518,8 +541,7 @@ End Subroutine
  END SUBROUTINE GetBBoxes
 
 !Determine and pass point information between partitions (based on beams/connections)
-!TODO - add UT!
-SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT)
+SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
 
   INCLUDE 'mpif.h'
   
@@ -527,124 +549,140 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT)
   TYPE(NRXF2_t) :: NRXF
   TYPE(InvPartInfo_t) :: InvPartInfo(:)
   TYPE(UT2_t), OPTIONAL :: UT
+  LOGICAL, OPTIONAL :: passNRXF
   !--------------------
-  INTEGER :: i,j,id,counter,neigh,neighcount,getcount,sendcount,ierr
+  INTEGER :: i,j,id,counter,loc,neigh,neighcount,getcount,sendcount,ierr
   INTEGER, ALLOCATABLE :: stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
+  LOGICAL :: doNRXF=.TRUE.
+  
+  IF(PRESENT(passNRXF)) doNRXF = passNRXF
 
   neighcount = SIZE(InvPartInfo)
   ALLOCATE(PointEx(neighcount),stats(neighcount*2))
   stats = MPI_REQUEST_NULL
 
-  !We can make use of the fact that two neighbouring partitions need
-  !the same number of points from each other, so don't need to send count
-  !ahead of time.
+  IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  0'
 
-  !First exchange the particle IDs we need from other partitions
+  !First exchange the number of particles we need from other partitions
   DO i=1,neighcount
     neigh = InvPartInfo(i) % NID
-    getcount = COUNT(NANS(3,:) == neigh)
+    PointEx(i) % rcount = InvPartInfo(i) % CCount
+
+    CALL MPI_ISend(PointEx(i) % rcount,1,MPI_INTEGER,neigh,&
+         198,MPI_COMM_WORLD,stats(i*2-1),ierr)
+
+    CALL MPI_IRecv(PointEx(i) % scount,1,MPI_INTEGER,neigh,&
+         198,MPI_COMM_WORLD,stats(i*2),ierr)
+
+  END DO
+
+  IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  1'
+
+  !Wait for the previous non-blocking sends, then reset stats
+  CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+  stats = MPI_REQUEST_NULL
+
+  !Now send the particle IDs we need to receive from other partitions (RecvIDs)
+  DO i=1,neighcount
+    neigh = InvPartInfo(i) % NID
+
+    sendcount = PointEx(i) % scount
+    getcount = PointEx(i) % rcount
 
     PointEx(i) % partid = neigh
-    PointEx(i) % scount = getcount
-    PointEx(i) % rcount = getcount
-    ALLOCATE(PointEx(i) % SendIDs(getcount),&
+    ALLOCATE(PointEx(i) % SendIDs(sendcount),&
          PointEx(i) % RecvIDs(getcount),&
-         PointEx(i) % S(3*getcount),&
+         PointEx(i) % S(3*sendcount),&
          PointEx(i) % R(3*getcount))
 
-    PointEx(i) % SendIDs = PACK(NANS(1,:), NANS(3,:)==neigh)
+    PointEx(i) % RecvIDs = InvPartInfo(i) % ConnIDs(1:getcount)
 
-    PRINT *,myid,' debug ',neigh,' getcount: ',getcount
-    PRINT *,myid,' debug ',neigh,' sendids: ',PointEx(i) % SendIDs(1:10)
-
-    CALL MPI_ISend(PointEx(i) % SendIDs,getcount,MPI_INTEGER,neigh,&
+    CALL MPI_ISend(PointEx(i) % RecvIDs,getcount,MPI_INTEGER,neigh,&
          199,MPI_COMM_WORLD,stats(i*2-1),ierr)
 
-    CALL MPI_IRecv(PointEx(i) % RecvIDs,getcount,MPI_INTEGER,neigh,&
+    CALL MPI_IRecv(PointEx(i) % SendIDs,sendcount,MPI_INTEGER,neigh,&
          199,MPI_COMM_WORLD,stats(i*2),ierr)
 
   END DO
 
-  !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
-  stats = MPI_REQUEST_NULL
-
-
-  !Now send the actual point locations
-  DO i=1,neighcount
-    neigh = PointEx(i) % partid
-    sendcount = PointEx(i) % scount
-
-    DO j=1,sendcount
-      id = PointEx(i) % RecvIDs(j) !TODO - SHOULDN'T THIS BE SendIDs?
-      PointEx(i) % S(j*3 - 2) = NRXF%M(1,id)
-      PointEx(i) % S(j*3 - 1) = NRXF%M(2,id)
-      PointEx(i) % S(j*3 - 0) = NRXF%M(3,id)
-    END DO
-
-    CALL MPI_ISend(PointEx(i) % S, sendcount*3, MPI_DOUBLE_PRECISION,neigh,&
-         200,MPI_COMM_WORLD,stats(i*2-1), ierr)
-
-    getcount = PointEx(i) % rcount
-    CALL MPI_IRecv(PointEx(i) % R, getcount*3, MPI_DOUBLE_PRECISION,neigh,&
-         200, MPI_COMM_WORLD,stats(i*2), ierr)
-
-  END DO
-
+  IF(DebugMode)  PRINT *,myid, ' ExchangeConnPoints Checkpoint:  2'
 
   !Wait for the previous non-blocking sends, then reset stats
   CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
-  !Put the points in NRXF
-  counter = 0
-  DO i=1,neighcount
-    neigh = PointEx(i) % partid
-    getcount = PointEx(i) % rcount
+  IF(doNRXF) THEN
+    !Now send the actual point locations
+    DO i=1,neighcount
+      neigh = PointEx(i) % partid
+      sendcount = PointEx(i) % scount
 
-    IF(counter + getcount > SIZE(NRXF%P,2)) THEN
-      PRINT *,myid,' debug - resizing nrxf'
-      CALL ResizePointData(NRXF,1.5_8)
-    END IF
+      DO j=1,sendcount
+        id = PointEx(i) % SendIDs(j)
+        PointEx(i) % S(j*3 - 2) = NRXF%M(1,id)
+        PointEx(i) % S(j*3 - 1) = NRXF%M(2,id)
+        PointEx(i) % S(j*3 - 0) = NRXF%M(3,id)
+      END DO
 
-    DO j=1,getcount
-      counter = counter + 1
-      NRXF%P(1,counter) = PointEx(i) % R(j*3 - 2)
-      NRXF%P(2,counter) = PointEx(i) % R(j*3 - 1)
-      NRXF%P(3,counter) = PointEx(i) % R(j*3 - 0)
-      !TODO store IDs here...
+      CALL MPI_ISend(PointEx(i) % S, sendcount*3, MPI_DOUBLE_PRECISION,neigh,&
+           200,MPI_COMM_WORLD,stats(i*2-1), ierr)
+
+      getcount = PointEx(i) % rcount
+      CALL MPI_IRecv(PointEx(i) % R, getcount*3, MPI_DOUBLE_PRECISION,neigh,&
+           200, MPI_COMM_WORLD,stats(i*2), ierr)
+
     END DO
-  END DO
 
+    IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  3'
+
+    !Wait for the previous non-blocking sends, then reset stats
+    CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+    stats = MPI_REQUEST_NULL
+
+    !Put the points in NRXF
+    DO i=1,neighcount
+      neigh = PointEx(i) % partid
+      getcount = PointEx(i) % rcount
+
+      DO j=1,getcount
+        loc = InvPartInfo(i) % ConnLocs(j)
+        NRXF%A(1,loc) = PointEx(i) % R(j*3 - 2)
+        NRXF%A(2,loc) = PointEx(i) % R(j*3 - 1)
+        NRXF%A(3,loc) = PointEx(i) % R(j*3 - 0)
+        IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
+      END DO
+    END DO
+  END IF
+
+  IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  4'
 
   IF(PRESENT(UT)) THEN
-
     
     !Send and receive UT
     DO i=1,neighcount
       neigh = PointEx(i) % partid
       sendcount = PointEx(i) % scount
-      getcount = sendcount
+      getcount = PointEx(i) % rcount
 
 
       DEALLOCATE(PointEx(i) % S, PointEx(i) % R)
       ALLOCATE(PointEx(i) % S(6*sendcount),&
-           PointEx(i) % R(6*sendcount))
+           PointEx(i) % R(6*getcount))
 
 
       PointEx(i) % S = 0.0
       PointEx(i) % R = 0.0
 
       DO j=1,sendcount
-        id = PointEx(i) % RecvIDs(j) !TODO - SHOULDN'T THIS BE SendIDs?
+        id = PointEx(i) % SendIDs(j)
         PointEx(i) % S(j*6-5 : j*6) = UT%M(6*id-5 : 6*id)
       END DO
 
       CALL MPI_ISend(PointEx(i) % S, sendcount*6, MPI_DOUBLE_PRECISION,neigh,&
            201,MPI_COMM_WORLD,stats(i*2-1), ierr)
 
-      CALL MPI_IRecv(PointEx(i) % R, sendcount*6, MPI_DOUBLE_PRECISION,neigh,&
+      CALL MPI_IRecv(PointEx(i) % R, getcount*6, MPI_DOUBLE_PRECISION,neigh,&
            201,MPI_COMM_WORLD,stats(i*2), ierr)
     END DO
 
@@ -652,25 +690,24 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT)
     CALL MPI_Waitall(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
     stats = MPI_REQUEST_NULL
 
+    IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  5'
+
     !Put the points in UT
-    counter = 0
     DO i=1,neighcount
       neigh = PointEx(i) % partid
       getcount = PointEx(i) % rcount
       
-      IF((counter + getcount)*6 > SIZE(UT%P)) THEN
-        PRINT *,myid,' debug, resizing UT'
-        CALL ResizePointData(UT,1.5_8)
-      END IF
+      ! TODO ***************
+      ! IF((counter + getcount)*6 > SIZE(UT%P)) THEN
+      !   PRINT *,myid,' debug, resizing UT'
+      !   CALL ResizePointData(UT,1.5_8)
+      ! END IF
       
       DO j=1,getcount
-        counter = counter + 1
-        UT%P(6*counter-5 : 6*counter) = PointEx(i) % R(j*6-5 : j*6)
-        !TODO store IDs here...
+        loc = InvPartInfo(i) % ConnLocs(j)
+        UT%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*6-5 : j*6)
       END DO
     END DO
-
-
   END IF
 
 
@@ -813,10 +850,267 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL)
 
   END DO
 
-  PRINT *,myid,' successfully navigated the mpi mess.'
+  IF(DebugMode) PRINT *,myid,' successfully completed ExchangeProxPoints.'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
 
 END SUBROUTINE ExchangeProxPoints
+
+!Pass EFS values for shared beams between partitions
+!This is only required because the beam EFS values are randomly
+!generated. The larger partition ID sends to the lower.
+!Note that it would be sufficient (in current implementation)
+!to send an MPI_LOGICAL 'broken' instead of DP EFS value, but 
+!this way is flexible to future change in EFS
+SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
+
+  INCLUDE 'mpif.h'
+
+  INTEGER, ALLOCATABLE :: NANS(:,:), NANPart(:)
+  REAL*8, ALLOCATABLE :: EFS(:)
+  TYPE(NRXF2_t) :: NRXF
+  !-----------------------------
+  INTEGER :: i,j,k,neigh,counter,neighcount,N1,N2,NTOT,ierr
+  INTEGER, ALLOCATABLE :: stats(:)
+  LOGICAL :: Send
+  TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
+  TYPE(InvPartInfo_t) :: InvPartInfo(:)
+
+  neighcount = SIZE(InvPartInfo)
+
+  ALLOCATE(stats(neighcount*3), PointEx(neighcount))
+  stats = MPI_REQUEST_NULL
+
+  IF(SIZE(EFS) /= SIZE(NANPart) .OR. SIZE(EFS) /= SIZE(NANS,2)) &
+       CALL FatalError("Size mismatch in ExchangeEFS")
+  NTOT = SIZE(NANPart)
+
+  DO i=1,neighcount
+    neigh = InvPartInfo(i) % NID
+    Send = (neigh < myid) 
+
+    counter = 0
+    DO j=1,NTOT
+      IF(NANPart(j) /= neigh) CYCLE
+      counter = counter + 1
+    END DO
+
+    IF(DebugMode) PRINT *,myid,' sharing ',counter,' EFS with ',neigh
+
+    PointEx(i) % scount = counter
+    PointEx(i) % rcount = counter
+
+    IF(Send) THEN
+      ALLOCATE(PointEx(i) % S(counter), &
+           PointEx(i) % SendIDs(counter*2))
+
+      counter = 0
+      DO j=1,NTOT
+        IF(NANPart(j) /= neigh) CYCLE
+        counter = counter + 1
+        PointEx(i) % S(counter) = EFS(j)
+        PointEx(i) % SendIDs(counter*2-1) = NRXF%PartInfo(2,NANS(1,j))
+        PointEx(i) % SendIDs(counter*2)   = NRXF%PartInfo(2,NANS(2,j))
+      END DO
+    ELSE
+      ALLOCATE(PointEx(i) % R(counter), &
+           PointEx(i) % RecvIDs(counter * 2))
+    END IF
+
+    IF(Send) THEN
+      CALL MPI_ISend(PointEx(i) % S,counter,MPI_DOUBLE_PRECISION,neigh,&
+           190,MPI_COMM_WORLD,stats(i*2-1),ierr)
+
+      CALL MPI_ISend(PointEx(i) % SendIDs,counter*2,MPI_INTEGER,neigh,&
+           191,MPI_COMM_WORLD,stats(i*2),ierr)
+
+    ELSE
+      CALL MPI_IRecv(PointEx(i) % R,counter,MPI_DOUBLE_PRECISION,neigh,&
+           190,MPI_COMM_WORLD,stats(i*2-1),ierr)
+
+      CALL MPI_IRecv(PointEx(i) % RecvIDs,counter*2,MPI_DOUBLE_PRECISION,neigh,&
+           191,MPI_COMM_WORLD,stats(i*2),ierr)
+
+    END IF
+  END DO
+
+  CALL MPI_WaitAll(neighcount*2, stats, MPI_STATUSES_IGNORE, ierr)
+
+  DO i=1,neighcount
+    neigh = InvPartInfo(i) % NID
+    Send = (neigh < myid) 
+    IF(Send) CYCLE
+
+    counter = 0
+    DO j=1,PointEx(i) % rcount
+      N2 = PointEx(i) % RecvIDs(j*2-1) !our ID
+      N1 = PointEx(i) % RecvIDs(j*2)   !otherpart ID
+
+      DO k=1,InvPartInfo(i) % CCount
+        IF(InvPartInfo(i) % ConnIDs(k) == N1) THEN
+          N1 = InvPartInfo(i) % ConnLocs(k)
+          EXIT
+        END IF
+      END DO
+
+      DO k=1,NTOT
+        IF(NANPart(k) /= neigh) CYCLE
+        IF(NANS(1,k) /= N1) CYCLE
+        IF(NANS(2,k) /= N2) CYCLE
+        PRINT *,myid,' EFS ',k,' changing from ',EFS(k),' to ',PointEx(i) % R(j)
+        EFS(k) = PointEx(i) % R(j)
+        counter = counter + 1
+      END DO
+    END DO
+
+    IF(counter /= PointEx(i) % rcount) &
+         CALL FatalError("Programming error: count mismatch in EFS comms")
+    IF(DebugMode) PRINT *,myid,' received ',counter,PointEx(i) % rcount,' EFS values from ',neigh
+  END DO
+
+  CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
+
+END SUBROUTINE ExchangeEFS
+
+!Use octree search to find nodes which are in contact
+SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
+
+  USE Octree
+
+  TYPE(NRXF2_t) :: NRXF
+  TYPE(UT2_t) :: UT
+  INTEGER :: NN
+  REAL*8 :: SCL, LNN, BBox(6)
+  !-----------------------
+  !octree stuff
+  type(point_type), allocatable :: points(:)
+  INTEGER i,j, npoints, num_ngb
+  integer, allocatable :: seed(:), ngb_ids(:)
+  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps
+
+  REAL*8 :: dist, max_dist, min_dist
+
+  eps = 1.0
+
+  npoints = NN !TODO - NN => include parallel
+  ALLOCATE(points(npoints)) 
+
+  DO i=1,3
+    oct_bbox(1,i) = BBox(i*2-1) - eps !buffer to ensure all points contained
+    oct_bbox(2,i) = BBox(i*2)   + eps
+  END DO
+
+  CALL Octree_init(max_depth=20,max_num_point=6,bbox=oct_bbox)
+
+  DO i=1,npoints
+    Points(i) % id = i
+    Points(i) % x(1) = NRXF%A(1,i) + UT%A(6*I-5)
+    Points(i) % x(2) = NRXF%A(2,i) + UT%A(6*I-4)
+    Points(i) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
+  END DO
+
+  CALL Octree_build(Points)
+
+  ALLOCATE(ngb_ids(100))
+
+  DO i=1,npoints
+    num_ngb = 0
+    ngb_ids = 0
+    CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
+    max_dist = -HUGE(max_dist)
+    min_dist = HUGE(max_dist)
+    DO j=1,num_ngb
+      IF(ngb_ids(j) == i) CYCLE
+      dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + UT%A(6*ngb_ids(j)-5)))**2.0) + &
+      (((NRXF%A(2,i) + UT%A(6*i-4)) - (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
+      (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
+
+      max_dist = MAX(max_dist, dist)
+      min_dist = MIN(min_dist, dist)
+    END DO
+    IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
+  END DO
+
+  CALL Octree_final()
+
+END SUBROUTINE FindCollisions
+
+
+!Use octree search to find nodes which are in contact
+SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
+  
+  USE Octree
+
+  REAL*8, ALLOCATABLE :: xo(:,:)
+  REAL*8 :: SCL
+  INTEGER :: ip,nbeams
+  INTEGER, ALLOCATABLE :: NCN(:), CN(:,:)
+  !-----------------------
+  !octree stuff
+  type(point_type), allocatable :: points(:)
+  INTEGER i,j,k, num_ngb,counter
+  integer, allocatable :: seed(:), ngb_ids(:)
+  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps
+  REAL*8 :: dist, max_dist, min_dist, searchdist
+
+  ALLOCATE(points(ip),&
+       NCN(ip),&
+       CN(ip,12)) 
+
+  eps = 1.0
+
+  nbeams = 0
+  CN = 0
+  NCN = 0
+
+  DO i=1,3
+    oct_bbox(1,i) = MINVAL(xo(i,:)) - eps !buffer bbox to ensure all points contained
+    oct_bbox(2,i) = MAXVAL(xo(i,:)) + eps
+  END DO
+
+
+  searchdist = SCL * (1.6**0.5)
+
+  !TODO - determine optimal depth - SCL vs bbox length?
+  !  mdepth 20, m points 6 was determined for a particular case
+  !   it doubled the speed w.r.t. 20,3 (i.e. max_num_points is important)
+  !   we *expect* 12 neighbours for every node... 
+  CALL Octree_init(max_depth=20,max_num_point=6,bbox=oct_bbox)
+
+  DO i=1,ip
+    Points(i) % id = i
+    Points(i) % x(1) = xo(1,i)
+    Points(i) % x(2) = xo(2,i)
+    Points(i) % x(3) = xo(3,i)
+  END DO
+  !octree build misses points...
+  CALL Octree_build(Points)
+
+  ALLOCATE(ngb_ids(100))
+
+  DO i=1,ip
+    num_ngb = 0
+    ngb_ids = 0
+    CALL Octree_search(points(i) % x, searchdist, num_ngb, ngb_ids)
+    counter = 0
+
+    DO j=1,num_ngb
+      IF(ngb_ids(j) == i) CYCLE
+      counter = counter+1
+      NCN(i) = NCN(i) + 1
+      CN(i,counter) = ngb_ids(j)
+      ! PRINT *,i, j, ' ngb_id ',ngb_ids(j)
+      IF(ngb_ids(j) > i) nbeams = nbeams+1
+    END DO
+    IF(DebugMode .AND. myid==0 .AND. MOD(i,1000)==0)&
+         PRINT *,myid,' node ',i,' nobeams: ',num_ngb
+  END DO
+
+  PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
+  !SUM(NCN) is too large compared to nbeams
+  !For some reason, testing id(j) > i doesn't produce right number of beams
+CALL Octree_final()
+
+END SUBROUTINE FindBeams
 
 FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
   INTEGER :: i

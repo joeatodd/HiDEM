@@ -12,9 +12,13 @@ MODULE UTILS
      MODULE PROCEDURE ResizePointDataNRXF, ResizePointDataUT
   END INTERFACE ResizePointData
 
+  INTERFACE ExpandIntarray
+     MODULE PROCEDURE Expand1IntArray, Expand2IntArray
+  END INTERFACE ExpandIntarray
+
   CONTAINS
 
-    SUBROUTINE ExpandIntArray(intarr)
+    SUBROUTINE Expand1IntArray(intarr)
 
       INTEGER, ALLOCATABLE :: intarr(:), workarr(:)
       INTEGER :: newsize, oldsize
@@ -28,14 +32,34 @@ MODULE UTILS
       ALLOCATE(workarr(newsize))
       workarr(1:oldsize) = intarr(1:oldsize)
 
-      PRINT *,'DEBUG: Doing move alloc'
+      !FORTRAN 2003 feature...
+      CALL MOVE_ALLOC(workarr, intarr)
+
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
+
+    END SUBROUTINE Expand1IntArray
+
+    SUBROUTINE Expand2IntArray(intarr)
+
+      INTEGER, ALLOCATABLE :: intarr(:,:), workarr(:,:)
+      INTEGER :: newsize, oldsize, dim1size
+
+      oldsize = SIZE(intarr,2)
+      newsize =  oldsize * 2
+      dim1size = SIZE(intarr,1)
+
+      ! ALLOCATE(workarr(oldsize))
+      ! workarr(1:oldsize) = intarr(1:oldsize)
+      ! DEALLOCATE(intarr)
+      ALLOCATE(workarr(dim1size,newsize))
+      workarr(:,1:oldsize) = intarr(:,1:oldsize)
 
       !FORTRAN 2003 feature...
       CALL MOVE_ALLOC(workarr, intarr)
 
-      PRINT *,'DEBUG: Done move alloc'
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
 
-    END SUBROUTINE ExpandIntArray
+    END SUBROUTINE Expand2IntArray
 
     SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand)
       TYPE(NRXF2_T), TARGET :: NRXF
@@ -52,16 +76,20 @@ MODULE UTILS
       NRXF%mstrt = 1
       NRXF%cstrt = 1 + n
       NRXF%mstrt = 1 + n !no connected particles, initially
-      
+
+      NRXF%NN = n
+      NRXF%NC = 0
+      NRXF%NP = 0
+
       ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot))
 
       NRXF%PartInfo(:,:) = -1 !-1 = no point
 
       NRXF%A = 0.0
       NRXF%M => NRXF%A(:,1:n)
-      NRXF%P => NRXF%A(:,n+1:UBOUND(NRXF%A,2))
+      ! NRXF%P => NRXF%A(:,n+1:UBOUND(NRXF%A,2))
 
-      PRINT *,'Debug,nrxf n, ntot: ',n,n_tot, SIZE(NRXF%A), SIZE(NRXF%M), SIZE(NRXF%P), UBOUND(NRXF%A,2)
+      IF(DebugMode) PRINT *,'Debug,nrxf init n, ntot: ',n,n_tot, SIZE(NRXF%A), NRXF%NN, UBOUND(NRXF%A,2)
 
     END SUBROUTINE PointDataInitNRXF
 
@@ -81,23 +109,59 @@ MODULE UTILS
       UT%A = 0.0
       UT%M => UT%A(1:6*n)
       UT%P => UT%A((6*n+1):UBOUND(UT%A,1))
+
+      IF(DebugMode) PRINT *,'Debug,ut init n, ntot: ',n,n_tot, SIZE(UT%A), SIZE(UT%M), SIZE(UT%P)
+
     END SUBROUTINE PointDataInitUT
 
-    SUBROUTINE ResizePointDataNRXF(NRXF,scale,do_M,do_P)
+    SUBROUTINE InvPartInfoInit(InvPartInfo,neighparts,initsize_in)
+      TYPE(InvPartInfo_t),ALLOCATABLE :: InvPartInfo(:)
+      INTEGER :: neighparts(:)
+      INTEGER, OPTIONAL :: initsize_in
+      !------------------------------
+      INTEGER :: initsize,i,neighcount
+
+      neighcount = COUNT(neighparts /= -1)
+
+      initsize = 1000
+      IF(PRESENT(initsize_in)) initsize = initsize_in
+
+      ALLOCATE(InvPartInfo(neighcount))
+      DO i=1,neighcount
+          ALLOCATE(InvPartInfo(i) % ConnIDs(initsize),&
+               InvPartInfo(i) % ConnLocs(initsize))
+          InvPartInfo(i) % ConnIDs = -1
+          InvPartInfo(i) % ConnLocs = -1
+          InvPartInfo(i) % ccount = 0
+          InvPartInfo(i) % pcount = 0
+          InvPartInfo(i) % NID = neighparts(i)
+      END DO
+
+    END SUBROUTINE InvPartInfoInit
+
+    SUBROUTINE ResizePointDataNRXF(NRXF,scale,do_M,do_C,do_P)
 
       TYPE(NRXF2_T), TARGET :: NRXF
       REAL*8 :: scale
-      LOGICAL, OPTIONAL :: do_M, do_P
+      LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
       REAL*8, ALLOCATABLE :: work_arr(:,:)
-      INTEGER :: a_oldsize,m_oldsize,p_oldsize
-      INTEGER :: a_newsize,m_newsize,p_newsize
-      LOGICAL :: doM,doP
+      INTEGER, ALLOCATABLE :: work_int(:,:)
+      INTEGER :: a_oldsize,m_oldsize,c_oldsize,p_oldsize
+      INTEGER :: a_newsize,m_newsize,c_newsize,p_newsize
+      INTEGER :: cstrt_new, pstrt_new
+      LOGICAL :: doM,doC,doP
       
       IF(PRESENT(do_M)) THEN
         doM = do_M
       ELSE
         doM = .FALSE.
+      END IF
+
+      IF(PRESENT(do_C)) THEN
+        doC = do_C
+      ELSE
+        doC = .FALSE.
       END IF
 
       IF(PRESENT(do_P)) THEN
@@ -107,19 +171,20 @@ MODULE UTILS
       END IF
 
       IF(scale < 1.0) THEN
-        PRINT *,'NRXF size reduction not yet implemented, sorry!'
+        PRINT *,'ERROR: NRXF size reduction not yet implemented, sorry!'
         STOP
       END IF
 
       a_oldsize = SIZE(NRXF%A,2)
-      m_oldsize = SIZE(NRXF%M,2)
-      p_oldsize = SIZE(NRXF%P,2)
+      m_oldsize = NRXF%cstrt - NRXF%mstrt
 
-      IF(doP) THEN
-        p_newsize = CEILING(p_oldsize*scale)
-      ELSE
-        p_newsize = p_oldsize
+      IF(SIZE(NRXF%M,2) /= m_oldsize) THEN
+        PRINT *, "ERROR: NRXF%M wrong size in ResizePointData"
+        STOP
       END IF
+
+      c_oldsize = NRXF%pstrt - NRXF%cstrt
+      p_oldsize = a_oldsize - NRXF%cstrt + 1
 
       IF(doM) THEN
         m_newsize = CEILING(m_oldsize*scale)
@@ -127,39 +192,73 @@ MODULE UTILS
         m_newsize = m_oldsize
       END IF
 
-      a_newsize = m_newsize + p_newsize
+      IF(doC) THEN
+        c_newsize = CEILING(c_oldsize*scale)
+      ELSE
+        c_newsize = c_oldsize
+      END IF
 
-      PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, p_oldsize, a_newsize, m_newsize, p_newsize
+      IF(doP) THEN
+        p_newsize = CEILING(p_oldsize*scale)
+      ELSE
+        p_newsize = p_oldsize
+      END IF
 
-      ALLOCATE(work_arr(3,a_newsize))
+      a_newsize = m_newsize + c_newsize + p_newsize
+      
+      cstrt_new = m_newsize + 1
+      pstrt_new = m_newsize + c_newsize + 1
+
+      IF(DebugMode) PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, p_oldsize,&
+           'new: ',a_newsize, m_newsize, p_newsize, 'strts: ', cstrt_new, pstrt_new
+
+      ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
       work_arr = 0.0
-      work_arr(:,1:m_oldsize) = NRXF % M(:,1:m_oldsize)
-      work_arr(:,m_newsize+1 : m_newsize+p_oldsize) = NRXF % P(:,1:p_oldsize)
+      work_int = 0
+
+      work_arr(:,1:m_oldsize) = NRXF%A(:,1:m_oldsize)
+      work_arr(:,cstrt_new : cstrt_new+c_oldsize) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize)
+      work_arr(:,pstrt_new : pstrt_new+p_oldsize) = NRXF % A(:,NRXF%pstrt:NRXF%pstrt+p_oldsize)
+
+      work_int(:,1:m_oldsize) = NRXF%PartInfo(:,1:m_oldsize)
+      work_int(:,cstrt_new : cstrt_new+c_oldsize) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize)
+      work_int(:,pstrt_new : pstrt_new+p_oldsize) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize)
 
       CALL MOVE_ALLOC(work_arr, NRXF%A)
+      CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
 
+      NRXF%cstrt = cstrt_new
+      NRXF%pstrt = pstrt_new
+      
       NRXF%M => NRXF%A(:,1:m_newsize)
-      NRXF%P => NRXF%A(:,m_newsize+1 : a_newsize)
+      ! NRXF%P => NRXF%A(:,m_newsize+1 : a_newsize)
 
-      PRINT *,myid,' debug2 resize nrxf: ',SIZE(NRXF%A,2),SIZE(NRXF%M,2),SIZE(NRXF%P,2)
+
+      PRINT *,myid,' debug2 resize nrxf: ',SIZE(NRXF%A,2),NRXF%cstrt, NRXF%pstrt
 
     END SUBROUTINE ResizePointDataNRXF
 
-    SUBROUTINE ResizePointDataUT(UT,scale,do_M,do_P)
+    SUBROUTINE ResizePointDataUT(UT,scale,do_M,do_C,do_P)
 
       TYPE(UT2_T), TARGET :: UT
       REAL*8 :: scale
-      LOGICAL, OPTIONAL :: do_M, do_P
+      LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
       REAL*8, ALLOCATABLE :: work_arr(:)
       INTEGER :: a_oldsize,m_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,p_newsize
-      LOGICAL :: doM,doP
+      LOGICAL :: doM,doC,doP
       
       IF(PRESENT(do_M)) THEN
         doM = do_M
       ELSE
         doM = .FALSE.
+      END IF
+
+      IF(PRESENT(do_C)) THEN
+        doC = do_C
+      ELSE
+        doC = .FALSE.
       END IF
 
       IF(PRESENT(do_P)) THEN
@@ -207,6 +306,5 @@ MODULE UTILS
       UT%P => UT%A(m_newsize+1 : a_newsize)
 
     END SUBROUTINE ResizePointDataUT
-
 
 END MODULE UTILS
