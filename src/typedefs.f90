@@ -62,7 +62,7 @@ MODULE TypeDefs
   END TYPE FXF_t
 
   TYPE PointEx_t
-     INTEGER :: partid,scount,rcount
+     INTEGER :: partid=-1,scount=0,rcount=0
      INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
      REAL*8, ALLOCATABLE :: S(:),R(:)
   END TYPE PointEx_t
