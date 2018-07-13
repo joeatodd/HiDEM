@@ -33,9 +33,9 @@
         INCLUDE 'mpif.h'
         INCLUDE 'na90.dat'
 	REAL*8 EMM(NOMA),BOYZ(NOMA),BOYY(NOMA),WSY(NOMA)
-	REAL*8 EN(NODM),WE(NOMA),VDP(NOMA),WSX(NOMA),BED(-100:2000,-100:2000)
+	REAL*8 EN(NODM),WE(NOMA),WSX(NOMA),BED(-100:2000,-100:2000)
 	REAL*8 SUF(-100:2000,-100:2000)
-	REAL*8, ALLOCATABLE :: MFIL(:),EFC(:),EFS(:)
+	REAL*8, ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
 	REAL*8 FBED(-100:2000,-100:2000)
 	REAL*8 DIX,DIY,DIZ,FRIC,UC
 	REAL*8 UTP(NODM),R(NODM)
@@ -71,7 +71,7 @@
 	REAL*8 V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL*8 SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
         REAL*8 fractime
-	REAL RAN(NOCON)
+	REAL, ALLOCATABLE :: RAN(:)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT,&
              NTOT,FXC
@@ -81,7 +81,7 @@
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec,CSVOutput
         LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine
-        LOGICAL, ALLOCATABLE :: LostParticle(:)
+        LOGICAL, ALLOCATABLE :: LostParticle(:), PartIsNeighbour(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
 
         TYPE(NAN_t) :: NANS_prev
@@ -168,10 +168,6 @@ END IF
 	LNN=SCL*1.1225  
 	MLOAD=SCL*MLOAD
 
-        SEED=SEEDI+873*myid
-        CALL RMARIN(SEED,0,0)
-        CALL RANMAR(RAN,NOCON)
-
 	PI=ACOS(-1.0)
         DMP=DAMP1*SCL**3.0
         DMP2=DAMP2*SCL**3.0
@@ -215,6 +211,10 @@ END IF
 	SQB=SQRT(1.0+SIN(SUB*PI/2.0)**2)
 	RLS=LS
 
+        ALLOCATE(PBBox(6,0:ntasks-1),&
+             PartIsNeighbour(0:ntasks-1))
+        PartIsNeighbour = .FALSE.
+
 	IF (REST.EQ.0) THEN
 
 	RY0=1
@@ -247,7 +247,7 @@ END IF
         MAXY = BBox(4)
         MAXZ = BBox(6) !don't really use these...
 
-        IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid+1)
+        IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
 
 	write(*,17) myid,NTOT
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
@@ -273,7 +273,6 @@ END IF
 	WEN=0.0
 	ENM0=0
 
-        VDP = 0.0     !VDP = drag coefficient
         UT%M = 0.0    ! UT%M = current displacement
         UTM%M = 0.0   ! UTM%M = previous displacement
 
@@ -345,8 +344,17 @@ END IF
 
         !Keep track of any particles which leave the domain
         ALLOCATE(LostParticle(NN),&
-             EFS(NTOT))
+             EFS(NTOT),&
+             VDP(NN),&
+             RAN(NTOT))
+
         LostParticle = .FALSE.
+        VDP = 0.0     !VDP = drag coefficient
+
+        SEED=SEEDI+873*myid
+        CALL RMARIN(SEED,0,0)
+        CALL RANMAR(RAN,NTOT)
+
 
         ALLOCATE(EFC(SIZE(NRXF2%A,2))) !to hold our & other nodes
         EFC = SCL*EF0
@@ -502,13 +510,14 @@ END IF
         CALL CPU_TIME(TT1)
         TT(1) = TT1
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
-
         !TODO  TIME 1
-        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, .FALSE.) !Don't pass NRXF...
 
+        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, .FALSE.) !Don't pass NRXF...
         
         !TODO - Use this for passing relevant points
         CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
+
+        CALL FindNeighbours(PBBox, PartIsNeighbour)
 
         IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
         CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL)

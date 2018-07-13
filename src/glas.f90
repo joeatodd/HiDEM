@@ -510,10 +510,8 @@ End Subroutine
    !-----------------
    INTEGER :: ierr
    REAL*8 :: BBox(6),workarr(6*ntasks),X,Y,Z
-   REAL*8, ALLOCATABLE :: PBBox(:,:)
+   REAL*8 :: PBBox(6,0:ntasks)
    REAL*8 :: minx,maxx,miny,maxy,minz,maxz
-
-   IF(.NOT. ALLOCATED(PBBox)) ALLOCATE(PBBox(6,ntasks))
 
    minx = HUGE(minx)
    miny = HUGE(miny)
@@ -543,11 +541,39 @@ End Subroutine
 
    CALL MPI_AllGather(BBox,6,MPI_DOUBLE_PRECISION,workarr,6,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
 
-   DO i=1,ntasks
-     PBBox(:,i) = workarr(((i-1)*6)+1:i*6)
+   DO i=0,ntasks-1
+     PBBox(:,i) = workarr((i*6)+1:(i+1)*6)
    END DO
 
  END SUBROUTINE GetBBoxes
+
+ SUBROUTINE FindNeighbours(PBBox,PartIsNeighbour)
+   REAL*8 :: PBBox(:,0:)
+   LOGICAL :: PartIsNeighbour(0:ntasks-1)
+   !-------------------------------
+   INTEGER :: i
+   REAL*8 :: BBox(6),Buffer
+
+   BBox = PBBox(:,myid)
+   Buffer = 200.0
+
+   PartIsNeighbour = .FALSE.
+
+   !Cycle each partition
+   DO i=0,ntasks-1
+     IF(i==myid) CYCLE
+     IF(BBox(1) - Buffer > PBBox(2,i)) CYCLE
+     IF(BBox(3) - Buffer > PBBox(4,i)) CYCLE
+     IF(BBox(5) - Buffer > PBBox(6,i)) CYCLE
+     IF(BBox(2) + Buffer < PBBox(1,i)) CYCLE
+     IF(BBox(4) + Buffer < PBBox(3,i)) CYCLE
+     IF(BBox(6) + Buffer < PBBox(5,i)) CYCLE
+
+     PartIsNeighbour(i) = .TRUE.
+     IF(DebugMode) PRINT *,myid,' potential neighbour: ',i
+   END DO
+
+ END SUBROUTINE FindNeighbours
 
 !Determine and pass point information between partitions (based on beams/connections)
 SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
