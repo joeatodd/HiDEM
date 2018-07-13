@@ -520,10 +520,15 @@ END IF
         CALL FindNeighbours(PBBox, PartIsNeighbour)
 
         IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
-        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL)
+        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL, PBBox)
         IF(DebugMode) PRINT *,myid,' finished  ExchangeProxPoints'
 
+        IF(DebugMode) PRINT *,'About to find collisions'
         CALL FindCollisions(NRXF2,UT2,NN,BBox,SCL,LNN)
+        IF(DebugMode) PRINT *,'Finished finding collisions'
+
+        !TODO - should we still adopt the approach of finding nearby particles every N steps?
+        ! - how efficient is octree vs prev strategy?
 
 !============================ Old Prox/Collision Strategy ===============================
 !Went like this:

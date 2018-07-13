@@ -757,7 +757,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
 END SUBROUTINE ExchangeConnPoints
 
 !Determine and pass point information between partitions (based on proximity)
-SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL)
+SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox)
 
   USE INOUT
   USE UTILS
@@ -771,8 +771,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL)
   !--------------------
   INTEGER :: i,j,id,cnt,neigh,neighcount,getcount,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
-  REAL*8, ALLOCATABLE :: PBBox(:,:)
-  REAL*8 :: BBox(6)
+  REAL*8 :: PBBox(6,0:ntasks-1)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
 
   ALLOCATE(PointEx(ntasks), stats(ntasks*2))
@@ -785,10 +784,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL)
     PointEx(i) % scount = 0
     PointEx(i) % rcount = 0
   END DO
-
-  !Pass bounding boxes
-  CALL GetBBoxes(NRXF, UT, NN,  BBox, PBBox)
-
 
   !Count points in each BB
   DO i=1,ntasks
@@ -1032,8 +1027,7 @@ SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
   type(point_type), allocatable :: points(:)
   INTEGER i,j, npoints, num_ngb
   integer, allocatable :: seed(:), ngb_ids(:)
-  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps
-
+  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
   REAL*8 :: dist, max_dist, min_dist
 
   eps = 1.0
@@ -1055,7 +1049,12 @@ SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
     Points(i) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
   END DO
 
+  CALL CPU_TIME(T1)
   CALL Octree_build(Points)
+
+  CALL CPU_TIME(T2)
+  IF(DebugMode) PRINT *,myid,'FindCollisions: Time to build octree: ',T2-T1
+  CALL CPU_TIME(T1)
 
   ALLOCATE(ngb_ids(100))
 
@@ -1074,8 +1073,11 @@ SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
       max_dist = MAX(max_dist, dist)
       min_dist = MIN(min_dist, dist)
     END DO
-    IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
+    !IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
   END DO
+
+  CALL CPU_TIME(T2)
+  IF(DebugMode) PRINT *,myid,'FindCollisions: Time to search octree: ',T2-T1
 
   CALL Octree_final()
 
