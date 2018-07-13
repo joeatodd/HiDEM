@@ -877,8 +877,9 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
   REAL*8, ALLOCATABLE :: EFS(:)
   TYPE(NRXF2_t) :: NRXF
   !-----------------------------
-  INTEGER :: i,j,k,neigh,counter,N1,N2,NTOT,ierr
+  INTEGER :: i,j,k,neigh,counter,N1,N2,NTOT,ierr,recvtot
   INTEGER, ALLOCATABLE :: stats(:)
+  REAL*8 :: T1,T2
   LOGICAL :: Send
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
@@ -940,41 +941,53 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
     END IF
   END DO
 
+  IF(DebugMode) PRINT *,myid,' finished EFS send'
   CALL MPI_WaitAll(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
+  IF(DebugMode) PRINT *,myid,' finished EFS recv'
 
+  CALL CPU_Time(T1)
+
+  !First replace otherpart's N1 with our N1 node ID
+  recvtot = 0
   DO i=0,ntasks-1
-    IF(InvPartInfo(i) % ccount == 0) CYCLE
-    neigh = InvPartInfo(i) % NID
-    Send = (neigh < myid) 
-    IF(Send) CYCLE
-
-    counter = 0
+    IF(i<=myid) CYCLE
+    recvtot = recvtot + PointEx(i) % rcount
     DO j=1,PointEx(i) % rcount
-      N2 = PointEx(i) % RecvIDs(j*2-1) !our ID
-      N1 = PointEx(i) % RecvIDs(j*2)   !otherpart ID
-
+      N1 = PointEx(i) % RecvIDs(j*2)
       DO k=1,InvPartInfo(i) % CCount
         IF(InvPartInfo(i) % ConnIDs(k) == N1) THEN
           N1 = InvPartInfo(i) % ConnLocs(k)
           EXIT
         END IF
       END DO
-
-      DO k=1,NTOT
-        IF(NANPart(k) /= neigh) CYCLE
-        IF(NANS(1,k) /= N1) CYCLE
-        IF(NANS(2,k) /= N2) CYCLE
-        PRINT *,myid,' EFS ',k,' changing from ',EFS(k),' to ',PointEx(i) % R(j)
-        EFS(k) = PointEx(i) % R(j)
-        counter = counter + 1
-      END DO
+      PointEx(i) % RecvIDs(j*2) = N1
     END DO
-
-    IF(counter /= PointEx(i) % rcount) &
-         CALL FatalError("Programming error: count mismatch in EFS comms")
-    IF(DebugMode) PRINT *,myid,' received ',counter,PointEx(i) % rcount,' EFS values from ',neigh
   END DO
 
+  counter = 0
+  DO k=1,NTOT
+    IF(NANPart(k) <= myid) CYCLE
+    neigh = NANPart(k)
+
+    DO j=1,PointEx(neigh) % rcount
+      N2 = PointEx(neigh) % RecvIDs(j*2-1) !our ID
+      N1 = PointEx(neigh) % RecvIDs(j*2)   !otherpart ID
+      IF(NANS(2,k) /= N2) CYCLE
+      IF(NANS(1,k) /= N1) CYCLE
+
+      EFS(k) = PointEx(neigh) % R(j)
+      counter = counter + 1
+    END DO
+  END DO
+
+  IF(counter /= recvtot) THEN
+    PRINT *,myid,' counter recvtot: ',counter, recvtot
+    PRINT *,myid,' OH NO! '; STOP
+  END IF
+
+  CALL CPU_Time(T2)
+
+  PRINT *,myid,' EFS replacement took: ',T2-T1,' secs'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
 
 END SUBROUTINE ExchangeEFS
