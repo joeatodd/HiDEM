@@ -18,14 +18,18 @@ MODULE UTILS
 
   CONTAINS
 
-    SUBROUTINE Expand1IntArray(intarr)
+    SUBROUTINE Expand1IntArray(intarr,newsize_in)
 
       INTEGER, ALLOCATABLE :: intarr(:), workarr(:)
+      INTEGER, OPTIONAL :: newsize_in
       INTEGER :: newsize, oldsize
 
       oldsize = SIZE(intarr)
-      newsize =  oldsize * 2
-
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
       ! ALLOCATE(workarr(oldsize))
       ! workarr(1:oldsize) = intarr(1:oldsize)
       ! DEALLOCATE(intarr)
@@ -39,13 +43,20 @@ MODULE UTILS
 
     END SUBROUTINE Expand1IntArray
 
-    SUBROUTINE Expand2IntArray(intarr)
+    SUBROUTINE Expand2IntArray(intarr,newsize_in)
 
       INTEGER, ALLOCATABLE :: intarr(:,:), workarr(:,:)
+      INTEGER, OPTIONAL :: newsize_in
       INTEGER :: newsize, oldsize, dim1size
 
       oldsize = SIZE(intarr,2)
-      newsize =  oldsize * 2
+
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
+
       dim1size = SIZE(intarr,1)
 
       ! ALLOCATE(workarr(oldsize))
@@ -75,7 +86,7 @@ MODULE UTILS
 
       NRXF%mstrt = 1
       NRXF%cstrt = 1 + n
-      NRXF%mstrt = 1 + n !no connected particles, initially
+      NRXF%pstrt = 1 + n !no connected particles, initially
 
       NRXF%NN = n
       NRXF%NC = 0
@@ -224,7 +235,7 @@ MODULE UTILS
       END IF
 
       c_oldsize = NRXF%pstrt - NRXF%cstrt
-      p_oldsize = a_oldsize - NRXF%cstrt + 1
+      p_oldsize = a_oldsize - NRXF%pstrt + 1
 
       IF(doM) THEN
         m_newsize = CEILING(m_oldsize*scale)
@@ -249,20 +260,20 @@ MODULE UTILS
       cstrt_new = m_newsize + 1
       pstrt_new = m_newsize + c_newsize + 1
 
-      IF(DebugMode) PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, p_oldsize,&
-           'new: ',a_newsize, m_newsize, p_newsize, 'strts: ', cstrt_new, pstrt_new
+      IF(DebugMode) PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, c_oldsize, p_oldsize,&
+           'new: ',a_newsize, m_newsize, c_newsize, p_newsize, 'strts: ', cstrt_new, pstrt_new
 
       ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
       work_arr = 0.0
       work_int = 0
 
       work_arr(:,1:m_oldsize) = NRXF%A(:,1:m_oldsize)
-      work_arr(:,cstrt_new : cstrt_new+c_oldsize) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize)
-      work_arr(:,pstrt_new : pstrt_new+p_oldsize) = NRXF % A(:,NRXF%pstrt:NRXF%pstrt+p_oldsize)
+      work_arr(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
+      work_arr(:,pstrt_new : pstrt_new+p_oldsize-1) = NRXF % A(:,NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
 
       work_int(:,1:m_oldsize) = NRXF%PartInfo(:,1:m_oldsize)
-      work_int(:,cstrt_new : cstrt_new+c_oldsize) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize)
-      work_int(:,pstrt_new : pstrt_new+p_oldsize) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize)
+      work_int(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
+      work_int(:,pstrt_new : pstrt_new+p_oldsize-1) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
 
       CALL MOVE_ALLOC(work_arr, NRXF%A)
       CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
