@@ -383,7 +383,8 @@ DO j=1,neighcount
     NRXF%PartInfo(2,counter) = NANS(1,i)
   END DO
 END DO
-NRXF%NC = counter-NRXF%cstrt
+NRXF%NC = counter-NRXF%cstrt+1
+NRXF%pstrt = NRXF%cstrt + NRXF%NC
 
 !Change NANS to array loc:
 DO i=1,NTOT
@@ -646,6 +647,19 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
   !Wait for the previous non-blocking sends, then reset stats
   CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
+
+  !Store info about which points we will send to each partition
+  DO i=0,ntasks-1
+    IF(InvPartInfo(i) % ccount == 0) CYCLE 
+    sendcount = PointEx(i) % scount
+
+    IF(sendcount == 0) CALL FatalError('Programming Error: scount == 0')
+
+    InvPartInfo(i) % sccount = sendcount
+    IF(SIZE(InvPartInfo(i) % SConnIDs) < sendcount) &
+         CALL ExpandIntArray(InvPartInfo(i) % SConnIDs,sendcount)
+    InvPartInfo(i) % SConnIDs(1:sendcount) = PointEx(i) % SendIDs(1:sendcount)
+  END DO
 
   IF(doNRXF) THEN
     !Now send the actual point locations
