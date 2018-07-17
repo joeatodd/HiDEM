@@ -520,7 +520,7 @@ END IF
         CALL FindNeighbours(PBBox, PartIsNeighbour)
 
         IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
-        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL, PBBox)
+        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
         IF(DebugMode) PRINT *,myid,' finished  ExchangeProxPoints'
 
         IF(DebugMode) PRINT *,'About to find collisions'
@@ -544,7 +544,6 @@ END IF
 ! 4) Use octree search to search for collision/interaction (no need for every 250 steps malarky)
 !
 ! Make use of InvPartInfo to confirm which points we already have/which we need
-!        All this would be easier if InvPartInfo exists for every partition (not just current neighbours) <- or linked list?
 ! Note - do we need to use ExchangeConnPoints separately here, or do they form part of the same strategy? 
   
       ! dest=myid+1

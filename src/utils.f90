@@ -131,17 +131,24 @@ MODULE UTILS
         InvPartInfo(i) % NID = i
         InvPartInfo(i) % ccount = 0
         InvPartInfo(i) % pcount = 0
+        InvPartInfo(i) % sccount = 0
+        InvPartInfo(i) % spcount = 0
       END DO
 
       DO i=1,neighcount
         j = neighparts(i)
-          ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
-               InvPartInfo(j) % ConnLocs(initsize))
-          InvPartInfo(j) % ConnIDs = -1
-          InvPartInfo(j) % ConnLocs = -1
-          InvPartInfo(j) % ccount = 0
-          InvPartInfo(j) % pcount = 0
-          InvPartInfo(j) % NID = j
+        ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
+             InvPartInfo(j) % ConnLocs(initsize),&
+             InvPartInfo(j) % ProxIDs(initsize),&
+             InvPartInfo(j) % ProxLocs(initsize),&
+             InvPartInfo(j) % SConnIDs(initsize),&
+             InvPartInfo(j) % SProxIDs(initsize))
+        InvPartInfo(j) % ConnIDs = -1
+        InvPartInfo(j) % ConnLocs = -1
+        InvPartInfo(j) % ProxIDs = -1
+        InvPartInfo(j) % ProxLocs = -1
+        InvPartInfo(j) % SProxIDs = -1
+        InvPartInfo(j) % SConnIDs = -1
       END DO
 
     END SUBROUTINE InvPartInfoInit
@@ -157,14 +164,21 @@ MODULE UTILS
       IF(PRESENT(initsize_in)) initsize = initsize_in
 
       ALLOCATE(InvPartInfo(nid) % ConnIDs(initsize),&
-           InvPartInfo(nid) % ConnLocs(initsize))
+           InvPartInfo(nid) % ConnLocs(initsize),&
+           InvPartInfo(nid) % ProxIDs(initsize),&
+           InvPartInfo(nid) % ProxLocs(initsize),&
+           InvPartInfo(nid) % SProxIDs(initsize),&
+           InvPartInfo(nid) % SConnIDs(initsize))
+
       InvPartInfo(nid) % ConnIDs = -1
       InvPartInfo(nid) % ConnLocs = -1
-      InvPartInfo(nid) % ccount = 0
-      InvPartInfo(nid) % pcount = 0
-      InvPartInfo(nid) % NID = nid
+      InvPartInfo(nid) % ProxIDs = -1
+      InvPartInfo(nid) % ProxLocs = -1
+      InvPartInfo(nid) % SConnIDs = -1
+      InvPartInfo(nid) % SProxIDs = -1
 
     END SUBROUTINE NewInvPartInfo
+
     SUBROUTINE ResizePointDataNRXF(NRXF,scale,do_M,do_C,do_P)
 
       TYPE(NRXF2_T), TARGET :: NRXF

@@ -31,10 +31,24 @@ MODULE TypeDefs
      INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
      INTEGER, ALLOCATABLE :: PartInfo(:,:)
   END TYPE NRXF2_t
-  
+
+  !Type to hold information on particles shared between partitions
+  !Our partition receives 'CCount' connected and 'PCount' proximal particles
+  !from partition 'NID'. The other partition's particle numbers for these are
+  !stored in ConnIDs and ProxIDs respectively, and the corresponding array values
+  !in ConnLocs and ProxLocs give the array addresses of NRXF (and UT, UTM) to which
+  !these shared particles correspond. NID is in fact redundant because HiDEM allocates
+  !an array InvPartInfo(0:ntasks-1), where InvPartInfo(i) % NID = i.
+  !Thus, if InvPartInfo(3) % ConnIDs(1) = 13, and % ConnLocs(1) = 2459, this means:
+  !Partition 3's 13th particle is shared with this partition, and its initial position
+  !and displacement is stored in NRXF(:,2459) and UT(2459) respectively.
+  !
+  !Inverse information (connected and proximal particles *sent* to partition i are
+  !stored in SConnIDs(:), SProxIDs(:), SCCount, SPCount
   TYPE InvPartInfo_t
      INTEGER, ALLOCATABLE :: ConnIDs(:), ConnLocs(:), ProxIDs(:), ProxLocs(:)
-     INTEGER :: CCount, PCount, NID
+     INTEGER, ALLOCATABLE :: SConnIDs(:), SProxIDs(:)
+     INTEGER :: CCount, PCount, SCCount, SPCount, NID
   END TYPE InvPartInfo_t
 
   TYPE EF_t

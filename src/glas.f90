@@ -375,7 +375,6 @@ DO j=1,neighcount
       CALL ExpandIntArray(InvPartInfo(n) % ConnLocs)
     END IF
 
-    !TODO - expand invpartinfo % connids etc if neccessary
     InvPartInfo(n) % ConnIDs(countptr) = NANS(1,i)
     InvPartInfo(n) % ConnLocs(countptr) = counter
     
@@ -757,7 +756,11 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
 END SUBROUTINE ExchangeConnPoints
 
 !Determine and pass point information between partitions (based on proximity)
-SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox)
+!Note this differs from ExchangeConnPoints, which 1) knows a priori which particle info 
+!to pass and 2) passes the same particles each time. In contrast, we must here
+!1) determine which particles are req'd, and also 2) when new particles are passed
+!we need to also pass NRXF (only once!)
+SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
   USE INOUT
   USE UTILS
@@ -767,29 +770,39 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox)
   TYPE(NRXF2_t) :: NRXF
   TYPE(UT2_t) :: UT
   INTEGER :: NN
-  REAL*8 :: SCL
+  REAL*8 :: SCL, PBBox(6,0:ntasks-1)
+  LOGICAL :: PartIsNeighbour(0:ntasks-1)
+  TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   !--------------------
   INTEGER :: i,j,id,cnt,neigh,neighcount,getcount,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
-  REAL*8 :: PBBox(6,0:ntasks-1)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
 
   ALLOCATE(PointEx(ntasks), stats(ntasks*2))
   stats = MPI_REQUEST_NULL
 
-  DO i=1,ntasks
-    IF(i==myid+1) CYCLE
-    ALLOCATE(PointEx(i) % SendIDs(NN/2))
-    PointEx(i) % partid = i-1
+  DO i=0,ntasks-1
+    IF(.NOT. PartIsNeighbour(i)) CYCLE
+    ALLOCATE(PointEx(i) % SendIDs(NN/2)) !TODO - better guess for this
+    PointEx(i) % partid = i
     PointEx(i) % scount = 0
     PointEx(i) % rcount = 0
   END DO
 
   !Count points in each BB
-  DO i=1,ntasks
-    IF(i==myid+1) CYCLE
+  !TODO - strategy change here
+  !If point is connected - don't send
+  !If piont wasn't already sent - send NRXF
+  !InvPartInfo % ProxIDs, ProxLocs should contain only *unconnected* points
+  !   i.e. they're not in ConnLoc, ConnIDs
+  DO i=0,ntasks-1
+    IF(.NOT. PartIsNeighbour(i)) CYCLE
     cnt = 0
     DO j=1,NN
+      !TODO here - IF already sent because connected, cycle
+      !   - how to do this efficiently?
+      !TODO here also - if in ProxIDs (but inverse) already
+      !  don't send NRXF, else do.
       IF(PInBBox(j,NRXF,UT,PBBox(:,i),SCL*2.0)) THEN
         PointEx(i) % scount = PointEx(i) % scount + 1
         cnt = PointEx(i) % scount
