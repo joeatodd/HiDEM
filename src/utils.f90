@@ -265,7 +265,7 @@ MODULE UTILS
 
       ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
       work_arr = 0.0
-      work_int = 0
+      work_int = -1
 
       work_arr(:,1:m_oldsize) = NRXF%A(:,1:m_oldsize)
       work_arr(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
