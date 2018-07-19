@@ -3,7 +3,7 @@ MODULE TypeDefs
   REAL*8 :: part_expand=0.5
   INTEGER :: myid, ntasks
   INTEGER, PARAMETER :: dp = SELECTED_REAL_KIND(12)
-  LOGICAL :: DebugMode
+  LOGICAL :: DebugMode,PrintTimes
 
   INCLUDE 'param.dat'
 

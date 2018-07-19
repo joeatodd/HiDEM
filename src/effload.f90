@@ -15,43 +15,60 @@
 ! *  You should have received a copy of the GNU General Public License
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
+MODULE EFFL
+
+CONTAINS
 
 	SUBROUTINE EFFLOAD(S,NTOT,NN,T,DT,M,JS,DMP,DMP2,UT,UTM,R,EN,RY, &
-     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,L,PNN,YN)
+     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,LNN)
 
         USE INOUT
         USE TypeDefs
 
 	IMPLICIT NONE
         include 'mpif.h'
-        REAL*8 MFIL(NOMA),VDP(NN)
-	REAL*8 A(NODM),C(NODM),F(NODM),D(NODM)
-	REAL*8 LNN
-	REAL*8 DUT(NODM),CT(NODC),EN(NODM),R(NODM)
-	REAL*8 DPE,S,E
-	REAL*8 T,DT,M,JS,L,ALF,DMP
-	REAL*8 G,X1,Y1,Z1,X2,Y2,Z2,TT(12,12)
-	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2,DMP2
-        REAL*8,ALLOCATABLE :: EFS(:)
-	INTEGER N,NL,NB,N1,N2,X,XL,XR,PNN(0:5000)
-	INTEGER I,J,NN,RY,YN,NTOT,FXC
+        REAL*8 :: MFIL(NN),VDP(NN)
+	REAL*8 :: LNN,DPE,S
+	REAL*8 :: CT(NTOT*12),EN(NN*6),R(NN*6)
+	REAL*8 :: T1,T2
+	REAL*8 :: T,DT,M,JS,DMP,DMP2
+        INTEGER :: NTOT,NN
+ !-----------------------------------------------
+	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2
+	REAL*8 X1,Y1,Z1,X2,Y2,Z2,TT(12,12),DUT(12)
+        REAL*8,ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)!,DUT(:)
+
+	INTEGER N,NL,NB,N1,N2,X,XL,XR
+	INTEGER I,J,RY,FXC
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
         INTEGER ierr
         INTEGER, ALLOCATABLE :: FXF(:,:),NANS(:,:)
         TYPE(UT2_t) :: UT, UTM
         TYPE(NRXF2_t) :: NRXF
-	DO I=1,6*NN
-	A(I)=0.0
-	D(I)=0.0
-        END DO
+        LOGICAL :: FirstTime=.TRUE.
 
-        !TODO - need to pass UTM before this point (for all conn & prox nodes?)
+        SAVE :: FirstTime, A,C,F,D!,DUT
+
+        CALL CPU_Time(T1)
+
+        IF(FirstTime) THEN
+          FirstTime = .FALSE.
+          ALLOCATE(A(NN*6),C(NN*6),F(NN*6),D(NN*6)) !,DUT(NN*6))
+        END IF
+
+        A = 0.0
+        C = 0.0
+        D = 0.0
+        F = 0.0
+        DUT = 0.0
+
 !------------------------------------------------------
       !Note - use of DUT here suggests N1 and N2 should be mutually 
       !exclusive sets? but they aren't - NOTE - may be now (my mods)
 !----------------------------------------------
-
  	DO X=1,NTOT
+        IF (EFS(X).NE.0.0) THEN
+
 	N1=NANS(1,X)
 	N2=NANS(2,X)
 	X1=NRXF%A(1,N1)
@@ -69,24 +86,25 @@
 	DY2=UT%A(6*N2-4)
 	DZ2=UT%A(6*N2-3)
 
-        DUT(6*N1-5)=UT%A(6*N1-5)-UTM%A(6*N1-5)
-        DUT(6*N1-4)=UT%A(6*N1-4)-UTM%A(6*N1-4)
-        DUT(6*N1-3)=UT%A(6*N1-3)-UTM%A(6*N1-3)
-        DUT(6*N1-2)=UT%A(6*N1-2)-UTM%A(6*N1-2)
-        DUT(6*N1-1)=UT%A(6*N1-1)-UTM%A(6*N1-1)
-        DUT(6*N1-0)=UT%A(6*N1-0)-UTM%A(6*N1-0)
+        DUT(6*1-5)=UT%A(6*N1-5)-UTM%A(6*N1-5)
+        DUT(6*1-4)=UT%A(6*N1-4)-UTM%A(6*N1-4)
+        DUT(6*1-3)=UT%A(6*N1-3)-UTM%A(6*N1-3)
+        DUT(6*1-2)=UT%A(6*N1-2)-UTM%A(6*N1-2)
+        DUT(6*1-1)=UT%A(6*N1-1)-UTM%A(6*N1-1)
+        DUT(6*1-0)=UT%A(6*N1-0)-UTM%A(6*N1-0)
                                                         
-        DUT(6*N2-5)=UT%A(6*N2-5)-UTM%A(6*N2-5)
-        DUT(6*N2-4)=UT%A(6*N2-4)-UTM%A(6*N2-4)
-        DUT(6*N2-3)=UT%A(6*N2-3)-UTM%A(6*N2-3)
-        DUT(6*N2-2)=UT%A(6*N2-2)-UTM%A(6*N2-2)
-        DUT(6*N2-1)=UT%A(6*N2-1)-UTM%A(6*N2-1)
-        DUT(6*N2-0)=UT%A(6*N2-0)-UTM%A(6*N2-0)
+        DUT(6*2-5)=UT%A(6*N2-5)-UTM%A(6*N2-5)
+        DUT(6*2-4)=UT%A(6*N2-4)-UTM%A(6*N2-4)
+        DUT(6*2-3)=UT%A(6*N2-3)-UTM%A(6*N2-3)
+        DUT(6*2-2)=UT%A(6*N2-2)-UTM%A(6*N2-2)
+        DUT(6*2-1)=UT%A(6*N2-1)-UTM%A(6*N2-1)
+        DUT(6*2-0)=UT%A(6*N2-0)-UTM%A(6*N2-0)
 
-        IF (EFS(X).NE.0.0) THEN
         CALL AMAT(EFS(X),S,EFS(X)/2.0,X1+DX1,Y1+DY1,Z1+DZ1, &
-             X2+DX2,Y2+DY2,Z2+DZ2,L,DUT,N1,N2,X,RY,CT)
+             X2+DX2,Y2+DY2,Z2+DZ2,LNN,DUT,X,RY,CT,NTOT)
+
 	ELSE
+
         CT(12*X-11)=0.0
         CT(12*X-10)=0.0
         CT(12*X-9)=0.0
@@ -121,6 +139,8 @@
         DY2=UT%A(6*N2-4)
         DZ2=UT%A(6*N2-3)
         CALL TTMAT(X1+DX1,Y1+DY1,Z1+DZ1,X2+DX2,Y2+DY2,Z2+DZ2,RY,TT)
+
+        IF(N1 <= NN) THEN
         A(6*N1-5)= A(6*N1-5) &
                   +  TT(1,1)*CT(12*X-11) + TT(1,2)*CT(12*X-10) &
                   + TT(1,3)*CT(12*X-9)
@@ -139,6 +159,8 @@
         A(6*N1-0)= A(6*N1-0) &
        	          + TT(6,4)*CT(12*X-8) &
                   + TT(6,5)*CT(12*X-7) + TT(6,6)*CT(12*X-6)
+        END IF
+        IF(N2 <= NN) THEN
         A(6*N2-5)= A(6*N2-5) &
                   + TT(7,7)*CT(12*X-5) + TT(7,8)*CT(12*X-4) &
                   + TT(7,9)*CT(12*X-3)
@@ -157,6 +179,7 @@
         A(6*N2-0)= A(6*N2-0) &
       	          + TT(12,10)*CT(12*X-2) + TT(12,11)*CT(12*X-1) &
       	          + TT(12,12)*CT(12*X-0)
+        END IF
 	ENDDO
 
 !------------------------------------------------------------------------
@@ -181,6 +204,7 @@
 	IF (EFS(X).NE.0.0) THEN
 	N1=NANS(1,X)
 	N2=NANS(2,X)
+        IF(N1 <= NN) THEN
 	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%A(6*N1-5)-UT%A(6*N2-5)) &
       	-(UTM%A(6*N1-5)-UTM%A(6*N2-5)))
 	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%A(6*N1-4)-UT%A(6*N2-4)) &
@@ -193,6 +217,8 @@
       	-(UTM%A(6*N1-1)-UTM%A(6*N2-1)))
 	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%A(6*N1-0)-UT%A(6*N2-0)) &
       	-(UTM%A(6*N1-0)-UTM%A(6*N2-0)))
+        END IF
+        IF(N2 <= NN) THEN
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
       	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))
 	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
@@ -205,6 +231,8 @@
       	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))
 	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
       	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
+        END IF
+
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
      	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
@@ -226,6 +254,7 @@
 	DO X=1,FXC
 	N1=FXF(1,X)
 	N2=FXF(2,X)
+        IF(N1 <= NN) THEN
 	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%A(6*N1-5)-UT%A(6*N2-5)) &
      	-(UTM%A(6*N1-5)-UTM%A(6*N2-5)))
 	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%A(6*N1-4)-UT%A(6*N2-4)) &
@@ -238,6 +267,8 @@
      	-(UTM%A(6*N1-1)-UTM%A(6*N2-1)))
 	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%A(6*N1-0)-UT%A(6*N2-0)) &
      	-(UTM%A(6*N1-0)-UTM%A(6*N2-0)))
+        END IF
+        IF(N2 <= NN) THEN
 	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
      	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))
 	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
@@ -250,6 +281,7 @@
      	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))
 	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
      	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
+        END IF
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
      	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
@@ -279,5 +311,10 @@
 	EN(X)=EN(X)+A(X)*(UT%M(X)-UTM%M(X))
 	END DO
 
+        CALL CPU_Time(T2)
+        IF(PrintTimes) PRINT *,myid,' Effload took: ',T2-T1,' secs'
+
 	RETURN
 END SUBROUTINE EFFLOAD
+
+END MODULE EFFL

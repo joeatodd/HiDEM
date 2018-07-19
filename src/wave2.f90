@@ -27,6 +27,7 @@
         USE INOUT
         USE TypeDefs
         USE Lattice
+        USE Effl
         USE Utils
 
 	IMPLICIT NONE
@@ -605,7 +606,7 @@ END IF
        !Calculates elastic forces from beams. Stiffness matrix K
 	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT2,UTM2,R,EN,RY,&
       	FXF,FXC,VDP,DPE,EFS,NANS,NRXF2,MFIL,CT,&
-      	LNN,PNN,YN)
+      	LNN)
 
 
         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
