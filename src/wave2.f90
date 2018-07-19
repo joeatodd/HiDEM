@@ -1196,12 +1196,12 @@ END IF
 
           IF(.NOT. CSVOutput) THEN
 
-          CALL BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
-               UTM,NeighbourID,NANS_prev,NTOT_prev,DoublePrec)
+          CALL BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF2,UT2,&
+               UTM2,NANS,NTOT,NANPart,DoublePrec)
           
 
-          CALL BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
-               NeighbourID,NANS_prev,NTOT_prev,DoublePrec)
+          CALL BinarySTROutput(NRY,resdir,runname,NRXF2,UT2,&
+               NANS,NTOT,NANPart,DoublePrec)
           
           ELSE
           !--------------- CSV Output ----------------------

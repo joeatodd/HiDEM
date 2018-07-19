@@ -271,17 +271,16 @@ CONTAINS
 END SUBROUTINE ReadInput
 
 SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
-     UTM,NeighbourID,NANS,NTOT,DoublePrec)
+     UTM,NANS,NTOT,NANPart,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY,PNN(:)
   CHARACTER(LEN=256) :: resdir, runname
-  TYPE(NAN_t), TARGET :: NANS
-  TYPE(NTOT_t) :: NTOT
-  TYPE(NEI_t) :: NeighbourID
-  TYPE(UT_t) :: UT, UTM
+  INTEGER :: NTOT, NANS(2,NTOT),NANPart(NTOT)
+  TYPE(NRXF2_t) :: NRXF
+  TYPE(UT2_t) :: UT, UTM
   LOGICAL :: DoublePrec
   !----------------------------------
   INTEGER :: NN,NNTot,NBeamsTot,counter,ms_counter,VTK_Offset
@@ -295,9 +294,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(4), fh_mystarts(4)
   INTEGER, ALLOCATABLE :: work_int(:)
-  INTEGER, POINTER :: NANSPtr(:,:)
   LOGICAL :: OutputBeams,OutputDisplacement
-  TYPE(NRXF_t) :: NRXF
 
   lfeed = CHAR(10) !line feed character
   OutputDisplacement = .TRUE.
@@ -340,8 +337,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     END DO
 
     !Cross-partition beam ownership goes to lower 'mytask'
-    !So we need: NTOT% M,R,FL,F,FR
-    Nbeams = NTOT%M+NTOT%R+NTOT%FL+NTOT%F+NTOT%FR
+    Nbeams = COUNT(NANPart >= myid)
     !PRINT *,myid,' debug, has ',NTOT%M,' own beams, ',Nbeams,' total.'
 
     CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
@@ -350,43 +346,18 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
 
     ! Write all beams to work array
     ALLOCATE(work_int(Nbeams*2))
+
     counter = 0
-    DO i=1,5
-      SELECT CASE(i)
-      CASE (1)
-        othertask = myid
-        ntotal = NTOT%M
-        NANSPtr => NANS % M
-      CASE (2)
-        othertask = NeighbourID % R
-        ntotal = NTOT%R
-        NANSPtr => NANS % R
-      CASE (3)
-        othertask = NeighbourID % FL
-        ntotal = NTOT%FL
-        NANSPtr => NANS % FL
-      CASE (4)
-        othertask = NeighbourID % F
-        ntotal = NTOT%F
-        NANSPtr => NANS % F
-      CASE (5)
-        othertask = NeighbourID % FR
-        ntotal = NTOT%FR
-        NANSPtr => NANS % FR
-      END SELECT
+    DO j=1,nbeams
+      IF(NANPart(j) < myid) CYCLE
+      counter = counter + 1
 
-      IF(othertask == -1) CYCLE
+      mybeamoffset = GlobalNNOffset(myid+1) !TODO -these are wrong! how do we get global node numbers?
+      otherbeamoffset = GlobalNNOffset(NANPart(j)+1)
 
-      mybeamoffset = GlobalNNOffset(myid+1)
-      otherbeamoffset = GlobalNNOffset(othertask+1)
-
-      DO j=1,ntotal
-        counter = counter + 1
-        work_int(counter*2 - 1) = NANSPtr(1,j) + otherbeamoffset - 1 !vtk 0 indexes the cells
-        work_int(counter*2) = NANSPtr(2,j) + mybeamoffset - 1 
-      END DO
+      work_int(counter*2 - 1) = NRXF%PartInfo(2,NANS(1,j)) + otherbeamoffset - 1 !vtk 0 indexes the cells
+      work_int(counter*2) = NANS(2,j) + mybeamoffset - 1
     END DO
-
   ELSE
     NBeamsTot = 0
   END IF
@@ -623,18 +594,16 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
 END SUBROUTINE BinaryVTKOutput
 
 SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
-     NeighbourID,NANS,NTOT,DoublePrec)
+     NANS,NTOT,NANPart,DoublePrec)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY
   CHARACTER(LEN=256) :: resdir, runname
-  TYPE(NAN_t), TARGET :: NANS
-  TYPE(NTOT_t) :: NTOT
-  TYPE(NEI_t) :: NeighbourID
-  TYPE(UT_t), TARGET :: UT
-  TYPE(NRXF_t), TARGET :: NRXF
+  INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT)
+  TYPE(UT2_t), TARGET :: UT
+  TYPE(NRXF2_t), TARGET :: NRXF
   LOGICAL :: DoublePrec
   !----------------------------------
   INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
@@ -644,11 +613,9 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   REAL*8 X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
   REAL*8, ALLOCATABLE :: work_real(:)
   REAL*4, ALLOCATABLE :: work_real_sp(:)
-  REAL*8, POINTER :: NRXFPtr(:,:),UTPtr(:)
   INTEGER :: fh,ierr,realsize
   INTEGER :: ntotal,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart
-  INTEGER, POINTER :: NANSPtr(:,:)
 
   lfeed = CHAR(10) !line feed character
 
@@ -659,8 +626,9 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   END IF
 
   !Cross-partition beam ownership goes to lower partition no
-  !So we need: NTOT% M,R,FL,F,FR
-  Nbeams = NTOT%M+NTOT%R+NTOT%FL+NTOT%F+NTOT%FR
+  Nbeams = COUNT(NANPart >= myid)
+
+  IF(DebugMode) PRINT *,myid,' debug nbeams, ntot: ',nbeams, ntot
 
   CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
        1, MPI_INTEGER, MPI_COMM_ACTIVE, ierr)
@@ -676,70 +644,36 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   ALLOCATE(work_real(Nbeams*4))
 
   counter = 0
-  DO i=1,5
-    SELECT CASE(i)
-    CASE (1)
-      othertask = myid
-      ntotal = NTOT%M
-      NANSPtr => NANS % M
-      NRXFPtr => NRXF % M
-      UTPtr => UT % M
-    CASE (2)
-      othertask = NeighbourID % R
-      ntotal = NTOT%R
-      NANSPtr => NANS % R
-      NRXFPtr => NRXF % R
-      UTPtr => UT % R
-    CASE (3)
-      othertask = NeighbourID % FL
-      ntotal = NTOT%FL
-      NANSPtr => NANS % FL
-      NRXFPtr => NRXF % FL
-      UTPtr => UT % FL
-    CASE (4)
-      othertask = NeighbourID % F
-      ntotal = NTOT%F
-      NANSPtr => NANS % F
-      NRXFPtr => NRXF % F
-      UTPtr => UT % F
-    CASE (5)
-      othertask = NeighbourID % FR
-      ntotal = NTOT%FR
-      NANSPtr => NANS % FR
-      NRXFPtr => NRXF % FR
-      UTPtr => UT % FR
-    END SELECT
+  DO j=1,NTOT
+    IF(NANPart(j) < myid) CYCLE
+    counter = counter + 1
 
-    IF(othertask == -1) CYCLE
+    N1 = NANS(1,j)
+    N2 = NANS(2,j)
 
-    DO j=1,ntotal
-      counter = counter + 1
+    X=(NRXF%A(1,N1)+UT%A(6*N1-5)+NRXF%A(1,N2)+UT%A(6*N2-5))/2.0
+    Y=(NRXF%A(2,N1)+UT%A(6*N1-4)+NRXF%A(2,N2)+UT%A(6*N2-4))/2.0
+    Z=(NRXF%A(3,N1)+UT%A(6*N1-3)+NRXF%A(3,N2)+UT%A(6*N2-3))/2.0
 
-      N1=NANSPtr(1,j)
-      N2=NANSPtr(2,j)
+    DDX=NRXF%A(1,N1)+UT%A(6*N1-5)-NRXF%A(1,N2)-UT%A(6*N2-5)
+    DDY=NRXF%A(2,N1)+UT%A(6*N1-4)-NRXF%A(2,N2)-UT%A(6*N2-4)
+    DDZ=NRXF%A(3,N1)+UT%A(6*N1-3)-NRXF%A(3,N2)-UT%A(6*N2-3)
 
-      !TODO - modify here, nrxf%M  and NRXFPtr, NAN??
-      X=(NRXFPtr(1,N1)+UTPtr(6*N1-5)+NRXF%M(1,N2)+UT%M(6*N2-5))/2.0
-      Y=(NRXFPtr(2,N1)+UTPtr(6*N1-4)+NRXF%M(2,N2)+UT%M(6*N2-4))/2.0
-      Z=(NRXFPtr(3,N1)+UTPtr(6*N1-3)+NRXF%M(3,N2)+UT%M(6*N2-3))/2.0
+    DX=NRXF%A(1,N1)-NRXF%A(1,N2)
+    DY=NRXF%A(2,N1)-NRXF%A(2,N2)
+    DZ=NRXF%A(3,N1)-NRXF%A(3,N2)
+    L=SQRT(DX**2+DY**2+DZ**2)
+    DL=SQRT(DDX**2+DDY**2+DDZ**2)
+    STR=(DL-L)/L
 
-      DDX=NRXFPtr(1,N1)+UTPtr(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-      DDY=NRXFPtr(2,N1)+UTPtr(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-      DDZ=NRXFPtr(3,N1)+UTPtr(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
+    work_real(counter*4 - 3) = X
+    work_real(counter*4 - 2) = Y
+    work_real(counter*4 - 1) = Z
+    work_real(counter*4 - 0) = STR
 
-      DX=NRXFPtr(1,N1)-NRXF%M(1,N2)
-      DY=NRXFPtr(2,N1)-NRXF%M(2,N2)
-      DZ=NRXFPtr(3,N1)-NRXF%M(3,N2)
-      L=SQRT(DX**2+DY**2+DZ**2)
-      DL=SQRT(DDX**2+DDY**2+DDZ**2)
-      STR=(DL-L)/L
-
-      work_real(counter*4 - 3) = X
-      work_real(counter*4 - 2) = Y
-      work_real(counter*4 - 1) = Z
-      work_real(counter*4 - 0) = STR
-    END DO
   END DO
+
+  IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
 
   CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.bin',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
