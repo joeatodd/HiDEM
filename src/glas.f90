@@ -1211,27 +1211,39 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
 END SUBROUTINE ExchangeEFS
 
-!Use octree search to find nodes which are in contact
-SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
+!Use octree search to find nodes which are nearby
+!Direct contact is identified by circ
+SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
 
   USE Octree
 
   TYPE(NRXF2_t) :: NRXF
   TYPE(UT2_t) :: UT
-  INTEGER :: NN
+  INTEGER :: NN,ND
+  INTEGER, ALLOCATABLE :: NDL(:,:)
   REAL*8 :: SCL, LNN, BBox(6)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
-  INTEGER i,j, npoints, num_ngb
+  INTEGER i,j,cnt,npoints, num_ngb, totsize
   integer, allocatable :: seed(:), ngb_ids(:)
   REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
-  REAL*8 :: dist, max_dist, min_dist
+  REAL*8 :: dist, max_dist, min_dist,tstrt,tend
+
+  CALL CPU_Time(tstrt)
 
   eps = 1.0
 
-  npoints = NN !TODO - NN => include parallel
+  npoints = COUNT(NRXF%PartInfo(1,:) /= -1)
+  totsize = SIZE(NRXF%PartInfo,2)
+
+  PRINT *, myid, 'debug nrxf count: ',nn,npoints,SIZE(NRXF%PartInfo,2)
+
+  IF(.NOT. ALLOCATED(NDL)) ALLOCATE(NDL(2,npoints*12)) !guess size
   ALLOCATE(points(npoints)) 
+
+  ND = 0
+  NDL = 0
 
   DO i=1,3
     oct_bbox(1,i) = BBox(i*2-1) - eps !buffer to ensure all points contained
@@ -1240,18 +1252,21 @@ SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
 
   CALL Octree_init(max_depth=20,max_num_point=6,bbox=oct_bbox)
 
-  DO i=1,npoints
-    Points(i) % id = i
-    Points(i) % x(1) = NRXF%A(1,i) + UT%A(6*I-5)
-    Points(i) % x(2) = NRXF%A(2,i) + UT%A(6*I-4)
-    Points(i) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
+  cnt = 0
+  DO i=1,totsize
+    IF(NRXF%PartInfo(1,i) == -1) CYCLE
+    cnt = cnt+1
+    Points(cnt) % id = i
+    Points(cnt) % x(1) = NRXF%A(1,i) + UT%A(6*I-5)
+    Points(cnt) % x(2) = NRXF%A(2,i) + UT%A(6*I-4)
+    Points(cnt) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
   END DO
 
   CALL CPU_TIME(T1)
   CALL Octree_build(Points)
 
   CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,'FindCollisions: Time to build octree: ',T2-T1
+  IF(DebugMode) PRINT *,myid,'FindNearbyParticles: Time to build octree: ',T2-T1
   CALL CPU_TIME(T1)
 
   ALLOCATE(ngb_ids(100))
@@ -1260,26 +1275,44 @@ SUBROUTINE FindCollisions(NRXF, UT, NN, BBox,SCL,LNN)
     num_ngb = 0
     ngb_ids = 0
     CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
-    max_dist = -HUGE(max_dist)
-    min_dist = HUGE(max_dist)
-    DO j=1,num_ngb
-      IF(ngb_ids(j) == i) CYCLE
-      dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + UT%A(6*ngb_ids(j)-5)))**2.0) + &
-      (((NRXF%A(2,i) + UT%A(6*i-4)) - (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
-      (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
 
-      max_dist = MAX(max_dist, dist)
-      min_dist = MIN(min_dist, dist)
+    IF(DebugMode) THEN
+      max_dist = -HUGE(max_dist)
+      min_dist = HUGE(max_dist)
+    END IF
+
+    DO j=1,num_ngb
+      IF(ngb_ids(j) <= i) CYCLE !Only save each pair once
+
+      ND = ND + 1
+      IF(ND > SIZE(NDL,2)) CALL ExpandIntArray(NDL)
+      NDL(1,ND) = points(i) % id
+      NDL(2,ND) = ngb_ids(j)
+
+      IF(DebugMode) THEN
+        dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + &
+             UT%A(6*ngb_ids(j)-5)))**2.0) + (((NRXF%A(2,i) + UT%A(6*i-4)) - &
+             (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
+             (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + &
+             UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
+        max_dist = MAX(max_dist, dist)
+        min_dist = MIN(min_dist, dist)
+      END IF
     END DO
-    !IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
+
+    IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
   END DO
 
   CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,'FindCollisions: Time to search octree: ',T2-T1
+  IF(DebugMode) PRINT *,myid,'FindNearbyParticles: Time to search octree: ',T2-T1
 
   CALL Octree_final()
 
-END SUBROUTINE FindCollisions
+  CALL CPU_Time(tend)
+  PRINT *,myid,'Finding nearby particles took: ',tend - tstrt,' secs'
+
+
+END SUBROUTINE FindNearbyParticles
 
 
 !Use octree search to find nodes which are in contact
@@ -1358,6 +1391,121 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
 CALL Octree_final()
 
 END SUBROUTINE FindBeams
+
+SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
+     T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+
+  USE TypeDefs
+  USE Utils
+
+  IMPLICIT NONE
+  INCLUDE 'mpif.h'
+  REAL*8 X1,X2,Y1,Y2,Z1,Z2
+  REAL*8 T1,T2
+  REAL*8, ALLOCATABLE :: EFC(:)
+  REAL*8 SX,SY,SZ,SUM,T,WE(:),L0
+  REAL*8 DDEL,DWE,OWE,DT,ESUM,LNN
+  REAL*8 LS,LS2,DEL,SCL
+  INTEGER ierr,FXC,ND
+  INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
+  INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
+  REAL*8 RC,RCX,RCY,RCZ,FRX(NN),FRY(NN),FRZ(NN)
+  INTEGER NTOT,I,N1,N2,IS,NN
+  TYPE(UT2_t) :: UT
+  TYPE(NRXF2_t) :: NRXF
+  LOGICAL :: own(2)
+
+  CALL CPU_Time(T1)
+
+  IF(.NOT. ALLOCATED(FXF)) ALLOCATE(FXF(2,NN*12))
+  FXF = 0 !particle proximity info
+  
+  FRX = 0.0
+  FRY=0.0
+  FRZ=0.0
+  WE=0.0
+  FXC = 0
+  FXF = 0
+
+  DO I=1,ND
+    N1=NDL(1,I)
+    N2=NDL(2,I)
+
+    own(1) = N1 <= NN
+    own(2) = N2 <= NN
+
+    IF(.NOT. ANY(own)) CYCLE !don't own either particle
+
+    X1=NRXF%A(1,N1)+UT%A(6*N1-5)
+    Y1=NRXF%A(2,N1)+UT%A(6*N1-4)
+    Z1=NRXF%A(3,N1)+UT%A(6*N1-3)
+    X2=NRXF%A(1,N2)+UT%A(6*N2-5)
+    Y2=NRXF%A(2,N2)+UT%A(6*N2-4)
+    Z2=NRXF%A(3,N2)+UT%A(6*N2-3)
+    IF (ABS(X1-X2).LE.LNN.AND.ABS(Y1-Y2).LE.LNN.AND.ABS(Z1-Z2).LE.LNN) THEN
+      RC=SQRT((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
+      RCX=(X1-X2)/RC
+      RCY=(Y1-Y2)/RC
+      RCZ=(Z1-Z2)/RC
+
+      !TODO - when this was parallel, FRX,Y,Z were only saved for *our* nodes (not other parts)
+      !       does this matter??
+
+      IF(FXC+1 > SIZE(FXF,2)) CALL ExpandIntArray(FXF)
+
+      IF (RC.LT.LNN) THEN
+
+        IF(own(1)) THEN !One of our own particles
+          FRX(N1)=FRX(N1)+EFC(N1)*(LNN-RC)**1.5*RCX
+          FRY(N1)=FRY(N1)+EFC(N1)*(LNN-RC)**1.5*RCY
+          FRZ(N1)=FRZ(N1)+EFC(N1)*(LNN-RC)**1.5*RCZ
+        END IF
+        IF(own(2)) THEN !One of our own particles
+          FRX(N2)=FRX(N2)-EFC(N2)*(LNN-RC)**1.5*RCX
+          FRY(N2)=FRY(N2)-EFC(N2)*(LNN-RC)**1.5*RCY
+          FRZ(N2)=FRZ(N2)-EFC(N2)*(LNN-RC)**1.5*RCZ
+        END IF
+
+        IF(own(2)) THEN
+          WE(N2)=WE(N2)+0.4*EFC(N2)*(LNN-RC)**2.5
+        ELSE
+          WE(N1)=WE(N1)+0.4*EFC(N1)*(LNN-RC)**2.5
+        END IF
+
+        FXC=FXC+1
+        FXF(1,FXC)=N1 
+        FXF(2,FXC)=N2 
+      ENDIF
+
+      !if almost touching, add forces but don't register interaction
+      IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+        IF(own(1)) THEN
+          FRX(N1)=FRX(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCX
+          FRY(N1)=FRY(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCY
+          FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+        END IF
+        IF(own(2)) THEN
+          FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
+          FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
+          FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+        END IF
+        IF(own(2)) THEN
+          WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
+        ELSE
+          WE(N1)=WE(N1)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
+        END IF
+      ENDIF
+
+    ENDIF
+  ENDDO
+
+  CALL CPU_Time(T2)
+  PRINT *,myid,'Finding collisions took: ',T2-T1,' secs'
+
+  RETURN
+
+END SUBROUTINE FindCollisions
+
 
 FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
   INTEGER :: i

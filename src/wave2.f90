@@ -33,16 +33,17 @@
         INCLUDE 'mpif.h'
         INCLUDE 'na90.dat'
 	REAL*8 EMM(NOMA),BOYZ(NOMA),BOYY(NOMA),WSY(NOMA)
-	REAL*8 EN(NODM),WE(NOMA),WSX(NOMA),BED(-100:2000,-100:2000)
+	REAL*8 EN(NODM),WSX(NOMA),BED(-100:2000,-100:2000)
 	REAL*8 SUF(-100:2000,-100:2000)
 	REAL*8, ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
+        REAL*8, ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:)
 	REAL*8 FBED(-100:2000,-100:2000)
 	REAL*8 DIX,DIY,DIZ,FRIC,UC
 	REAL*8 UTP(NODM),R(NODM)
 	REAL*8 UTW(NODM),NRXFW(3,NOMA)
 	REAL*8 ENM0,ENMS0,POR,GRID
         REAL*8 RHO,RHOW,GRAV, BedIntConst
-        REAL*8 CT(NODC),FRX(NOMA),FRY(NOMA),FRZ(NOMA),BBox(6)
+        REAL*8 CT(NODC),BBox(6)!,FRX(NOMA),FRY(NOMA),FRZ(NOMA),
         REAL*8, ALLOCATABLE :: PBBox(:,:)
 	INTEGER CCN(NOMA),CCNW(NOMA),CB(NOMA),CCB(NOMA,3)
 	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
@@ -74,9 +75,9 @@
 	REAL, ALLOCATABLE :: RAN(:)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT,&
-             NTOT,FXC
+             NTOT,FXC,ND
         INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
-             neighparts(:), NANS(:,:),NANPart(:),FXF(:,:)
+             neighparts(:), NANS(:,:),NANPart(:),FXF(:,:), NDL(:,:)
 
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,PrintTimes,StrictDomain,DoublePrec,CSVOutput
@@ -85,14 +86,13 @@
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
 
         TYPE(NAN_t) :: NANS_prev
-        TYPE(NTOT_t) :: NTOT_prev,ND
+        TYPE(NTOT_t) :: NTOT_prev
 !        TYPE(EF_t) :: EFS
         TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
         TYPE(UT2_t) :: UT2, UTM2
         TYPE(NRXF_t) :: NRXF
         TYPE(NRXF2_t) :: NRXF2
-        TYPE(FXF_t) :: NDL
         TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
 
         CALL MPI_INIT(rc)
@@ -257,7 +257,7 @@ END IF
         PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         !TODO - links to CSV output - replace
-        CALL MPI_ALLGATHER(NTOT_prev % M,1,MPI_INTEGER,&
+        CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
 
         IF(DebugMode) PRINT *,myid,'Wave checkpoint 2'
@@ -346,6 +346,10 @@ END IF
         ALLOCATE(LostParticle(NN),&
              EFS(NTOT),&
              VDP(NN),&
+             FRX(NN),&
+             FRY(NN),&
+             FRZ(NN),&
+             WE(NN),&
              RAN(NTOT))
 
         LostParticle = .FALSE.
@@ -519,10 +523,18 @@ END IF
 
         CALL ExchangeProxPoints(NRXF2, UT2, UTM2, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
-        IF(DebugMode) PRINT *,'About to find collisions'
-        CALL FindCollisions(NRXF2,UT2,NN,BBox,SCL,LNN)
-        IF(DebugMode) PRINT *,'Finished finding collisions'
 
+	IF (MOD(RY,250).EQ.1 .OR. (RY.EQ.RY0)) THEN
+          IF(DebugMode) PRINT *,'About to find nearby particles'
+          CALL  FindNearbyParticles(NRXF2,UT2,NN,BBox,SCL,LNN,ND,NDL)
+        END IF
+
+       !circ checks which particles are really in contact and computes the forces
+	CALL FindCollisions(ND,NN,NRXF2,UT2,FRX,FRY,FRZ,&
+          T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+
+        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+       
         !TODO - should we still adopt the approach of finding nearby particles every N steps?
         ! - how efficient is octree vs prev strategy?
 
@@ -556,26 +568,33 @@ END IF
       !....... etc for every direction - REPLACE THIS
 
 
-      !TODO  TIME 2
-      CALL CPU_TIME(TT(2))
-      TTCUM(2) = TTCUM(2) + (TT(2) - TT(1))
+!       !TODO  TIME 2
+!       CALL CPU_TIME(TT(2))
+!       TTCUM(2) = TTCUM(2) + (TT(2) - TT(1))
 
-      !Every 250 steps, reconstruct neighbourhood list
-	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
-     	CALL DIST(NN,UT,ND,NRXF,NDL,SCL,PNN,YN)
-	END IF
+!       !Every 250 steps, reconstruct neighbourhood list
+! 	IF (MOD(RY,250).EQ.1.OR.RY.EQ.RY0) THEN
 
-!      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
+!         ALLOCATE(NDL(2,NN*12))
+!         CALL CPU_TIME(T1)
+!      	CALL DIST(NN,UT2,ND,NRXF2,NDL,SCL,PNN,YN)
+!         CALL CPU_TIME(T2)
+!         PRINT *,myid,'Dist took: ',T2-T1,' secs'
 
-       !TODO  TIME 3
-       CALL CPU_TIME(TT(3))
-       TTCUM(3) = TTCUM(3) + (TT(3) - TT(2))
+! 	END IF
+!         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
 
-       !circ checks which particles are really in contact and computes the forces
-	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
-      	T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+! !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
 
-!      write(*,17) RY,myid,FXC%M,FXC%L,FXC%B,FXC%F,FXC%FR,FXC%FL,FXC%BR,FXC%BL
+!        !TODO  TIME 3
+!        CALL CPU_TIME(TT(3))
+!        TTCUM(3) = TTCUM(3) + (TT(3) - TT(2))
+
+!        !circ checks which particles are really in contact and computes the forces
+! 	CALL CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
+!       	T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+
+! !      write(*,17) RY,myid,FXC%M,FXC%L,FXC%B,FXC%F,FXC%FR,FXC%FL,FXC%BR,FXC%BL
 
 !============================ END Old Prox/Collision Strategy ===============================
 
@@ -584,8 +603,8 @@ END IF
        TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
 
        !Calculates elastic forces from beams. Stiffness matrix K
-	CALL EFFLOAD(S,NTOT_prev,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
-      	FXF,FXC,VDP,DPE,EFS,NANS_prev,NRXF,MFIL,CT,&
+	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT2,UTM2,R,EN,RY,&
+      	FXF,FXC,VDP,DPE,EFS,NANS,NRXF2,MFIL,CT,&
       	LNN,PNN,YN)
 
 

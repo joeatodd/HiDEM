@@ -34,14 +34,12 @@
 	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2,DMP2
         REAL*8,ALLOCATABLE :: EFS(:)
 	INTEGER N,NL,NB,N1,N2,X,XL,XR,PNN(0:5000)
-	INTEGER I,J,NN,RY,YN
+	INTEGER I,J,NN,RY,YN,NTOT,FXC
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
         INTEGER ierr
-        TYPE(NAN_t) :: NANS
-        TYPE(NTOT_t) :: NTOT,FXC
-        TYPE(UT_t) :: UT, UTM
-        TYPE(NRXF_t) :: NRXF
-        TYPE(FXF_t) :: FXF
+        INTEGER, ALLOCATABLE :: FXF(:,:),NANS(:,:)
+        TYPE(UT2_t) :: UT, UTM
+        TYPE(NRXF2_t) :: NRXF
 	DO I=1,6*NN
 	A(I)=0.0
 	D(I)=0.0
@@ -53,37 +51,37 @@
       !exclusive sets? but they aren't - NOTE - may be now (my mods)
 !----------------------------------------------
 
- 	DO X=1,NTOT%M
-	N1=NANS%M(1,X)
-	N2=NANS%M(2,X)
-	X1=NRXF%M(1,N1)
-	Y1=NRXF%M(2,N1)
-	Z1=NRXF%M(3,N1)
-	X2=NRXF%M(1,N2)
-	Y2=NRXF%M(2,N2)
-	Z2=NRXF%M(3,N2)
+ 	DO X=1,NTOT
+	N1=NANS(1,X)
+	N2=NANS(2,X)
+	X1=NRXF%A(1,N1)
+	Y1=NRXF%A(2,N1)
+	Z1=NRXF%A(3,N1)
+	X2=NRXF%A(1,N2)
+	Y2=NRXF%A(2,N2)
+	Z2=NRXF%A(3,N2)
 
 
-	DX1=UT%M(6*N1-5)
-	DY1=UT%M(6*N1-4)
-	DZ1=UT%M(6*N1-3)
-	DX2=UT%M(6*N2-5)
-	DY2=UT%M(6*N2-4)
-	DZ2=UT%M(6*N2-3)
+	DX1=UT%A(6*N1-5)
+	DY1=UT%A(6*N1-4)
+	DZ1=UT%A(6*N1-3)
+	DX2=UT%A(6*N2-5)
+	DY2=UT%A(6*N2-4)
+	DZ2=UT%A(6*N2-3)
 
-        DUT(6*N1-5)=UT%M(6*N1-5)-UTM%M(6*N1-5)
-        DUT(6*N1-4)=UT%M(6*N1-4)-UTM%M(6*N1-4)
-        DUT(6*N1-3)=UT%M(6*N1-3)-UTM%M(6*N1-3)
-        DUT(6*N1-2)=UT%M(6*N1-2)-UTM%M(6*N1-2)
-        DUT(6*N1-1)=UT%M(6*N1-1)-UTM%M(6*N1-1)
-        DUT(6*N1-0)=UT%M(6*N1-0)-UTM%M(6*N1-0)
+        DUT(6*N1-5)=UT%A(6*N1-5)-UTM%A(6*N1-5)
+        DUT(6*N1-4)=UT%A(6*N1-4)-UTM%A(6*N1-4)
+        DUT(6*N1-3)=UT%A(6*N1-3)-UTM%A(6*N1-3)
+        DUT(6*N1-2)=UT%A(6*N1-2)-UTM%A(6*N1-2)
+        DUT(6*N1-1)=UT%A(6*N1-1)-UTM%A(6*N1-1)
+        DUT(6*N1-0)=UT%A(6*N1-0)-UTM%A(6*N1-0)
                                                         
-        DUT(6*N2-5)=UT%M(6*N2-5)-UTM%M(6*N2-5)
-        DUT(6*N2-4)=UT%M(6*N2-4)-UTM%M(6*N2-4)
-        DUT(6*N2-3)=UT%M(6*N2-3)-UTM%M(6*N2-3)
-        DUT(6*N2-2)=UT%M(6*N2-2)-UTM%M(6*N2-2)
-        DUT(6*N2-1)=UT%M(6*N2-1)-UTM%M(6*N2-1)
-        DUT(6*N2-0)=UT%M(6*N2-0)-UTM%M(6*N2-0)
+        DUT(6*N2-5)=UT%A(6*N2-5)-UTM%A(6*N2-5)
+        DUT(6*N2-4)=UT%A(6*N2-4)-UTM%A(6*N2-4)
+        DUT(6*N2-3)=UT%A(6*N2-3)-UTM%A(6*N2-3)
+        DUT(6*N2-2)=UT%A(6*N2-2)-UTM%A(6*N2-2)
+        DUT(6*N2-1)=UT%A(6*N2-1)-UTM%A(6*N2-1)
+        DUT(6*N2-0)=UT%A(6*N2-0)-UTM%A(6*N2-0)
 
         IF (EFS(X).NE.0.0) THEN
         CALL AMAT(EFS(X),S,EFS(X)/2.0,X1+DX1,Y1+DY1,Z1+DZ1, &
@@ -107,21 +105,21 @@
 !-------------------------------------------------------
 ! TODO - again, A was only filled in for *our* particles
 
-        DO X=1,NTOT%M
-        N1=NANS % M(1,X)
-        N2=NANS % M(2,X)
-        X1=NRXF%M(1,N1)
-        Y1=NRXF%M(2,N1)
-        Z1=NRXF%M(3,N1)
-        X2=NRXF%M(1,N2)
-        Y2=NRXF%M(2,N2)
-        Z2=NRXF%M(3,N2)
-        DX1=UT%M(6*N1-5)
-        DY1=UT%M(6*N1-4)
-        DZ1=UT%M(6*N1-3)
-        DX2=UT%M(6*N2-5)
-        DY2=UT%M(6*N2-4)
-        DZ2=UT%M(6*N2-3)
+        DO X=1,NTOT
+        N1=NANS(1,X)
+        N2=NANS(2,X)
+        X1=NRXF%A(1,N1)
+        Y1=NRXF%A(2,N1)
+        Z1=NRXF%A(3,N1)
+        X2=NRXF%A(1,N2)
+        Y2=NRXF%A(2,N2)
+        Z2=NRXF%A(3,N2)
+        DX1=UT%A(6*N1-5)
+        DY1=UT%A(6*N1-4)
+        DZ1=UT%A(6*N1-3)
+        DX2=UT%A(6*N2-5)
+        DY2=UT%A(6*N2-4)
+        DZ2=UT%A(6*N2-3)
         CALL TTMAT(X1+DX1,Y1+DY1,Z1+DZ1,X2+DX2,Y2+DY2,Z2+DZ2,RY,TT)
         A(6*N1-5)= A(6*N1-5) &
                   +  TT(1,1)*CT(12*X-11) + TT(1,2)*CT(12*X-10) &
@@ -179,91 +177,91 @@
 ! TODO - when this was %L,%R etc, D was only saved for our nodes (not shared)
 
 
-	DO X=1,NTOT%M
+	DO X=1,NTOT
 	IF (EFS(X).NE.0.0) THEN
-	N1=NANS % M(1,X)
-	N2=NANS % M(2,X)
-	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%M(6*N1-5)-UT%M(6*N2-5)) &
-      	-(UTM%M(6*N1-5)-UTM%M(6*N2-5)))
-	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%M(6*N1-4)-UT%M(6*N2-4)) &
-      	-(UTM%M(6*N1-4)-UTM%M(6*N2-4)))
-	D(6*N1-3)=D(6*N1-3)+(DMP/DT)*((UT%M(6*N1-3)-UT%M(6*N2-3)) &
-      	-(UTM%M(6*N1-3)-UTM%M(6*N2-3)))
-	D(6*N1-2)=D(6*N1-2)+(DMP2/DT)*((UT%M(6*N1-2)-UT%M(6*N2-2)) &
-      	-(UTM%M(6*N1-2)-UTM%M(6*N2-2)))
-	D(6*N1-1)=D(6*N1-1)+(DMP2/DT)*((UT%M(6*N1-1)-UT%M(6*N2-1)) &
-      	-(UTM%M(6*N1-1)-UTM%M(6*N2-1)))
-	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%M(6*N1-0)-UT%M(6*N2-0)) &
-      	-(UTM%M(6*N1-0)-UTM%M(6*N2-0)))
-	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%M(6*N1-5)) &
-      	-(UTM%M(6*N2-5)-UTM%M(6*N1-5)))
-	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%M(6*N1-4)) &
-      	-(UTM%M(6*N2-4)-UTM%M(6*N1-4)))
-	D(6*N2-3)=D(6*N2-3)+(DMP/DT)*((UT%M(6*N2-3)-UT%M(6*N1-3)) &
-      	-(UTM%M(6*N2-3)-UTM%M(6*N1-3)))
-	D(6*N2-2)=D(6*N2-2)+(DMP2/DT)*((UT%M(6*N2-2)-UT%M(6*N1-2)) &
-      	-(UTM%M(6*N2-2)-UTM%M(6*N1-2)))
-	D(6*N2-1)=D(6*N2-1)+(DMP2/DT)*((UT%M(6*N2-1)-UT%M(6*N1-1)) &
-      	-(UTM%M(6*N2-1)-UTM%M(6*N1-1)))
-	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%M(6*N2-0)-UT%M(6*N1-0)) &
-      	-(UTM%M(6*N2-0)-UTM%M(6*N1-0)))
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-5)-UT%M(6*N1-5)) &
-     	-(UTM%M(6*N2-5)-UTM%M(6*N1-5)))**2
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-4)-UT%M(6*N1-4)) &
-     	-(UTM%M(6*N2-4)-UTM%M(6*N1-4)))**2
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-3)-UT%M(6*N1-3)) &
-     	-(UTM%M(6*N2-3)-UTM%M(6*N1-3)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-2)-UT%M(6*N1-2)) &
-     	-(UTM%M(6*N2-2)-UTM%M(6*N1-2)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-1)-UT%M(6*N1-1)) &
-     	-(UTM%M(6*N2-1)-UTM%M(6*N1-1)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-0)-UT%M(6*N1-0)) &
-     	-(UTM%M(6*N2-0)-UTM%M(6*N1-0)))**2
+	N1=NANS(1,X)
+	N2=NANS(2,X)
+	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%A(6*N1-5)-UT%A(6*N2-5)) &
+      	-(UTM%A(6*N1-5)-UTM%A(6*N2-5)))
+	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%A(6*N1-4)-UT%A(6*N2-4)) &
+      	-(UTM%A(6*N1-4)-UTM%A(6*N2-4)))
+	D(6*N1-3)=D(6*N1-3)+(DMP/DT)*((UT%A(6*N1-3)-UT%A(6*N2-3)) &
+      	-(UTM%A(6*N1-3)-UTM%A(6*N2-3)))
+	D(6*N1-2)=D(6*N1-2)+(DMP2/DT)*((UT%A(6*N1-2)-UT%A(6*N2-2)) &
+      	-(UTM%A(6*N1-2)-UTM%A(6*N2-2)))
+	D(6*N1-1)=D(6*N1-1)+(DMP2/DT)*((UT%A(6*N1-1)-UT%A(6*N2-1)) &
+      	-(UTM%A(6*N1-1)-UTM%A(6*N2-1)))
+	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%A(6*N1-0)-UT%A(6*N2-0)) &
+      	-(UTM%A(6*N1-0)-UTM%A(6*N2-0)))
+	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
+      	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))
+	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
+      	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))
+	D(6*N2-3)=D(6*N2-3)+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
+      	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))
+	D(6*N2-2)=D(6*N2-2)+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
+      	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))
+	D(6*N2-1)=D(6*N2-1)+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
+      	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))
+	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
+      	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
+     	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
+     	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
+     	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
+     	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
+     	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
+     	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
 	ENDIF
 	ENDDO
 
 !-----------------------------------------------------------------
 ! TODO - when this was %L,%R etc, D was only saved for our nodes (not shared)
 
-	DO X=1,FXC%M
-	N1=FXF%M(1,X)
-	N2=FXF%M(2,X)
-	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%M(6*N1-5)-UT%M(6*N2-5)) &
-     	-(UTM%M(6*N1-5)-UTM%M(6*N2-5)))
-	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%M(6*N1-4)-UT%M(6*N2-4)) &
-     	-(UTM%M(6*N1-4)-UTM%M(6*N2-4)))
-	D(6*N1-3)=D(6*N1-3)+(DMP/DT)*((UT%M(6*N1-3)-UT%M(6*N2-3)) &
-     	-(UTM%M(6*N1-3)-UTM%M(6*N2-3)))
-	D(6*N1-2)=D(6*N1-2)+(DMP2/DT)*((UT%M(6*N1-2)-UT%M(6*N2-2)) &
-     	-(UTM%M(6*N1-2)-UTM%M(6*N2-2)))
-	D(6*N1-1)=D(6*N1-1)+(DMP2/DT)*((UT%M(6*N1-1)-UT%M(6*N2-1)) &
-     	-(UTM%M(6*N1-1)-UTM%M(6*N2-1)))
-	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%M(6*N1-0)-UT%M(6*N2-0)) &
-     	-(UTM%M(6*N1-0)-UTM%M(6*N2-0)))
-	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%M(6*N2-5)-UT%M(6*N1-5)) &
-     	-(UTM%M(6*N2-5)-UTM%M(6*N1-5)))
-	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%M(6*N2-4)-UT%M(6*N1-4)) &
-     	-(UTM%M(6*N2-4)-UTM%M(6*N1-4)))
-	D(6*N2-3)=D(6*N2-3)+(DMP/DT)*((UT%M(6*N2-3)-UT%M(6*N1-3)) &
-     	-(UTM%M(6*N2-3)-UTM%M(6*N1-3)))
-	D(6*N2-2)=D(6*N2-2)+(DMP2/DT)*((UT%M(6*N2-2)-UT%M(6*N1-2)) &
-     	-(UTM%M(6*N2-2)-UTM%M(6*N1-2)))
-	D(6*N2-1)=D(6*N2-1)+(DMP2/DT)*((UT%M(6*N2-1)-UT%M(6*N1-1)) &
-     	-(UTM%M(6*N2-1)-UTM%M(6*N1-1)))
-	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%M(6*N2-0)-UT%M(6*N1-0)) &
-     	-(UTM%M(6*N2-0)-UTM%M(6*N1-0)))
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-5)-UT%M(6*N1-5)) &
-     	-(UTM%M(6*N2-5)-UTM%M(6*N1-5)))**2
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-4)-UT%M(6*N1-4)) &
-     	-(UTM%M(6*N2-4)-UTM%M(6*N1-4)))**2
-        DPE=DPE+(DMP/DT)*((UT%M(6*N2-3)-UT%M(6*N1-3)) &
-     	-(UTM%M(6*N2-3)-UTM%M(6*N1-3)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-2)-UT%M(6*N1-2)) &
-     	-(UTM%M(6*N2-2)-UTM%M(6*N1-2)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-1)-UT%M(6*N1-1)) &
-     	-(UTM%M(6*N2-1)-UTM%M(6*N1-1)))**2
-        DPE=DPE+(DMP2/DT)*((UT%M(6*N2-0)-UT%M(6*N1-0)) &
-     	-(UTM%M(6*N2-0)-UTM%M(6*N1-0)))**2
+	DO X=1,FXC
+	N1=FXF(1,X)
+	N2=FXF(2,X)
+	D(6*N1-5)=D(6*N1-5)+(DMP/DT)*((UT%A(6*N1-5)-UT%A(6*N2-5)) &
+     	-(UTM%A(6*N1-5)-UTM%A(6*N2-5)))
+	D(6*N1-4)=D(6*N1-4)+(DMP/DT)*((UT%A(6*N1-4)-UT%A(6*N2-4)) &
+     	-(UTM%A(6*N1-4)-UTM%A(6*N2-4)))
+	D(6*N1-3)=D(6*N1-3)+(DMP/DT)*((UT%A(6*N1-3)-UT%A(6*N2-3)) &
+     	-(UTM%A(6*N1-3)-UTM%A(6*N2-3)))
+	D(6*N1-2)=D(6*N1-2)+(DMP2/DT)*((UT%A(6*N1-2)-UT%A(6*N2-2)) &
+     	-(UTM%A(6*N1-2)-UTM%A(6*N2-2)))
+	D(6*N1-1)=D(6*N1-1)+(DMP2/DT)*((UT%A(6*N1-1)-UT%A(6*N2-1)) &
+     	-(UTM%A(6*N1-1)-UTM%A(6*N2-1)))
+	D(6*N1-0)=D(6*N1-0)+(DMP2/DT)*((UT%A(6*N1-0)-UT%A(6*N2-0)) &
+     	-(UTM%A(6*N1-0)-UTM%A(6*N2-0)))
+	D(6*N2-5)=D(6*N2-5)+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
+     	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))
+	D(6*N2-4)=D(6*N2-4)+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
+     	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))
+	D(6*N2-3)=D(6*N2-3)+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
+     	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))
+	D(6*N2-2)=D(6*N2-2)+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
+     	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))
+	D(6*N2-1)=D(6*N2-1)+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
+     	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))
+	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
+     	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
+     	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
+     	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
+        DPE=DPE+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
+     	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
+     	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
+     	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
+        DPE=DPE+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
+     	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
 	ENDDO
 !---------------------------------------------------------
 
