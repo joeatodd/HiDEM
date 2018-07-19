@@ -448,7 +448,7 @@ END IF
 !and works out whether to randomise or receive the EFS value
 
  IF(DebugMode) PRINT *,myid,' about to go to ExchangeConnPoints'
- CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2)
+ CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, UTM2)
  IF(DebugMode)  PRINT *,myid,' finished exchange.'
  
 
@@ -512,16 +512,12 @@ END IF
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
         !TODO  TIME 1
 
-        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, .FALSE.) !Don't pass NRXF...
-        
-        !TODO - Use this for passing relevant points
-        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
+        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, UTM2, .FALSE.) !Don't pass NRXF...
 
+        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
         CALL FindNeighbours(PBBox, PartIsNeighbour)
 
-        IF(DebugMode) PRINT *,myid,' about to go to ExchangeProxPoints'
-        CALL ExchangeProxPoints(NRXF2, UT2, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
-        IF(DebugMode) PRINT *,myid,' finished  ExchangeProxPoints'
+        CALL ExchangeProxPoints(NRXF2, UT2, UTM2, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
         IF(DebugMode) PRINT *,'About to find collisions'
         CALL FindCollisions(NRXF2,UT2,NN,BBox,SCL,LNN)

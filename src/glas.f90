@@ -576,21 +576,24 @@ End Subroutine
  END SUBROUTINE FindNeighbours
 
 !Determine and pass point information between partitions (based on beams/connections)
-SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
+SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
 
   INCLUDE 'mpif.h'
   
   INTEGER, ALLOCATABLE :: NANS(:,:)
   TYPE(NRXF2_t) :: NRXF
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
-  TYPE(UT2_t), OPTIONAL :: UT
+  TYPE(UT2_t), OPTIONAL :: UT, UTM
   LOGICAL, OPTIONAL :: passNRXF
   !--------------------
+  REAL*8 :: T1,T2
   INTEGER :: i,j,id,counter,loc,neigh,getcount,sendcount,ierr
   INTEGER, ALLOCATABLE :: stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   LOGICAL :: doNRXF=.TRUE.
-  
+
+  CALL CPU_Time(T1)
+
   IF(PRESENT(passNRXF)) doNRXF = passNRXF
 
   ALLOCATE(PointEx(0:ntasks-1),stats(0:ntasks*2-1))
@@ -720,8 +723,8 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
 
 
       DEALLOCATE(PointEx(i) % S, PointEx(i) % R)
-      ALLOCATE(PointEx(i) % S(6*sendcount),&
-           PointEx(i) % R(6*getcount))
+      ALLOCATE(PointEx(i) % S(12*sendcount),&
+           PointEx(i) % R(12*getcount))
 
 
       PointEx(i) % S = 0.0
@@ -729,13 +732,14 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
 
       DO j=1,sendcount
         id = PointEx(i) % SendIDs(j)
-        PointEx(i) % S(j*6-5 : j*6) = UT%M(6*id-5 : 6*id)
+        PointEx(i) % S(j*12-11 : j*12-6) = UT%M(6*id-5 : 6*id)
+        PointEx(i) % S(j*12-5 : j*12) = UTM%M(6*id-5 : 6*id)
       END DO
 
-      CALL MPI_ISend(PointEx(i) % S, sendcount*6, MPI_DOUBLE_PRECISION,neigh,&
+      CALL MPI_ISend(PointEx(i) % S, sendcount*12, MPI_DOUBLE_PRECISION,neigh,&
            201,MPI_COMM_WORLD,stats(i*2), ierr)
 
-      CALL MPI_IRecv(PointEx(i) % R, getcount*6, MPI_DOUBLE_PRECISION,neigh,&
+      CALL MPI_IRecv(PointEx(i) % R, getcount*12, MPI_DOUBLE_PRECISION,neigh,&
            201,MPI_COMM_WORLD,stats(i*2+1), ierr)
     END DO
 
@@ -760,12 +764,17 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, passNRXF)
       
       DO j=1,getcount
         loc = InvPartInfo(i) % ConnLocs(j)
-        UT%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*6-5 : j*6)
+        UT%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*12-11 : j*12-6)
+        UTM%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*12-5 : j*12)
       END DO
     END DO
   END IF
 
+  CALL CPU_Time(T2)
+  PRINT *,myid,'Exchange Conn Points took: ',T2-T1,' secs'
+
   CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
 
 END SUBROUTINE ExchangeConnPoints
 
@@ -774,7 +783,7 @@ END SUBROUTINE ExchangeConnPoints
 !to pass and 2) passes the same particles each time. In contrast, we must here
 !1) determine which particles are req'd, and also 2) when new particles are passed
 !we need to also pass NRXF (only once!)
-SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
+SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
   USE INOUT
   USE UTILS
@@ -782,17 +791,21 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
   INCLUDE 'mpif.h'
 
   TYPE(NRXF2_t) :: NRXF
-  TYPE(UT2_t) :: UT
+  TYPE(UT2_t) :: UT, UTM
   INTEGER :: NN
   REAL*8 :: SCL, PBBox(6,0:ntasks-1)
   LOGICAL :: PartIsNeighbour(0:ntasks-1)
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   !--------------------
-  INTEGER :: i,j,id,new_id,put_loc,put_loc_init,cnt,cnt2,neigh,neighcount,&
+  REAL*8 :: T1, T2, tstrt,tend
+  INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,neigh,neighcount,&
        getcount,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:),NRXFPointEx(:)
   LOGICAL, ALLOCATABLE :: IsConnected(:),PrevProx(:)
+
+  CALL CPU_Time(tstrt)
+
   ALLOCATE(PointEx(0:ntasks-1),NRXFPointEx(0:ntasks-1), &
        stats(0:ntasks*4-1),IsConnected(NN),PrevProx(NN))
   stats = MPI_REQUEST_NULL
@@ -810,10 +823,12 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     NRXFPointEx(i) % rcount = 0
   END DO
 
+  CALL CPU_TIME(T1)
+
   !Count points in each BB
   !TODO - strategy change here
   !If point is connected - don't send
-  !If piont wasn't already sent - send NRXF
+  !If point wasn't already sent - send NRXF
   !InvPartInfo % ProxIDs, ProxLocs should contain only *unconnected* points
   !   i.e. they're not in ConnLoc, ConnIDs
   DO i=0,ntasks-1
@@ -828,6 +843,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
       IsConnected(InvPartInfo(i) % SConnIDs(j)) = .TRUE.
       PRINT *,myid,InvPartInfo(i) % SConnIDs(j),' is connected to part ',i
     END DO
+
     PrevProx = .FALSE.
     DO j=1,InvPartInfo(i) % spcount
       PrevProx(InvPartInfo(i) % SProxIDs(j)) = .TRUE.
@@ -860,7 +876,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
 
           InvPartInfo(i) % spcount = InvPartInfo(i) % spcount + 1
           IF(InvPartInfo(i) % spcount > SIZE(InvPartInfo(i) % SProxIDs)) &
-               CALL ResizeIntArray(InvPartInfo(i) % SProxIDs)
+               CALL ExpandIntArray(InvPartInfo(i) % SProxIDs)
           InvPartInfo(i) % SProxIDs(InvPartInfo(i) % spcount) = j
         END IF
 
@@ -870,7 +886,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     IF(DebugMode) PRINT *,myid,' sending to ',i,' prox: ', &
          cnt, ' already sent conn: ',COUNT(IsConnected), ' prev sent nrxf: ',COUNT(PrevProx)
 
-    ALLOCATE(PointEx(i) % S(3 * PointEx(i) % scount))
+    ALLOCATE(PointEx(i) % S(12 * PointEx(i) % scount))
     CALL MPI_ISend(PointEx(i) % scount,1,MPI_INTEGER,i,&
          201,MPI_COMM_WORLD,stats(i*4),ierr)
     CALL MPI_ISend(PointEx(i) % SendIDs(1:cnt),cnt,MPI_INTEGER,i,&
@@ -892,7 +908,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     CALL MPI_Recv(PointEx(i) % rcount, 1, MPI_INTEGER, i,201,MPI_COMM_WORLD, stat, ierr)
     cnt = PointEx(i) % rcount
 
-    ALLOCATE(PointEx(i) % R(3 * cnt),&
+    ALLOCATE(PointEx(i) % R(12 * cnt),&
          PointEx(i) % RecvIDs(cnt))
 
     CALL MPI_Recv(PointEx(i) % RecvIDs(1:cnt),cnt, MPI_INTEGER, i,202,MPI_COMM_WORLD, stat, ierr)
@@ -905,7 +921,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
          NRXFPointEx(i) % RecvIDs(cnt))
 
     CALL MPI_Recv(NRXFPointEx(i) % RecvIDs(1:cnt),cnt, MPI_INTEGER, i,204,MPI_COMM_WORLD, stat, ierr)
-
   END DO
 
   !Wait for the previous non-blocking sends, then reset stats
@@ -913,8 +928,8 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
   stats = MPI_REQUEST_NULL
 
   PRINT *,myid,' NRXF pstart, np init: ',NRXF%pstrt, NRXF%NP
-  !For new prox points received, put them into InvPartInfo
 
+  !For new prox points received, put them into InvPartInfo and NRXF
   put_loc = NRXF%pstrt + NRXF%NP
   put_loc_init = put_loc
 
@@ -924,24 +939,11 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     DO j=1,NRXFPointEx(i) % rcount
       new_id = NRXFPointEx(i) % RecvIDs(j)
 
-      ! !TEMPORARY TEST
-      ! IF(ANY(InvPartInfo(i) % ProxIDs(1:InvPartInfo(i) % Pcount) == new_id)) THEN
-      !   PRINT *,myid,i,j,new_id,' PROGRAMMING ERROR, GOT THIS POINT ALREADY PROX'
-      !   STOP
-      ! END IF
-
-      ! IF(ANY(InvPartInfo(i) % ConnIDs(1:InvPartInfo(i) % Ccount) == new_id)) THEN
-      !   PRINT *,myid,i,j,new_id,' PROGRAMMING ERROR, GOT THIS POINT ALREADY CONN'
-      !   PRINT *,InvPartInfo(i) % ConnIDs
-
-      !   STOP
-      ! END IF
-      ! !END TEST
-
-
       IF(put_loc > SIZE(NRXF%A,2)) THEN
-        IF(DebugMode) PRINT *,myid,' debug, resizing NRXF'
+        IF(DebugMode) PRINT *,myid,' debug, resizing NRXF & UT'
         CALL ResizePointData(NRXF,2.0_8,.FALSE.,.FALSE.,.TRUE.)
+        CALL ResizePointData(UT,2.0_8,.FALSE.,.FALSE.,.TRUE.)
+        CALL ResizePointData(UTM,2.0_8,.FALSE.,.FALSE.,.TRUE.)
       END IF
 
       NRXF%PartInfo(1,put_loc) = i
@@ -988,7 +990,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     IF(.NOT. PartIsNeighbour(i)) CYCLE
 
     DO j=1,NRXFPointEx(i) % rcount
-      new_id = NRXFPointEx(i) % RecvIDs(j)
+      !new_id = NRXFPointEx(i) % RecvIDs(j) <- not needed, order is unchanged
       NRXF%A(:,put_loc) = NRXFPointEx(i) % R(j*3-2 : j*3)
       put_loc = put_loc + 1
     END DO
@@ -996,8 +998,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
 
   IF(DebugMode) PRINT *,myid,' NRXF pstart, np putloc ppost: ',NRXF%pstrt, NRXF%NP,put_loc
 
-  !TODO here - need to send all 6 components of UT
-  !Pass UT
+  !Pass UT & UTM
   DO i=0,ntasks-1
     IF(.NOT. PartIsNeighbour(i)) CYCLE
 
@@ -1005,14 +1006,23 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
     PointEx(i) % R = 0.0
     DO j=1,PointEx(i) % scount
       id = PointEx(i) % SendIDs(j)
-      PointEx(i) % S(j*3 - 2) = UT%M(6*id - 5)
-      PointEx(i) % S(j*3 - 1) = UT%M(6*id - 4)
-      PointEx(i) % S(j*3 - 0) = UT%M(6*id - 3)
+      PointEx(i) % S(j*12 - 11) = UT%M(6*id - 5)
+      PointEx(i) % S(j*12 - 10) = UT%M(6*id - 4)
+      PointEx(i) % S(j*12 - 9) = UT%M(6*id - 3)
+      PointEx(i) % S(j*12 - 8) = UT%M(6*id - 2)
+      PointEx(i) % S(j*12 - 7) = UT%M(6*id - 1)
+      PointEx(i) % S(j*12 - 6) = UT%M(6*id - 0)
+      PointEx(i) % S(j*12 - 5) = UTM%M(6*id - 5)
+      PointEx(i) % S(j*12 - 4) = UTM%M(6*id - 4)
+      PointEx(i) % S(j*12 - 3) = UTM%M(6*id - 3)
+      PointEx(i) % S(j*12 - 2) = UTM%M(6*id - 2)
+      PointEx(i) % S(j*12 - 1) = UTM%M(6*id - 1)
+      PointEx(i) % S(j*12 - 0) = UTM%M(6*id - 0)
     END DO
 
-    CALL MPI_ISend(PointEx(i) % S, PointEx(i) % scount*3, MPI_DOUBLE_PRECISION, &
+    CALL MPI_ISend(PointEx(i) % S, PointEx(i) % scount*12, MPI_DOUBLE_PRECISION, &
          i, 203, MPI_COMM_WORLD, stats(i*2),ierr)
-    CALL MPI_IRecv(PointEx(i) % R, PointEx(i) % rcount*3, MPI_DOUBLE_PRECISION, &
+    CALL MPI_IRecv(PointEx(i) % R, PointEx(i) % rcount*12, MPI_DOUBLE_PRECISION, &
          i, 203, MPI_COMM_WORLD, stats(i*2+1),ierr)
     
   END DO
@@ -1020,13 +1030,52 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, NN, SCL, PBBox, InvPartInfo, PartIsNeigh
   CALL MPI_Waitall(ntasks*4, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
-  !Store UT
+  CALL CPU_TIME(T2)
+  IF(DebugMode) PRINT *,myid,' ExchangeProxPoints Part 1 time: ',T2-T1,' secs'
+  CALL CPU_TIME(T1)
+
+  !Store UT & UTM
+  ! PointEx(i) % rcount = InvPartInfo(i) % Pcount, and the values of
+  ! InvPartInfo(i) % ProxIDs are all present in PointEx(i) % RecvIDs
   DO i=0,ntasks-1
-    IF(i==myid) CYCLE
+    IF(.NOT. PartIsNeighbour(i)) CYCLE
 
-    !TODO - DO SOMETHING WITH UT
+    CALL sort_int2(InvPartInfo(i) % ProxIDs, InvPartInfo(i) % ProxLocs, InvPartInfo(i) % Pcount)
+    DO j=1,PointEx(i) % rcount
+      IF(PointEx(i) % RecvIDs(j) /= InvPartInfo(i) % ProxIDs(j)) &
+        CALL FatalError("ExchangeProxPoints: Incorrect sorting assumption")
 
+      put_loc = InvPartInfo(i) % ProxLocs(j)
+
+      UT%A(6*put_loc - 5) = PointEx(i) % R(j*12 - 11)
+      UT%A(6*put_loc - 4) = PointEx(i) % R(j*12 - 10)
+      UT%A(6*put_loc - 3) = PointEx(i) % R(j*12 - 9)
+      UT%A(6*put_loc - 2) = PointEx(i) % R(j*12 - 8)
+      UT%A(6*put_loc - 1) = PointEx(i) % R(j*12 - 7)
+      UT%A(6*put_loc - 0) = PointEx(i) % R(j*12 - 6)
+
+      UTM%A(6*put_loc - 5) = PointEx(i) % R(j*12 - 5)
+      UTM%A(6*put_loc - 4) = PointEx(i) % R(j*12 - 4)
+      UTM%A(6*put_loc - 3) = PointEx(i) % R(j*12 - 3)
+      UTM%A(6*put_loc - 2) = PointEx(i) % R(j*12 - 2)
+      UTM%A(6*put_loc - 1) = PointEx(i) % R(j*12 - 1)
+      UTM%A(6*put_loc - 0) = PointEx(i) % R(j*12 - 0)
+
+      IF(DebugMode) THEN
+        IF(j==3) THEN
+          PRINT *,myid,' 3rd from ',i,' is ',PointEx(i) % RecvIDs(j),' put_loc: ',&
+               put_loc,' UT%A: ',UT%A(6*put_loc-5 : 6*put_loc),' NRXF: ',NRXF%A(:,put_loc)
+        END IF
+      END IF
+
+    END DO
   END DO
+
+  CALL CPU_TIME(T2)
+  IF(DebugModE) PRINT *,myid,' ExchangeProxPoints Part 2 time: ',T2-T1,' secs'
+
+  CALL CPU_Time(tend)
+  PRINT *,myid,'Exchange Prox Points took: ',tend -  tstrt,' secs'
 
   IF(DebugMode) PRINT *,myid,' successfully completed ExchangeProxPoints.'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
