@@ -189,7 +189,7 @@ DO i=1,nx !x step
                xo(:,1:ip-1) = work_arr(:,1:ip-1)
                DEALLOCATE(work_arr)
                !CALL FatalError("NOMA not large enough (too many points)")
-               CALL Warn("Doubling size of xo")
+               IF(DebugMode) CALL Warn("Doubling size of xo")
              END IF
 
 	     xo(1,ip) = x0(1,k1) + REAL(i-1)*b	
@@ -211,7 +211,7 @@ CALL CPU_TIME(T1)
 CALL FindBeams(xo, ip, SCL, NCN_All, CN_All, nbeams)
 CALL CPU_TIME(T2)
 
-PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
+IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
 ALLOCATE(ParticlePart(ip))
 IF(myid==0) THEN
@@ -432,8 +432,6 @@ DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC
   WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
 END DO
 CLOSE(510+myid)
-
-WRITE(*,*) 'NN=',NN,myid
 
 IF(DebugMode .AND. .FALSE.) THEN
   rc_min = HUGE(rc_min)
@@ -771,7 +769,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
   END IF
 
   CALL CPU_Time(T2)
-  PRINT *,myid,'Exchange Conn Points took: ',T2-T1,' secs'
+  IF(PrintTimes) PRINT *,myid,'Exchange Conn Points took: ',T2-T1,' secs'
 
   CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -841,7 +839,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     IsConnected = .FALSE.
     DO j=1,InvPartInfo(i) % sccount
       IsConnected(InvPartInfo(i) % SConnIDs(j)) = .TRUE.
-      PRINT *,myid,InvPartInfo(i) % SConnIDs(j),' is connected to part ',i
+      IF(DebugMode) PRINT *,myid,InvPartInfo(i) % SConnIDs(j),' is connected to part ',i
     END DO
 
     PrevProx = .FALSE.
@@ -927,7 +925,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   CALL MPI_Waitall(ntasks*4, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
-  PRINT *,myid,' NRXF pstart, np init: ',NRXF%pstrt, NRXF%NP
+  IF(DebugMode) PRINT *,myid,' NRXF pstart, np init: ',NRXF%pstrt, NRXF%NP
 
   !For new prox points received, put them into InvPartInfo and NRXF
   put_loc = NRXF%pstrt + NRXF%NP
@@ -963,7 +961,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     END DO
   END DO
 
-  PRINT *,myid,' NRXF pstart, np putloc post: ',NRXF%pstrt, NRXF%NP,put_loc
+  IF(DebugMode) PRINT *,myid,' NRXF pstart, np putloc post: ',NRXF%pstrt, NRXF%NP,put_loc
 
   !Pass NRXF
   DO i=0,ntasks-1
@@ -1072,10 +1070,10 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   END DO
 
   CALL CPU_TIME(T2)
-  IF(DebugModE) PRINT *,myid,' ExchangeProxPoints Part 2 time: ',T2-T1,' secs'
+  IF(DebugMode) PRINT *,myid,' ExchangeProxPoints Part 2 time: ',T2-T1,' secs'
 
   CALL CPU_Time(tend)
-  PRINT *,myid,'Exchange Prox Points took: ',tend -  tstrt,' secs'
+  IF(PrintTimes) PRINT *,myid,'Exchange Prox Points took: ',tend -  tstrt,' secs'
 
   IF(DebugMode) PRINT *,myid,' successfully completed ExchangeProxPoints.'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
@@ -1206,7 +1204,7 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
   CALL CPU_Time(T2)
 
-  PRINT *,myid,' EFS replacement took: ',T2-T1,' secs'
+  IF(PrintTimes) PRINT *,myid,' EFS replacement took: ',T2-T1,' secs'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
 
 END SUBROUTINE ExchangeEFS
@@ -1237,7 +1235,7 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   npoints = COUNT(NRXF%PartInfo(1,:) /= -1)
   totsize = SIZE(NRXF%PartInfo,2)
 
-  PRINT *, myid, 'debug nrxf count: ',nn,npoints,SIZE(NRXF%PartInfo,2)
+  IF(DebugMode) PRINT *, myid, 'debug nrxf count: ',nn,npoints,SIZE(NRXF%PartInfo,2)
 
   IF(.NOT. ALLOCATED(NDL)) ALLOCATE(NDL(2,npoints*12)) !guess size
   ALLOCATE(points(npoints)) 
@@ -1276,10 +1274,10 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     ngb_ids = 0
     CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
 
-    IF(DebugMode) THEN
-      max_dist = -HUGE(max_dist)
-      min_dist = HUGE(max_dist)
-    END IF
+    ! IF(DebugMode) THEN
+    !   max_dist = -HUGE(max_dist)
+    !   min_dist = HUGE(max_dist)
+    ! END IF
 
     DO j=1,num_ngb
       IF(ngb_ids(j) <= i) CYCLE !Only save each pair once
@@ -1289,18 +1287,18 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
       NDL(1,ND) = points(i) % id
       NDL(2,ND) = ngb_ids(j)
 
-      IF(DebugMode) THEN
-        dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + &
-             UT%A(6*ngb_ids(j)-5)))**2.0) + (((NRXF%A(2,i) + UT%A(6*i-4)) - &
-             (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
-             (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + &
-             UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
-        max_dist = MAX(max_dist, dist)
-        min_dist = MIN(min_dist, dist)
-      END IF
+      ! IF(DebugMode) THEN
+      !   dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + &
+      !        UT%A(6*ngb_ids(j)-5)))**2.0) + (((NRXF%A(2,i) + UT%A(6*i-4)) - &
+      !        (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
+      !        (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + &
+      !        UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
+      !   max_dist = MAX(max_dist, dist)
+      !   min_dist = MIN(min_dist, dist)
+      ! END IF
     END DO
 
-    IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
+    ! IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
   END DO
 
   CALL CPU_TIME(T2)
@@ -1309,7 +1307,7 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   CALL Octree_final()
 
   CALL CPU_Time(tend)
-  PRINT *,myid,'Finding nearby particles took: ',tend - tstrt,' secs'
+  IF(PrintTimes) PRINT *,myid,'Finding nearby particles took: ',tend - tstrt,' secs'
 
 
 END SUBROUTINE FindNearbyParticles
@@ -1385,7 +1383,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
          PRINT *,myid,' node ',i,' nobeams: ',num_ngb
   END DO
 
-  PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
+  IF(DebugMode) PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
   !SUM(NCN) is too large compared to nbeams
   !For some reason, testing id(j) > i doesn't produce right number of beams
 CALL Octree_final()
@@ -1500,7 +1498,7 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   ENDDO
 
   CALL CPU_Time(T2)
-  PRINT *,myid,'Finding collisions took: ',T2-T1,' secs'
+  IF(PrintTimes) PRINT *,myid,' Finding collisions took: ',T2-T1,' secs'
 
   RETURN
 
