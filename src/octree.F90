@@ -56,7 +56,7 @@ MODULE octree
     integer num_point
     integer, allocatable :: point_ids(:)
     type(node_type), pointer :: parent
-    type(node_type), pointer :: children(:)
+    type(node_type), pointer :: children(:)=>NULL()
   end type node_type
 
   type tree_type

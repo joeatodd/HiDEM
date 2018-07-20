@@ -1249,7 +1249,7 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     oct_bbox(2,i) = BBox(i*2)   + eps
   END DO
 
-  CALL Octree_init(max_depth=20,max_num_point=6,bbox=oct_bbox)
+  CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
 
   cnt = 0
   DO i=1,totsize
@@ -1342,8 +1342,8 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   NCN = 0
 
   DO i=1,3
-    oct_bbox(1,i) = MINVAL(xo(i,:)) - eps !buffer bbox to ensure all points contained
-    oct_bbox(2,i) = MAXVAL(xo(i,:)) + eps
+    oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
+    oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
   END DO
 
 
@@ -1353,7 +1353,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   !  mdepth 20, m points 6 was determined for a particular case
   !   it doubled the speed w.r.t. 20,3 (i.e. max_num_points is important)
   !   we *expect* 12 neighbours for every node... 
-  CALL Octree_init(max_depth=20,max_num_point=6,bbox=oct_bbox)
+  CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
 
   DO i=1,ip
     Points(i) % id = i

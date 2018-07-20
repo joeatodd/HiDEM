@@ -18,11 +18,11 @@ MODULE UTILS
 
   CONTAINS
 
-    SUBROUTINE Expand1IntArray(intarr,newsize_in)
+    SUBROUTINE Expand1IntArray(intarr,newsize_in,fill_in)
 
       INTEGER, ALLOCATABLE :: intarr(:), workarr(:)
-      INTEGER, OPTIONAL :: newsize_in
-      INTEGER :: newsize, oldsize
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, fill
 
       oldsize = SIZE(intarr)
       IF(PRESENT(newsize_in)) THEN
@@ -30,10 +30,15 @@ MODULE UTILS
       ELSE
         newsize =  oldsize * 2
       END IF
+
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
       ! ALLOCATE(workarr(oldsize))
       ! workarr(1:oldsize) = intarr(1:oldsize)
       ! DEALLOCATE(intarr)
       ALLOCATE(workarr(newsize))
+      workarr = fill
       workarr(1:oldsize) = intarr(1:oldsize)
 
       !FORTRAN 2003 feature...
@@ -43,11 +48,11 @@ MODULE UTILS
 
     END SUBROUTINE Expand1IntArray
 
-    SUBROUTINE Expand2IntArray(intarr,newsize_in)
+    SUBROUTINE Expand2IntArray(intarr,newsize_in,fill_in)
 
       INTEGER, ALLOCATABLE :: intarr(:,:), workarr(:,:)
-      INTEGER, OPTIONAL :: newsize_in
-      INTEGER :: newsize, oldsize, dim1size
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, dim1size, fill
 
       oldsize = SIZE(intarr,2)
 
@@ -57,12 +62,17 @@ MODULE UTILS
         newsize =  oldsize * 2
       END IF
 
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
       dim1size = SIZE(intarr,1)
 
       ! ALLOCATE(workarr(oldsize))
       ! workarr(1:oldsize) = intarr(1:oldsize)
       ! DEALLOCATE(intarr)
       ALLOCATE(workarr(dim1size,newsize))
+      workarr = fill
+
       workarr(:,1:oldsize) = intarr(:,1:oldsize)
 
       !FORTRAN 2003 feature...
