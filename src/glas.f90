@@ -831,6 +831,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   !   i.e. they're not in ConnLoc, ConnIDs
   DO i=0,ntasks-1
     IF(.NOT. PartIsNeighbour(i)) CYCLE
+    IF(.NOT. ALLOCATED(InvPartInfo(i) % SProxIDs)) CALL NewInvPartInfo(InvPartInfo, i)
 
     IF(DebugMode) PRINT *,myid,' sends to ',i,'count ',InvPartInfo(i) % sccount,' sum: ',&
          SUM(InvPartInfo(i) % SConnIDs(1:InvPartInfo(i) % sccount))
@@ -839,7 +840,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     IsConnected = .FALSE.
     DO j=1,InvPartInfo(i) % sccount
       IsConnected(InvPartInfo(i) % SConnIDs(j)) = .TRUE.
-      IF(DebugMode) PRINT *,myid,InvPartInfo(i) % SConnIDs(j),' is connected to part ',i
     END DO
 
     PrevProx = .FALSE.
@@ -849,6 +849,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
     cnt = 0
     cnt2 = 0
+
     DO j=1,NN
 
       !If this particle is part of a beam shared w/ this partition, it's already been sent
