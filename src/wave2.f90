@@ -213,7 +213,7 @@ END IF
 
  !TODO - test output of NCN, CN, particles_g, NRXF
 
-        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
 
@@ -226,15 +226,15 @@ END IF
         IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
 
 	PRINT *, myid,NN,NTOT
-        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         !NN - particles in each core
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
         !TODO - links to CSV output - replace
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
         IF(DebugMode) PRINT *,myid,'Wave checkpoint 2'
 
@@ -276,11 +276,11 @@ END IF
         IF(NRXF2%cstrt + NRXF2%NC > SIZE(NRXF2%A,2)) CALL ResizePointData(NRXF2,1.5_8)
 
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
         !TODO - links to CSV output - replace
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
         ALLOCATE(CT(12*NTOT))          ! CT - cumulative translation of all the beams
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
@@ -526,7 +526,7 @@ END IF
 	CALL FindCollisions(ND,NN,NRXF2,UT2,FRX,FRY,FRZ,&
           T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
 
-        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
        
         !TODO - should we still adopt the approach of finding nearby particles every N steps?
         ! - how efficient is octree vs prev strategy?
@@ -553,10 +553,10 @@ END IF
       !   tag=142
       ! IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       ! CALL MPI_Send(UT%M,6*NN,MPI_DOUBLE_PRECISION,&
-      ! dest,tag,MPI_COMM_ACTIVE,ierr)
+      ! dest,tag,MPI_COMM_WORLD,ierr)
       ! IF (MOD(myid,ntasks/YN).ne.0)&
       ! CALL MPI_Recv(UT%L,6*PNN(source),MPI_DOUBLE_PRECISION,&
-      ! source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      ! source,tag,MPI_COMM_WORLD,stat,ierr)
 
       !....... etc for every direction - REPLACE THIS
 
@@ -575,7 +575,7 @@ END IF
 !         PRINT *,myid,'Dist took: ',T2-T1,' secs'
 
 ! 	END IF
-!         CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+!         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
 ! !      write(*,17) RY,myid,ND,NCL,NDR,NDF,NDB,NDBL,NDBL,NDFR
 
@@ -600,7 +600,7 @@ END IF
       	FXF,FXC,VDP,DPE,EFS,NANS,NRXF2,MFIL,CT,LNN)
 
 
-        CALL MPI_BARRIER(MPI_COMM_ACTIVE,ierr)
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         CALL CPU_TIME(TT2)
 	TS1=TS1+(TT2-TT1)
@@ -835,28 +835,28 @@ END IF
 !-------------- Gather and write energy -----------------
 
         IF (RY.EQ.1) THEN
-        CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(MGH,MGH0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(GSUM,GSUM0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(MGH,MGH0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
         END IF
 
 !	IF (RY.EQ.REST*STEPS0+1) THEN
 
 	IF (RY.EQ.RY0) THEN
-        CALL MPI_ALLREDUCE(ENM0,ENMS0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(ENM0,ENMS0,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 	ENDIF
 
  	IF (MOD(RY,100).EQ.0) THEN
-        CALL MPI_ALLREDUCE(KIN,KINS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(KIN2,KINS2,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(ENM,ENMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(MGH,MGHS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_ACTIVE,ierr)
-        CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLREDUCE(KIN,KINS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(KIN2,KINS2,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(ENM,ENMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(MGH,MGHS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
  	IF (myid.EQ.0) WRITE(612,*) T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
       	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0
 
@@ -965,10 +965,10 @@ END IF
 !         tag=131
 !         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
 !         CALL MPI_Send(EFS % R,NTOT_prev % R,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_ACTIVE,ierr)
+!         dest,tag,MPI_COMM_WORLD,ierr)
 !         IF (MOD(myid,ntasks/YN).ne.0)&
 !         CALL MPI_Recv(EFS % L,NTOT_prev % L,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_ACTIVE,stat,ierr)
+!         source,tag,MPI_COMM_WORLD,stat,ierr)
 
 !         IF (myid.le.(YN-1)*ntasks/YN) THEN
 !         DO I=1,NTOT_prev % F
@@ -1003,10 +1003,10 @@ END IF
 !         tag=132
 !         IF (myid.lt.(YN-1)*ntasks/YN)&
 !         CALL MPI_Send(EFS % F,NTOT_prev % F,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_ACTIVE,ierr)
+!         dest,tag,MPI_COMM_WORLD,ierr)
 !         IF (myid.ge.ntasks/YN)&
 !         CALL MPI_Recv(EFS % B,NTOT_prev % B,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_ACTIVE,stat,ierr)
+!         source,tag,MPI_COMM_WORLD,stat,ierr)
 
 !         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
 !         DO I=1,NTOT_prev % FL
@@ -1041,10 +1041,10 @@ END IF
 !         tag=133
 !         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
 !         CALL MPI_Send(EFS % FL,NTOT_prev % FL,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_ACTIVE,ierr)
+!         dest,tag,MPI_COMM_WORLD,ierr)
 !         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
 !         CALL MPI_Recv(EFS % BR,NTOT_prev % BR,MPI_DOUBLE_PRECISION,& 
-!         source,tag,MPI_COMM_ACTIVE,stat,ierr)
+!         source,tag,MPI_COMM_WORLD,stat,ierr)
 
 !         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
 !         DO I=1,NTOT_prev % FR
@@ -1080,10 +1080,10 @@ END IF
 !         IF (myid.lt.(YN-1)*ntasks/YN&
 !         .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
 !         CALL MPI_Send(EFS % FR,NTOT_prev % FR,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_ACTIVE,ierr)
+!         dest,tag,MPI_COMM_WORLD,ierr)
 !         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
 !         CALL MPI_Recv(EFS % BL,NTOT_prev % BL,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_ACTIVE,stat,ierr)
+!         source,tag,MPI_COMM_WORLD,stat,ierr)
 
 ! !        IF (myid.gt.(ntasks-1)/YN) THEN
 ! !        DO I=1,NTOT_prev % B
@@ -1206,17 +1206,17 @@ END IF
           tag=151
           IF (myid.NE.0)&
           CALL MPI_Send(UT2%M,6*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_ACTIVE,ierr)
+          dest,tag,MPI_COMM_WORLD,ierr)
 
           tag=152
           IF (myid.NE.0)&
           CALL MPI_Send(NANS,2*NTOT,MPI_INTEGER,&
-          dest,tag,MPI_COMM_ACTIVE,ierr)
+          dest,tag,MPI_COMM_WORLD,ierr)
 
           tag=161
           IF (myid.NE.0)&
           CALL MPI_Send(NRXF2%M,3*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_ACTIVE,ierr)
+          dest,tag,MPI_COMM_WORLD,ierr)
 
           IF (myid.EQ.0) THEN
           OPEN(UNIT=910,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
@@ -1227,13 +1227,13 @@ END IF
           source=KK
 
           tag=151
-          CALL MPI_Recv(UTW,6*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
+          CALL MPI_Recv(UTW,6*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
 
           tag=152
-          CALL MPI_Recv(NANW,2*NTOTW(source),MPI_INTEGER,source,tag,MPI_COMM_ACTIVE,stat,ierr)
+          CALL MPI_Recv(NANW,2*NTOTW(source),MPI_INTEGER,source,tag,MPI_COMM_WORLD,stat,ierr)
 
           tag=161
-          CALL MPI_Recv(NRXFW,3*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
+          CALL MPI_Recv(NRXFW,3*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
 
           DO I=1,PNN(source)
 	  X=NRXFW(1,I)+UTW(6*I-5)
@@ -1324,14 +1324,14 @@ END IF
 !
 !        dest=0
 !	tag=171
-!        IF (myid.NE.0) CALL MPI_Send(CCN,NN,MPI_DOUBLE_PRECISION,dest,tag,MPI_COMM_ACTIVE,ierr)
+!        IF (myid.NE.0) CALL MPI_Send(CCN,NN,MPI_DOUBLE_PRECISION,dest,tag,MPI_COMM_WORLD,ierr)
 !
 !        IF (myid.EQ.0) THEN
 !	OPEN(UNIT=112, FILE='frag',STATUS='UNKNOWN')
 !         DO KK=1,ntasks-1
 !         source=KK
 !         tag=171
-!         CALL MPI_Recv(CCNW,NN,MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_ACTIVE,stat,ierr)
+!         CALL MPI_Recv(CCNW,NN,MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
 !           DO I=1,NN
 !           CCN(I)=CCN(I)+CCNW(I)
 !	   END DO

@@ -22,8 +22,6 @@ MODULE INOUT
 
   IMPLICIT NONE
 
-  INTEGER :: MPI_COMM_ACTIVE
-
 CONTAINS
 
  SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
@@ -341,7 +339,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     !PRINT *,myid,' debug, has ',NTOT%M,' own beams, ',Nbeams,' total.'
 
     CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
-         1, MPI_INTEGER, MPI_COMM_ACTIVE, ierr)
+         1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
     NBeamsTot = SUM(PNBeams(1:ntasks))
 
     ! Write all beams to work array
@@ -414,7 +412,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     fh_mystarts(ms_counter) = fh_starts(ms_counter)
   END IF
 
-  CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
+  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
 
   IF(myid==0) THEN
@@ -505,7 +503,7 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   END IF
 
   !... and tell everyone else
-  CALL MPI_BCast(fh_mpi_byte_offset,1, MPI_OFFSET, 0, MPI_COMM_ACTIVE, ierr)
+  CALL MPI_BCast(fh_mpi_byte_offset,1, MPI_OFFSET, 0, MPI_COMM_WORLD, ierr)
 
   !Update cpu specific start points w/ header length
   fh_starts = fh_mpi_byte_offset + fh_starts
@@ -631,7 +629,7 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   IF(DebugMode) PRINT *,myid,' debug nbeams, ntot: ',nbeams, ntot
 
   CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
-       1, MPI_INTEGER, MPI_COMM_ACTIVE, ierr)
+       1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
   NBeamsTot = SUM(PNBeams(1:ntasks))
 
   fh_mystart = 0
@@ -675,7 +673,7 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
 
   IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
 
-  CALL MPI_File_Open(MPI_COMM_ACTIVE,TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.bin',&
+  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.bin',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
 
   !root write out header info (count & type)
@@ -758,33 +756,5 @@ END SUBROUTINE BinarySTROutput
       PRINT *, 'WARNING: ',Message
 
     END SUBROUTINE Warn
-
-    !Create the 'MPI_COMM_ACTIVE' communicator which includes only 
-    !CPUs which are actually doing something
-    SUBROUTINE RedefineMPI(noprocs)
-
-      INCLUDE 'mpif.h'
-
-      INTEGER :: i, noprocs, groupworld, groupactive,ierr
-      INTEGER, ALLOCATABLE :: active_parts(:)
-
-        CALL MPI_COMM_GROUP(MPI_COMM_WORLD, groupworld, ierr)
-        ALLOCATE(active_parts(noprocs))
-        DO i=1,noprocs
-          active_parts(i) = i-1
-        END DO
-
-        CALL MPI_Group_Incl(groupworld, noprocs, active_parts, groupactive, ierr)
-        CALL MPI_Comm_Create(MPI_COMM_WORLD, groupactive, MPI_COMM_ACTIVE, ierr)
-
-        IF(myid < noprocs) THEN
-          CALL MPI_BARRIER(MPI_COMM_ACTIVE, ierr)
-        ELSE
-          PRINT *,'MPI process ',myid,' terminating because not required.'
-          CALL MPI_Finalize(ierr)
-          STOP
-        END IF
-
-      END SUBROUTINE RedefineMPI
 
   END MODULE INOUT

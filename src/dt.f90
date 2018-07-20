@@ -44,7 +44,7 @@
         OPEN(UNIT=310+myid,FILE=TRIM(wrkdir)//'/FSL'//na(myid),STATUS='UNKNOWN')
         OPEN(UNIT=410+myid,FILE=TRIM(wrkdir)//'/FSR'//na(myid),STATUS='UNKNOWN')
 
-        CALL MPI_ALLGATHER(NNA,1,MPI_INTEGER,PNN,1,MPI_INTEGER,MPI_COMM_ACTIVE,ierr)
+        CALL MPI_ALLGATHER(NNA,1,MPI_INTEGER,PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
 	ND%M=0
 	ND%L=0
@@ -83,10 +83,10 @@
         tag=32
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(NRXF%L,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
       dest=myid-1
       source=myid+1
@@ -94,10 +94,10 @@
         tag=33
       IF (MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(NRXF%R,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
 !      IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
       IF (MOD(myid,ntasks/YN).ne.0) THEN
@@ -163,10 +163,10 @@
         tag=34
       IF (myid.lt.(YN-1)*ntasks/YN)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.ge.ntasks/YN)&
       CALL MPI_Recv(NRXF%B,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
       dest=myid-ntasks/YN
       source=myid+ntasks/YN
@@ -174,10 +174,10 @@
         tag=35
       IF (myid.ge.ntasks/YN)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN)&
       CALL MPI_Recv(NRXF%F,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
 
       IF (myid.ge.ntasks/YN) THEN
@@ -245,10 +245,10 @@
         tag=36
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(NRXF%BR,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
       dest=myid-ntasks/YN-1
       source=myid+ntasks/YN+1
@@ -256,11 +256,11 @@
         tag=37
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN&
       .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Recv(NRXF%FR,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
 
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
@@ -329,10 +329,10 @@
       IF (myid.lt.(YN-1)*ntasks/YN&
       .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(NRXF%BL,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
       dest=myid-ntasks/YN+1
       source=myid+ntasks/YN-1
@@ -340,10 +340,10 @@
         tag=39
       IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
       CALL MPI_Send(NRXF%M,3*NOMA,MPI_DOUBLE_PRECISION,&
-      dest,tag,MPI_COMM_ACTIVE,ierr)
+      dest,tag,MPI_COMM_WORLD,ierr)
       IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
       CALL MPI_Recv(NRXF%FL,3*NOMA,MPI_DOUBLE_PRECISION,&
-      source,tag,MPI_COMM_ACTIVE,stat,ierr)
+      source,tag,MPI_COMM_WORLD,stat,ierr)
 
 
 
