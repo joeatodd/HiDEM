@@ -233,8 +233,7 @@ contains
     node%num_point = 0
     if (.not. allocated(node%point_ids)) allocate(node%point_ids(config%max_num_point))
     nullify(node%parent)
-    !NOTE: technically not even safe to query associated status of an uninitialized pointer...
-    if (size(node%children) == 8 .AND. associated(node%children)) deallocate(node%children)
+    if (associated(node%children)) deallocate(node%children)
     nullify(node%children)
 
   end subroutine reset_node
