@@ -13,10 +13,10 @@ from timeit import default_timer as timer
 # get input files from user
 
 def usage():
-    print ("Usage: " + sys.argv[0] + " -i input_file_glob -b buffer_dist (m, optional) -n interval (process every nth) -v max_str ")
+    print ("Usage: " + sys.argv[0] + " -i input_file_glob -b buffer_dist (m, optional) -n interval (process every nth) -v max_str -d dx")
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],"i:b:n:lv:")
+    opts, args = getopt.getopt(sys.argv[1:],"i:b:d:n:lv:")
 except getopt.GetoptError:
     usage()
     sys.exit(2)
@@ -38,7 +38,7 @@ def str_from_file(fname,legacy_input):
 
 #default buffer distance (added to max_x and max_y
 buff = 500.0
-dx = 50.0
+dx = 60.0
 buff_boxes = math.floor(buff/dx)
 interval = 1
 legacy_input = False
@@ -48,18 +48,19 @@ for opt, arg in opts:
     if(opt =="-i"):
         inglob = arg
     elif(opt =='-b'):
-        buff = arg
+        buff = float(arg)
+    elif(opt == '-d'):
+		dx = float(arg)
     elif(opt =='-n'):
-        interval == arg
+        interval == int(arg)
     elif(opt =='-l'):
         legacy_input = True
     elif(opt =='-v'):
-        vmax = arg
+        vmax = float(arg)
     else:
         print "help"
         usage()
         sys.exit(2)
-
 
 #Find the input files
 if legacy_input:
@@ -94,6 +95,7 @@ for j,f in enumerate(infiles[1:]):
 
     #get the strain 'rate'
     strate = abs(str1[:,3] - str0[:,3])
+
 
     sx_plan = np.zeros([len(xx), len(yy)])
     nx_plan = np.zeros([len(xx), len(yy)])
