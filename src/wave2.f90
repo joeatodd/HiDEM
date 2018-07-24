@@ -203,10 +203,9 @@ END IF
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
 
- !TODO - allocate these to same size as NRXF
         !Allocate point data structures & pointers
-        CALL PointDataInit(UT2,NN,part_expand)
-        CALL PointDataInit(UTM2,NN,part_expand)
+        CALL PointDataInit(UT2,NRXF2)
+        CALL PointDataInit(UTM2,NRXF2)
 
  !TODO - test output of NCN, CN, particles_g, NRXF
 
@@ -271,6 +270,8 @@ END IF
 
         !TODO -sort this nightmare
         IF(NRXF2%cstrt + NRXF2%NC > SIZE(NRXF2%A,2)) CALL ResizePointData(NRXF2,1.5_8)
+        CALL PointDataInit(UT2,NRXF2)
+        CALL PointDataInit(UTM2,NRXF2)
 
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
         PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)

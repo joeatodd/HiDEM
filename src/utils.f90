@@ -5,7 +5,7 @@ MODULE UTILS
   IMPLICIT NONE
 
   INTERFACE PointDataInit
-     MODULE PROCEDURE PointDataInitNRXF, PointDataInitUT
+     MODULE PROCEDURE PointDataInitNRXF, PointDataInitUT, PointDataInitUTNRXF
   END INTERFACE PointDataInit
 
   INTERFACE ResizePointData
@@ -129,11 +129,33 @@ MODULE UTILS
       ALLOCATE(UT%A(6*n_tot))
       UT%A = 0.0
       UT%M => UT%A(1:6*n)
-      UT%P => UT%A((6*n+1):UBOUND(UT%A,1))
+      ! UT%P => UT%A((6*n+1):UBOUND(UT%A,1)) <- not used
 
       IF(DebugMode) PRINT *,'Debug,ut init n, ntot: ',n,n_tot, SIZE(UT%A), SIZE(UT%M), SIZE(UT%P)
 
     END SUBROUTINE PointDataInitUT
+
+    SUBROUTINE PointDataInitUTNRXF(UT, NRXF)
+      TYPE(UT2_T), TARGET :: UT
+      TYPE(NRXF2_T) :: NRXF
+      INTEGER :: n_tot, NN
+
+      n_tot = SIZE(NRXF%A,2)
+
+      IF(ALLOCATED(UT%A)) THEN
+        PRINT *, "Programming error: abuse of PointDataInitUT"
+        STOP
+      END IF
+
+      ALLOCATE(UT%A(6*n_tot))
+      UT%A = 0.0
+      UT%M => UT%A(1:6*NRXF%NN)
+      ! UT%P => UT%A((6*n+1):UBOUND(UT%A,1)) <- not used
+
+      IF(DebugMode) PRINT *,myid,' Debug, UT init NN, ntot: ',NRXF%NN,n_tot, SIZE(UT%A), &
+           SIZE(UT%M), SIZE(UT%P)
+
+    END SUBROUTINE PointDataInitUTNRXF
 
     SUBROUTINE InvPartInfoInit(InvPartInfo,neighparts,initsize_in)
       TYPE(InvPartInfo_t),ALLOCATABLE :: InvPartInfo(:)
@@ -200,17 +222,18 @@ MODULE UTILS
 
     END SUBROUTINE NewInvPartInfo
 
-    SUBROUTINE ResizePointDataNRXF(NRXF,scale,do_M,do_C,do_P)
+    SUBROUTINE ResizePointDataNRXF(NRXF,scale,UT,UTM,do_M,do_C,do_P)
 
       TYPE(NRXF2_T), TARGET :: NRXF
+      TYPE(UT2_T), OPTIONAL, TARGET :: UT, UTM
       REAL*8 :: scale
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
-      REAL*8, ALLOCATABLE :: work_arr(:,:)
+      REAL*8, ALLOCATABLE :: work_arr(:,:),work_arr1(:)
       INTEGER, ALLOCATABLE :: work_int(:,:)
       INTEGER :: a_oldsize,m_oldsize,c_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,c_newsize,p_newsize
-      INTEGER :: cstrt_new, pstrt_new
+      INTEGER :: cstrt_new, pstrt_new,cstrt_old, pstrt_old
       LOGICAL :: doM,doC,doP
       
       IF(PRESENT(do_M)) THEN
@@ -236,31 +259,47 @@ MODULE UTILS
         STOP
       END IF
 
+      !ISSUE in here - repeated resizing produces wacky results - see LOG_5492906.sdb in test_metis
       a_oldsize = SIZE(NRXF%A,2)
       m_oldsize = NRXF%cstrt - NRXF%mstrt
+      IF(NRXF%NN > m_oldsize) THEN
+        IF(DebugMode) PRINT *,myid,' WARNING: ResizePointDataNRXF: NRXF%NN overlaps NC'
+        m_oldsize = NRXF%NN
+        NRXF%cstrt = NRXF%NN+1
+      END IF
+
+      c_oldsize = NRXF%pstrt - NRXF%cstrt
+      IF(NRXF%NC > c_oldsize) THEN
+        IF(DebugMode) PRINT *,myid,' WARNING: ResizePointDataNRXF: NRXF%NC overlaps NP'
+        c_oldsize = NRXF%NC
+        NRXF%pstrt = NRXF%cstrt + NRXF%NC
+      END IF
+
+      p_oldsize = a_oldsize - NRXF%pstrt + 1
+      IF(NRXF%NP > p_oldsize) THEN
+        IF(DebugMode) PRINT *,myid,' WARNING: ResizePointDataNRXF: NRXF%NP overlaps array end'
+        p_oldsize = NRXF%NP
+      END IF
 
       IF(SIZE(NRXF%M,2) /= m_oldsize) THEN
         PRINT *, "ERROR: NRXF%M wrong size in ResizePointData"
         STOP
       END IF
 
-      c_oldsize = NRXF%pstrt - NRXF%cstrt
-      p_oldsize = a_oldsize - NRXF%pstrt + 1
-
       IF(doM) THEN
-        m_newsize = CEILING(m_oldsize*scale)
+        m_newsize = MAX(CEILING(m_oldsize*scale),100)
       ELSE
         m_newsize = m_oldsize
       END IF
 
       IF(doC) THEN
-        c_newsize = CEILING(c_oldsize*scale)
+        c_newsize = MAX(CEILING(c_oldsize*scale),100)
       ELSE
         c_newsize = c_oldsize
       END IF
 
       IF(doP) THEN
-        p_newsize = CEILING(p_oldsize*scale)
+        p_newsize = MAX(CEILING(p_oldsize*scale),100)
       ELSE
         p_newsize = p_oldsize
       END IF
@@ -272,6 +311,11 @@ MODULE UTILS
 
       IF(DebugMode) PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, c_oldsize, p_oldsize,&
            'new: ',a_newsize, m_newsize, c_newsize, p_newsize, 'strts: ', cstrt_new, pstrt_new
+
+      IF(a_oldsize < 0 .OR. m_oldsize < 0 .OR. c_oldsize < 0 .OR. p_oldsize < 0 .OR. &
+           a_newsize < 0 .OR. m_newsize < 0 .OR. c_newsize < 0 .OR. p_newsize < 0) THEN
+        PRINT *,'ResizePointDataNRXF: Programming error, negative sizes!'
+      END IF
 
       ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
       work_arr = 0.0
@@ -288,14 +332,44 @@ MODULE UTILS
       CALL MOVE_ALLOC(work_arr, NRXF%A)
       CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
 
+      cstrt_old = NRXF%cstrt
+      pstrt_old = NRXF%pstrt
+
       NRXF%cstrt = cstrt_new
       NRXF%pstrt = pstrt_new
       
       NRXF%M => NRXF%A(:,1:m_newsize)
       ! NRXF%P => NRXF%A(:,m_newsize+1 : a_newsize)
 
+      IF(PRESENT(UT)) THEN
+        ALLOCATE(work_arr1(a_newsize*6))
+        work_arr1 = 0.0
 
-      PRINT *,myid,' debug2 resize nrxf: ',SIZE(NRXF%A,2),NRXF%cstrt, NRXF%pstrt
+        work_arr1(1:m_oldsize*6) = UT%A(1:m_oldsize*6)
+        work_arr1((cstrt_new-1)*6 - 1 : (cstrt_new-1)*6 + c_oldsize*6) = &
+             UT%A((cstrt_old-1)*6 - 1 : (cstrt_old-1)*6 + c_oldsize*6)
+        work_arr1((pstrt_new-1)*6 - 1 : (pstrt_new-1)*6 + p_oldsize*6) = &
+             UT%A((pstrt_old-1)*6 - 1 : (pstrt_old-1)*6 + p_oldsize*6)
+
+        CALL MOVE_ALLOC(work_arr1, UT%A)
+        UT%M => UT%A(1:m_newsize*6)
+      END IF
+
+      IF(PRESENT(UTM)) THEN
+        ALLOCATE(work_arr1(a_newsize*6))
+        work_arr1 = 0.0
+
+        work_arr1(1:m_oldsize*6) = UTM%A(1:m_oldsize*6)
+        work_arr1((cstrt_new-1)*6 - 1 : (cstrt_new-1)*6 + c_oldsize*6) = &
+             UTM%A((cstrt_old-1)*6 - 1 : (cstrt_old-1)*6 + c_oldsize*6)
+        work_arr1((pstrt_new-1)*6 - 1 : (pstrt_new-1)*6 + p_oldsize*6) = &
+             UTM%A((pstrt_old-1)*6 - 1 : (pstrt_old-1)*6 + p_oldsize*6)
+
+        CALL MOVE_ALLOC(work_arr1, UTM%A)
+        UTM%M => UTM%A(1:m_newsize*6)
+      END IF
+
+      IF(DebugMode) PRINT *,myid,' debug2 resize nrxf: ',SIZE(NRXF%A,2),NRXF%cstrt, NRXF%pstrt
 
     END SUBROUTINE ResizePointDataNRXF
 
@@ -338,18 +412,21 @@ MODULE UTILS
       p_oldsize = SIZE(UT%P)/6
 
       IF(doP) THEN
-        p_newsize = CEILING(p_oldsize*scale)
+        p_newsize = MAX(CEILING(p_oldsize*scale),100)
       ELSE
         p_newsize = p_oldsize
       END IF
 
       IF(doM) THEN
-        m_newsize = CEILING(m_oldsize*scale)
+        m_newsize = MAX(CEILING(m_oldsize*scale),100)
       ELSE
         m_newsize = m_oldsize
       END IF
 
       a_newsize = m_newsize + p_newsize
+
+      IF(DebugMode) PRINT *,myid,' debug resize ut: ',a_oldsize, m_oldsize, p_oldsize,&
+           'new: ',a_newsize, m_newsize, p_newsize
 
       a_newsize = a_newsize * 6
       m_newsize = m_newsize * 6

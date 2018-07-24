@@ -378,13 +378,13 @@ DO j=1,neighcount
     InvPartInfo(n) % ConnIDs(countptr) = NANS(1,i)
     InvPartInfo(n) % ConnLocs(countptr) = counter
     
-    IF(counter > SIZE(NRXF%PartInfo,2)) CALL ResizePointData(NRXF,1.5_8)
+    IF(counter > SIZE(NRXF%PartInfo,2)) CALL ResizePointData(NRXF,1.5_8, do_C=.TRUE.,do_P=.FALSE.)
     NRXF%PartInfo(1,counter) = InvPartInfo(n) % NID
     NRXF%PartInfo(2,counter) = NANS(1,i)
+
+    NRXF%NC = NRXF%NC + 1
   END DO
 END DO
-NRXF%NC = counter-NRXF%cstrt+1
-NRXF%pstrt = NRXF%cstrt + NRXF%NC
 
 !Change NANS to array loc:
 DO i=1,NTOT
@@ -428,7 +428,7 @@ OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
 DO i=1,NN
   WRITE(510+myid,12) i,NRXF%A(:,i),1.0
 END DO
-DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC
+DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
   WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
 END DO
 CLOSE(510+myid)
@@ -754,14 +754,11 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
       neigh = PointEx(i) % partid
       getcount = PointEx(i) % rcount
       
-      ! TODO ***************
-      ! IF((counter + getcount)*6 > SIZE(UT%P)) THEN
-      !   PRINT *,myid,' debug, resizing UT'
-      !   CALL ResizePointData(UT,1.5_8)
-      ! END IF
-      
       DO j=1,getcount
         loc = InvPartInfo(i) % ConnLocs(j)
+        IF(6*loc > UBOUND(UT%A,1)) CALL FatalError(&
+             "ExchangeConnPoints: Insufficient space in UT array")
+
         UT%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*12-11 : j*12-6)
         UTM%A(6*loc-5 : 6*loc) = PointEx(i) % R(j*12-5 : j*12)
       END DO
@@ -888,6 +885,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     ALLOCATE(PointEx(i) % S(12 * PointEx(i) % scount))
     CALL MPI_ISend(PointEx(i) % scount,1,MPI_INTEGER,i,&
          201,MPI_COMM_WORLD,stats(i*4),ierr)
+
     CALL MPI_ISend(PointEx(i) % SendIDs(1:cnt),cnt,MPI_INTEGER,i,&
          202,MPI_COMM_WORLD,stats(i*4+1),ierr)
 
@@ -896,11 +894,12 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
          203,MPI_COMM_WORLD,stats(i*4+2),ierr)
     CALL MPI_ISend(NRXFPointEx(i) % SendIDs(1:cnt2),cnt2,MPI_INTEGER,i,&
          204,MPI_COMM_WORLD,stats(i*4+3),ierr)
-
   END DO
 
 
   !Receive count and IDs sent above
+  !Note: this code can throw up array bounds checking errors when receiving zero points, but
+  ! its not an issue.
   DO i=0,ntasks-1
     IF(.NOT. PartIsNeighbour(i)) CYCLE
 
@@ -911,7 +910,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
          PointEx(i) % RecvIDs(cnt))
 
     CALL MPI_Recv(PointEx(i) % RecvIDs(1:cnt),cnt, MPI_INTEGER, i,202,MPI_COMM_WORLD, stat, ierr)
-
 
     CALL MPI_Recv(NRXFPointEx(i) % rcount, 1, MPI_INTEGER, i,203,MPI_COMM_WORLD, stat, ierr)
     cnt = NRXFPointEx(i) % rcount
@@ -939,10 +937,9 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
       new_id = NRXFPointEx(i) % RecvIDs(j)
 
       IF(put_loc > SIZE(NRXF%A,2)) THEN
-        IF(DebugMode) PRINT *,myid,' debug, resizing NRXF & UT'
-        CALL ResizePointData(NRXF,2.0_8,.FALSE.,.FALSE.,.TRUE.)
-        CALL ResizePointData(UT,2.0_8,.FALSE.,.FALSE.,.TRUE.)
-        CALL ResizePointData(UTM,2.0_8,.FALSE.,.FALSE.,.TRUE.)
+        IF(DebugMode) PRINT *,myid,' ExchangeProxPoints: resizing NRXF & UT: ',&
+             SIZE(NRXF%A,2),SIZE(UT%A)/6.0, SIZE(UTM%A)/6.0
+        CALL ResizePointData(NRXF,2.0_8,UT,UTM,.FALSE.,.FALSE.,.TRUE.)
       END IF
 
       NRXF%PartInfo(1,put_loc) = i
@@ -1041,9 +1038,11 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
     CALL sort_int2(InvPartInfo(i) % ProxIDs, InvPartInfo(i) % ProxLocs, InvPartInfo(i) % Pcount)
     DO j=1,PointEx(i) % rcount
-      IF(PointEx(i) % RecvIDs(j) /= InvPartInfo(i) % ProxIDs(j)) &
+      IF(PointEx(i) % RecvIDs(j) /= InvPartInfo(i) % ProxIDs(j)) THEN
+        PRINT *,myid,' debug, j,recvid,proxid: ',j, PointEx(i) % RecvIDs(j), &
+             InvPartInfo(i) % ProxIDs(j)
         CALL FatalError("ExchangeProxPoints: Incorrect sorting assumption")
-
+      END IF
       put_loc = InvPartInfo(i) % ProxLocs(j)
 
       UT%A(6*put_loc - 5) = PointEx(i) % R(j*12 - 11)
