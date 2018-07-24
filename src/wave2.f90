@@ -99,9 +99,6 @@
         CALL MPI_COMM_SIZE(MPI_COMM_WORLD, ntasks, rc)
         ntasks_init = ntasks
 
-        PrintTimes = .FALSE.
-        DebugMode = .FALSE.
-
 IF(myid==0) THEN
   CALL DATE_AND_TIME(VALUES=datetime)
 5 FORMAT("HiDEM run starting at: ",i2.2,"/",i2.2,"/",i4.4,' ',i2.2,':',i2.2,':',i2.2)

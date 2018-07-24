@@ -80,6 +80,8 @@ CONTAINS
    FixLat = .FALSE.
    FixBack = .TRUE.
    GeomMasked = .FALSE.
+   DebugMode = .FALSE.
+   PrintTimes = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -192,6 +194,10 @@ CONTAINS
        READ(VarValue,*) FixLat
      CASE("fixed inflow margin")
        READ(VarValue,*) FixBack
+     CASE("debug mode")
+       READ(VarValue,*) DebugMode
+     CASE("print times")
+       READ(VarValue,*) PrintTimes
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
