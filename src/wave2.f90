@@ -47,10 +47,12 @@
 	INTEGER, ALLOCATABLE :: CCN(:),CCNW(:)
 	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
 	INTEGER REST,RY0,NM2,noprocs, counter
+        INTEGER, POINTER :: countptr
 	REAL*8 M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
 	REAL*8 DMPEN,PSUM,KIN,KIN2,PRESS,MELT
-	INTEGER I,N,NL,NN,STEPS,IX,IM,MS,N1,N2,P1,RY
-	INTEGER PN,NRY,NTOTW(0:5000),XK,YK,ZK
+	INTEGER I,N,NL,NN,NSIZE,STEPS,IX,IM,MS,N1,N2,P1,RY
+        INTEGER cstrt,NC,pstrt,NP
+	INTEGER PN,NRY,NTOTW(0:5000),XK,YK,ZK,Part,ID
         REAL*8 L,ALF,MLOAD,DMP,VEL,G,S1,S2,M1,B1,B2
 	REAL*8 S,LOAD,DMP2,BCE,STR,I1,I2,ZB,ZS
 	REAL*8 T2,T1,TS1,TT1,TT2,ENM,WEN,ERSUM
@@ -85,9 +87,9 @@
 
 !        TYPE(EF_t) :: EFS
         TYPE(NEI_t) :: NeighbourID
-        TYPE(UT2_t) :: UT2, UTM2
-        TYPE(NRXF2_t) :: NRXF2
-        TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
+        TYPE(UT_t) :: UT, UTM
+        TYPE(NRXF_t) :: NRXF
+        TYPE(InvPartInfo_t), TARGET, ALLOCATABLE :: InvPartInfo(:)
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -188,175 +190,7 @@ END IF
         PartIsNeighbour = .FALSE.
         PNN = 0
 
-	IF (REST.EQ.0) THEN
-
-	RY0=1
-
-!TODO - automatically translate and rotate the input data 
-!     (interp required <- either at load time or within BIPINT)
-!     Write out translation and rotation matrices to REST?
-
-        !Go to glas.f90 to make the grid
-	CALL FIBG3(NN,NTOT,NANS,NRXF2,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
-        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,&
-        StrictDomain)
- 
-        IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
-
-        !Allocate point data structures & pointers
-        CALL PointDataInit(UT2,NRXF2)
-        CALL PointDataInit(UTM2,NRXF2)
-
- !TODO - test output of NCN, CN, particles_g, NRXF
-
-        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
-        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
-
-        !PRINT *, myid,' neighparts: ',neighparts(1:neighcount)
-
-        MAXX = BBox(2)
-        MAXY = BBox(4)
-        MAXZ = BBox(6) !don't really use these...
-
-        IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
-
-	PRINT *, myid,NN,NTOT
-        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
-        !NN - particles in each core
-        CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-
-        !TODO - links to CSV output - replace
-        CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-
-        IF(DebugMode) PRINT *,myid,'Wave checkpoint 2'
-
-        !MATHS!
-        !Iterate over: this part nodes, edge nodes
-
-	T=0 !T is time
-	ENM=0.0
-	WEN=0.0
-	ENM0=0
-
-        UT2%M = 0.0    ! UT%M = current displacement
-        UTM2%M = 0.0   ! UTM%M = previous displacement
-
-        ALLOCATE(CT(NTOT*12))
-        CT = 0.0
-
-
-        !======================== IF RESTART ======================
-	ELSE         !If restarting, read from restart file instead
-
-
-   !TODO - not sure that NRXF%PartInfo etc is correctly filled in here...
-
-        INQUIRE( FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid), EXIST=FileExists ) 
-        IF(.NOT. FileExists) CALL FatalError("Running with too many cores!&
-             &(some restart files don't exist)")
-
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
-        READ(117+myid,*) NN,NTOT,BCC
-        !Allocate the structure holding the point data
-        CALL PointDataInit(NRXF2,NN,part_expand)
-        READ(117+myid,*) NRXF2%cstrt,NRXF2%NC
-        READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
-        READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
-        CLOSE(117+myid)
-
-        !TODO -sort this nightmare
-        IF(NRXF2%cstrt + NRXF2%NC > SIZE(NRXF2%A,2)) CALL ResizePointData(NRXF2,1.5_8)
-        CALL PointDataInit(UT2,NRXF2)
-        CALL PointDataInit(UTM2,NRXF2)
-
-        CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
-        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-
-        !TODO - links to CSV output - replace
-        CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
-        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-
-        ALLOCATE(CT(12*NTOT))          ! CT - cumulative translation of all the beams
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
-	DO I=1,NTOT
-	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
-      	CT(12*I-8),CT(12*I-7),CT(12*I-6)
-	READ(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),&
-      	CT(12*I-2),CT(12*I-1),CT(12*I-0)
-	END DO
-	CLOSE (117+myid)
-
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD')
-	DO I=1,NN
-	READ(117+myid,*) UT2%M(6*I-5),UT2%M(6*I-4),UT2%M(6*I-3),&
-      	UT2%M(6*I-2),UT2%M(6*I-1),UT2%M(6*I-0)
-	READ(117+myid,*) UTM2%M(6*I-5),UTM2%M(6*I-4),UTM2%M(6*I-3),&
-      	UTM2%M(6*I-2),UTM2%M(6*I-1),UTM2%M(6*I-0)
-	END DO
-	CLOSE (117+myid)
-
-        !Read particle init pos from file if restarting
- !TODO - writing of NODFIL2 has been modified to include neighbouring connected points
- ! so this is inconsistent
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
-	DO I=1,NN
-          READ(117+myid,*) IX,X,Y,Z,M
-          NRXF2%M(1,IX)=X
-          NRXF2%M(2,IX)=Y
-          NRXF2%M(3,IX)=Z
-        END DO
-	CLOSE (117+myid)
-
-        END IF 
-        
-
-! ============== END IF RESTART ==============
-
-
-        IF(DebugMode) PRINT *,myid,' checkpoint 3'
-
-        !initialize some data
-
-        !Keep track of any particles which leave the domain
-        ALLOCATE(LostParticle(NN),&
-             EFS(NTOT),&
-             VDP(NN),&
-             FRX(NN),&
-             FRY(NN),&
-             FRZ(NN),&
-             WE(NN),&
-             EN(NN*6),&
-             UTP(NN*6),&
-             UTW(NN*6),&
-             R(NN*6),&
-             EMM(NN),&
-             BOYZ(NN),&
-             BOYY(NN),&
-             WSY(NN),&
-             WSX(NN),&
-             NRXFW(3,MAXVAL(PNN)),&
-             RAN(NTOT))
-
-        !ALLOCATE(CCN(NN),CCNW(NN))
-
-        LostParticle = .FALSE.
-        VDP = 0.0     !VDP = drag coefficient
-        EN = 0.0
-        UTP = 0.0
-        UTW = 0.0
-        R = 0.0
-
-        SEED=SEEDI+873*myid
-        CALL RMARIN(SEED,0,0)
-        CALL RANMAR(RAN,NTOT)
-
-
-        ALLOCATE(EFC(SIZE(NRXF2%A,2))) !to hold our & other nodes
-        EFC = SCL*EF0
+!============= Read in the geometry from DEM ==============
 
         !Set bed -1000.0 everywhere
         DO I=-100,2000
@@ -410,6 +244,257 @@ END IF
 	ENDDO
 	CLOSE(400)
 
+
+!============= Generate the lattice if new run ==============
+
+	IF (REST.EQ.0) THEN
+
+	RY0=1
+
+!TODO - automatically translate and rotate the input data 
+!     (interp required <- either at load time or within BIPINT)
+!     Write out translation and rotation matrices to REST?
+
+        !Go to glas.f90 to make the grid
+	CALL FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
+        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,&
+        StrictDomain)
+ 
+        IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
+
+        !Allocate point data structures & pointers
+        CALL PointDataInit(UT,NRXF)
+        CALL PointDataInit(UTM,NRXF)
+
+ !TODO - test output of NCN, CN, particles_g, NRXF
+
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
+        CALL GetBBoxes(NRXF, UT, NN, BBox, PBBox)
+
+        !PRINT *, myid,' neighparts: ',neighparts(1:neighcount)
+
+        MAXX = BBox(2)
+        MAXY = BBox(4)
+        MAXZ = BBox(6) !don't really use these...
+
+        IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
+
+	PRINT *, myid,NN,NTOT
+        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
+        !NN - particles in each core
+        CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
+        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+
+        !TODO - links to CSV output - replace
+        CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
+        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+
+        IF(DebugMode) PRINT *,myid,'Wave checkpoint 2'
+
+        !MATHS!
+        !Iterate over: this part nodes, edge nodes
+
+	T=0 !T is time
+	ENM=0.0
+	WEN=0.0
+	ENM0=0
+
+        UT%M = 0.0    ! UT%M = current displacement
+        UTM%M = 0.0   ! UTM%M = previous displacement
+
+        ALLOCATE(CT(NTOT*12),RAN(NTOT))
+        CT = 0.0
+
+        SEED=SEEDI+873*myid
+        CALL RMARIN(SEED,0,0)
+        CALL RANMAR(RAN,NTOT)
+
+        !This code reads in connection information for each partition
+        !and works out whether to randomise or receive the EFS value
+        ALLOCATE(EFS(NTOT))
+        DO I=1,NTOT
+          
+          aboveShearLine = .TRUE.
+          IF(doShearLine) THEN
+            N1 = NANS(1,I)
+            N2 = NANS(2,I)
+            X1 = NRXF%A(1,N1)
+            Y1 = NRXF%A(2,N1)
+            Z1 = NRXF%A(3,N1)
+
+            I1=X1/GRID-INT(X1/GRID)
+            I2=Y1/GRID-INT(Y1/GRID)
+            CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
+                 SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
+
+            aboveShearLine = ABS(Z1-ZS).LT.SLIN
+          END IF
+
+          IF (RAN(I).LT.1.0-POR.AND.aboveShearLine) THEN
+            EFS(I)=EF0
+          ELSE
+            EFS(I)=0.1
+          ENDIF
+        END DO
+
+        !Share randomly generated EFS with other parts to avoid conflict
+        CALL ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
+
+!======================== Read Restart Data ======================
+
+	ELSE         !If restarting, read from restart file instead
+
+
+   !TODO - not sure that NRXF%PartInfo etc is correctly filled in here...
+
+        INQUIRE( FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid), EXIST=FileExists ) 
+        IF(.NOT. FileExists) CALL FatalError("Running with too many cores!&
+             &(some restart files don't exist)")
+
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
+        READ(117+myid,*) NN,cstrt,NC,pstrt,NP,NSIZE,NTOT,BCC
+        READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
+        READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
+        CLOSE(117+myid)
+
+        !Allocate the structures holding the point data
+        CALL PointDataInit(NRXF,NN,arrsize=NSIZE)
+        NRXF % cstrt = cstrt
+        NRXF % NC = NC
+        NRXF % pstrt = pstrt
+        !NRXF % NP = NP
+        CALL PointDataInit(UT,NRXF)
+        CALL PointDataInit(UTM,NRXF)
+
+        CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
+        PNN,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+
+        !TODO - links to CSV output - replace
+        CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
+        NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+
+        ALLOCATE(CT(12*NTOT))          ! CT - cumulative translation of all the beams
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
+	DO I=1,NTOT
+	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
+      	CT(12*I-8),CT(12*I-7),CT(12*I-6)
+	READ(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),&
+      	CT(12*I-2),CT(12*I-1),CT(12*I-0)
+	END DO
+	CLOSE (117+myid)
+
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD')
+	DO I=1,NN
+	READ(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),&
+      	UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
+	READ(117+myid,*) UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),&
+      	UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
+	END DO
+	CLOSE (117+myid)
+
+        !Read particle init pos from file if restarting
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
+	DO I=1,NN
+          READ(117+myid,*) IX,X,Y,Z,M
+          NRXF%M(1,IX)=X
+          NRXF%M(2,IX)=Y
+          NRXF%M(3,IX)=Z
+          NRXF%PartInfo(1,IX) = myid
+          NRXF%PartInfo(2,IX) = IX
+        END DO
+	CLOSE (117+myid)
+
+        !Read in the partition & id of particles we share from other partitions
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/ONODFIL2'//na(myid),STATUS='UNKNOWN')
+	DO I=1,NC!+NP
+          READ(117+myid,*) IX,Part,ID
+          IF(IX >= NRXF%pstrt .OR. IX < NRXF%cstrt) THEN
+            PRINT *,myid,' debug IX, pstrt, cstrt: ',IX,NRXF%pstrt, NRXF%cstrt
+            CALL FatalError("Restart programming error - NRXF bounds")
+          END IF
+          NRXF%PartInfo(1,IX) = Part
+          NRXF%PartInfo(2,IX) = ID
+          PartIsNeighbour(Part) = .TRUE.
+        END DO
+	CLOSE (117+myid)
+
+        !Construct InvPartInfo 
+        CALL InvPartInfoInit(InvPartInfo, PartIsNeighbour)
+
+        DO I=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
+          Part = NRXF%PartInfo(1,i)
+          ID = NRXF%PartInfo(2,i)
+          countptr => InvPartInfo(Part) % ccount
+          countptr = countptr + 1
+
+          IF(countptr > SIZE(InvPartInfo(Part) % ConnIDs)) THEN
+            CALL ExpandIntArray(InvPartInfo(n) % ConnIDs)
+            CALL ExpandIntArray(InvPartInfo(n) % ConnLocs)
+          END IF
+
+          InvPartInfo(Part) % ConnIDs(countptr) = ID
+          InvPartInfo(Part) % ConnLocs(countptr) = I
+        END DO
+
+        ALLOCATE(EFS(NTOT), NANS(2,NTOT), NANPart(NTOT))
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
+        DO I=1,NTOT
+          READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
+          NANS(1,I)=N1
+          NANS(2,I)=N2
+          NANPart(I)=P1
+          EFS(I)=E
+        END DO
+        CLOSE (117+myid)
+
+        IF(DebugMode) PRINT *,myid,' about to go to ExchangeConnPoints'
+        CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM)
+        IF(DebugMode)  PRINT *,myid,' finished exchange.'
+
+        END IF 
+
+        
+
+! ============== END IF RESTART ==============
+
+
+        IF(DebugMode) PRINT *,myid,' checkpoint 3'
+
+        !initialize some data
+
+        !Keep track of any particles which leave the domain
+        ALLOCATE(LostParticle(NN),&
+             VDP(NN),&
+             FRX(NN),&
+             FRY(NN),&
+             FRZ(NN),&
+             WE(NN),&
+             EN(NN*6),&
+             UTP(NN*6),&
+             UTW(NN*6),&
+             R(NN*6),&
+             EMM(NN),&
+             BOYZ(NN),&
+             BOYY(NN),&
+             WSY(NN),&
+             WSX(NN),&
+             NRXFW(3,MAXVAL(PNN)))
+
+        !ALLOCATE(CCN(NN),CCNW(NN))
+
+        LostParticle = .FALSE.
+        VDP = 0.0     !VDP = drag coefficient
+        EN = 0.0
+        UTP = 0.0
+        UTW = 0.0
+        R = 0.0
+
+
+        ALLOCATE(EFC(SIZE(NRXF%A,2))) !to hold our & other nodes
+        EFC = SCL*EF0
+
         IF(DebugMode) PRINT *,myid,' checkpoint 5'
 
         !Initialize drag/friction
@@ -417,9 +502,9 @@ END IF
 	DO I=1,NN
 
         MFIL(I)=MN
-	X=NRXF2%M(1,I)+UT2%M(6*I-5)
-        Y=NRXF2%M(2,I)+UT2%M(6*I-4)
-        Z=NRXF2%M(3,I)+UT2%M(6*I-3)
+	X=NRXF%M(1,I)+UT%M(6*I-5)
+        Y=NRXF%M(2,I)+UT%M(6*I-4)
+        Z=NRXF%M(3,I)+UT%M(6*I-3)
         I1=X/GRID-INT(X/GRID)
 	I2=Y/GRID-INT(Y/GRID)
         CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
@@ -438,54 +523,7 @@ END IF
         ENDIF
 	END DO
 
-!This code reads in connection information for each partition
-!and works out whether to randomise or receive the EFS value
-
- IF(DebugMode) PRINT *,myid,' about to go to ExchangeConnPoints'
- CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, UTM2)
- IF(DebugMode)  PRINT *,myid,' finished exchange.'
  
-
- IF(REST==1) THEN
-   OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
-   DO I=1,NTOT
-     READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
-     NANS(1,I)=N1
-     NANS(2,I)=N2
-     NANPart(I)=P1
-     EFS(I)=E
-   END DO
-   CLOSE (117+myid)
- ELSE
-   DO I=1,NTOT
-
-     aboveShearLine = .TRUE.
-     IF(doShearLine) THEN
-       N1 = NANS(1,I)
-       N2 = NANS(2,I)
-       X1 = NRXF2%A(1,N1)
-       Y1 = NRXF2%A(2,N1)
-       Z1 = NRXF2%A(3,N1)
-
-       !TODO - could save time here if SLIN not specified
-       I1=X1/GRID-INT(X1/GRID)
-       I2=Y1/GRID-INT(Y1/GRID)
-       CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)),&
-            SUF(INT(X1/GRID),INT(Y1/GRID)+1),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-     
-       aboveShearLine = ABS(Z1-ZS).LT.SLIN
-     END IF
-     
-     IF (RAN(I).LT.1.0-POR.AND.aboveShearLine) THEN
-       EFS(I)=EF0
-     ELSE
-       EFS(I)=0.1
-     ENDIF
-   END DO
-
-   !Share randomly generated EFS with other parts to avoid conflict
-   CALL ExchangeEFS(NANS, NANPart, NRXF2, InvPartInfo, EFS)
- END IF
 
 
 !============================================================
@@ -507,21 +545,21 @@ END IF
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
         !TODO  TIME 1
 
-        CALL ExchangeConnPoints(NANS, NRXF2, InvPartInfo, UT2, UTM2, .FALSE.) !Don't pass NRXF...
+        CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, .FALSE.) !Don't pass NRXF...
 
-        CALL GetBBoxes(NRXF2, UT2, NN, BBox, PBBox)
+        CALL GetBBoxes(NRXF, UT, NN, BBox, PBBox)
         CALL FindNeighbours(PBBox, PartIsNeighbour)
 
-        CALL ExchangeProxPoints(NRXF2, UT2, UTM2, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
+        CALL ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
 
 	IF (MOD(RY,250).EQ.1 .OR. (RY.EQ.RY0)) THEN
           IF(DebugMode) PRINT *,'About to find nearby particles'
-          CALL  FindNearbyParticles(NRXF2,UT2,NN,BBox,SCL,LNN,ND,NDL)
+          CALL  FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
         END IF
 
        !circ checks which particles are really in contact and computes the forces
-	CALL FindCollisions(ND,NN,NRXF2,UT2,FRX,FRY,FRZ,&
+	CALL FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
           T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -568,7 +606,7 @@ END IF
 
 !         ALLOCATE(NDL(2,NN*12))
 !         CALL CPU_TIME(T1)
-!      	CALL DIST(NN,UT2,ND,NRXF2,NDL,SCL,PNN,YN)
+!      	CALL DIST(NN,UT,ND,NRXF,NDL,SCL,PNN,YN)
 !         CALL CPU_TIME(T2)
 !         PRINT *,myid,'Dist took: ',T2-T1,' secs'
 
@@ -594,8 +632,8 @@ END IF
        TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
 
        !Calculates elastic forces from beams. Stiffness matrix K
-	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT2,UTM2,R,EN,RY,&
-      	FXF,FXC,VDP,DPE,EFS,NANS,NRXF2,MFIL,CT,LNN)
+	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
+      	FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,LNN)
 
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -627,9 +665,9 @@ END IF
           TTCUM(6) = TTCUM(6) + (TT(6) - TT(9))
         END IF
 
-	X=NRXF2%M(1,I)+UT2%M(6*I-5)  !<- x,y,z actual positions, NRXF%M = original, UT%M = displacement
-	Y=NRXF2%M(2,I)+UT2%M(6*I-4)
-	Z=NRXF2%M(3,I)+UT2%M(6*I-3)
+	X=NRXF%M(1,I)+UT%M(6*I-5)  !<- x,y,z actual positions, NRXF%M = original, UT%M = displacement
+	Y=NRXF%M(2,I)+UT%M(6*I-4)
+	Z=NRXF%M(3,I)+UT%M(6*I-3)
 
 	WSY(I)=0.0
 
@@ -728,12 +766,12 @@ END IF
         ! ENDIF
 
 !Kinetic energy
-	KIN=KIN+0.5*MN*((UT2%M(6*I-5)-UTM2%M(6*I-5))/DT)**2
-	KIN=KIN+0.5*MN*((UT2%M(6*I-4)-UTM2%M(6*I-4))/DT)**2
-	KIN=KIN+0.5*MN*((UT2%M(6*I-3)-UTM2%M(6*I-3))/DT)**2
-	KIN2=KIN2+0.5*JS*((UT2%M(6*I-2)-UTM2%M(6*I-2))/DT)**2
-	KIN2=KIN2+0.5*JS*((UT2%M(6*I-1)-UTM2%M(6*I-1))/DT)**2
-	KIN2=KIN2+0.5*JS*((UT2%M(6*I-0)-UTM2%M(6*I-0))/DT)**2
+	KIN=KIN+0.5*MN*((UT%M(6*I-5)-UTM%M(6*I-5))/DT)**2
+	KIN=KIN+0.5*MN*((UT%M(6*I-4)-UTM%M(6*I-4))/DT)**2
+	KIN=KIN+0.5*MN*((UT%M(6*I-3)-UTM%M(6*I-3))/DT)**2
+	KIN2=KIN2+0.5*JS*((UT%M(6*I-2)-UTM%M(6*I-2))/DT)**2
+	KIN2=KIN2+0.5*JS*((UT%M(6*I-1)-UTM%M(6*I-1))/DT)**2
+	KIN2=KIN2+0.5*JS*((UT%M(6*I-0)-UTM%M(6*I-0))/DT)**2
 
 !Calculate final UTP
 	UTP(6*I-5)=(R(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
@@ -745,17 +783,17 @@ END IF
 
         !Check that particles haven't left the domain
         !and freeze them if they have!
-         XIND = INT((NRXF2%M(1,I) + UTP(6*I-5))/GRID)
-         YIND = INT((NRXF2%M(2,I) + UTP(6*I-4))/GRID)
+         XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
+         YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
          IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
              ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
              ABS(UTP(6*I-3)) > MAXUT) THEN
-           UTP(6*I-5) = UT2%M(6*I-5)
-           UTP(6*I-4) = UT2%M(6*I-4)
-           UTP(6*I-3) = UT2%M(6*I-3)
-           UTP(6*I-2) = UT2%M(6*I-2)
-           UTP(6*I-1) = UT2%M(6*I-1)
-           UTP(6*I-0) = UT2%M(6*I-0)
+           UTP(6*I-5) = UT%M(6*I-5)
+           UTP(6*I-4) = UT%M(6*I-4)
+           UTP(6*I-3) = UT%M(6*I-3)
+           UTP(6*I-2) = UT%M(6*I-2)
+           UTP(6*I-1) = UT%M(6*I-1)
+           UTP(6*I-0) = UT%M(6*I-0)
            IF(.NOT. LostParticle(I)) THEN
              PRINT *, myid, " Lost a particle : ",I," at time: ",T
              LostParticle(i) = .TRUE.
@@ -779,34 +817,34 @@ END IF
         !This code allows glacier edge/inflow boundary to be frozen in XY
         !TODO (esp for melange) - convert to contact BC/elastic rebound?
         IF(FixBack .OR. FixLat) THEN
-          XIND = INT((NRXF2%M(1,I) + UTP(6*I-5))/GRID)
-          YIND = INT((NRXF2%M(2,I) + UTP(6*I-4))/GRID)
+          XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
+          YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
           gridratio = INT(MAX(SCL/GRID,1.0))
 
           !Freeze if near back plane
           IF(FixBack) THEN
             IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
-              UTP(6*I-5)=UT2%M(6*I-5)
-              UTP(6*I-4)=UT2%M(6*I-4)
+              UTP(6*I-5)=UT%M(6*I-5)
+              UTP(6*I-4)=UT%M(6*I-4)
             END IF
           END IF
 
           !Freeze if near edge of glacier
           IF(FixLat) THEN
             IF(ANY(GEOMMASK(XIND-(2*gridratio):XIND+(2*gridratio),YIND)==0)) THEN
-              UTP(6*I-5)=UT2%M(6*I-5)
-              UTP(6*I-4)=UT2%M(6*I-4)
+              UTP(6*I-5)=UT%M(6*I-5)
+              UTP(6*I-4)=UT%M(6*I-4)
             END IF
           END IF
         END IF
 
        !Compute damping
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM2%M(6*I-5))**2/(4*DT)
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-4)-UTM2%M(6*I-4))**2/(4*DT)
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-3)-UTM2%M(6*I-3))**2/(4*DT)
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-2)-UTM2%M(6*I-2))**2/(4*DT)
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-1)-UTM2%M(6*I-1))**2/(4*DT)
-	DMPEN=DMPEN+VDP(I)*(UTP(6*I-0)-UTM2%M(6*I-0))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM%M(6*I-5))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-4)-UTM%M(6*I-4))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-3)-UTM%M(6*I-3))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-2)-UTM%M(6*I-2))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-1)-UTM%M(6*I-1))**2/(4*DT)
+	DMPEN=DMPEN+VDP(I)*(UTP(6*I-0)-UTM%M(6*I-0))**2/(4*DT)
  
 
        !Calculate all the energy and sum over partitions
@@ -879,17 +917,17 @@ END IF
 	N1=NANS(1,I)
 	N2=NANS(2,I)
         IF (EFS(I).GT.0.0) THEN
-	DDX=NRXF2%A(1,N1)+UT2%A(6*N1-5)-NRXF2%A(1,N2)-UT2%A(6*N2-5)
-	DDY=NRXF2%A(2,N1)+UT2%A(6*N1-4)-NRXF2%A(2,N2)-UT2%A(6*N2-4)
-	DDZ=NRXF2%A(3,N1)+UT2%A(6*N1-3)-NRXF2%A(3,N2)-UT2%A(6*N2-3)
-	DX=NRXF2%A(1,N1)-NRXF2%A(1,N2)
-	DY=NRXF2%A(2,N1)-NRXF2%A(2,N2)
-	DZ=NRXF2%A(3,N1)-NRXF2%A(3,N2)
+	DDX=NRXF%A(1,N1)+UT%A(6*N1-5)-NRXF%A(1,N2)-UT%A(6*N2-5)
+	DDY=NRXF%A(2,N1)+UT%A(6*N1-4)-NRXF%A(2,N2)-UT%A(6*N2-4)
+	DDZ=NRXF%A(3,N1)+UT%A(6*N1-3)-NRXF%A(3,N2)-UT%A(6*N2-3)
+	DX=NRXF%A(1,N1)-NRXF%A(1,N2)
+	DY=NRXF%A(2,N1)-NRXF%A(2,N2)
+	DZ=NRXF%A(3,N1)-NRXF%A(3,N2)
 	L=SQRT(DX**2+DY**2+DZ**2)
 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-	V1=ABS(UT2%A(6*N1-2)-UT2%A(6*N2-2))
-	V2=ABS(UT2%A(6*N1-1)-UT2%A(6*N2-1))
-	V3=ABS(UT2%A(6*N1-0)-UT2%A(6*N2-0))
+	V1=ABS(UT%A(6*N1-2)-UT%A(6*N2-2))
+	V2=ABS(UT%A(6*N1-1)-UT%A(6*N2-1))
+	V3=ABS(UT%A(6*N1-0)-UT%A(6*N2-0))
 	MAXV=MAX(V1,V2,V3)
 	LOAD=((DL-L)+0.05*MAXV)
 	IF (LOAD.GT.MML) MML=LOAD
@@ -901,276 +939,10 @@ END IF
         ENDIF
  	END DO
 
-!        IF (myid.ne.0.and.myid.ne.(ntasks-1)/2+1) THEN
-!        DO I=1,NTOT_prev % L
-!	N1=NANS_prev % L(1,I)
-!	N2=NANS_prev % L(2,I)
-!        IF (EFS % L(I).GT.0.0) THEN
-!	DDX=NRXF%L(1,N1)+UT%L(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-!	DDY=NRXF%L(2,N1)+UT%L(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-!	DDZ=NRXF%L(3,N1)+UT%L(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-!	DX=NRXF%L(1,N1)-NRXF%M(1,N2)
-!	DY=NRXF%L(2,N1)-NRXF%M(2,N2)
-!	DZ=NRXF%L(3,N1)-NRXF%M(3,N2)
-!	L=SQRT(DX**2+DY**2+DZ**2)
-!	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-!	V1=ABS(UT%L(6*N1-2)-UT%M(6*N2-2))
-!	V2=ABS(UT%L(6*N1-1)-UT%M(6*N2-1))
-!	V3=ABS(UT%L(6*N1-0)-UT%M(6*N2-0))
-!	MAXV=MAX(V1,V2,V3)
-!	LOAD=((DL-L)+0.05*MAXV)
-!	IF (LOAD.GT.MML) MML=LOAD
-!	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-!	 BCE=BCE+0.5*EFS % L(I)*S**2/LNN*(DL-L)**2
-!         EFS % L(I)=0.0
-!	 BCC=BCC+1
-!	 ENDIF
-!	ENDIF
-! 	END DO
-!	ENDIF
-
-!         IF (myid.ne.ntasks-1.and.myid.ne.(ntasks-1)/2) THEN
-!         DO I=1,NTOT_prev % R
-! 	N1=NANS_prev % R(1,I)
-! 	N2=NANS_prev % R(2,I)
-!         IF (EFS % R(I).GT.0.0) THEN
-! 	DDX=NRXF%R(1,N1)+UT%R(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! 	DDY=NRXF%R(2,N1)+UT%R(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! 	DDZ=NRXF%R(3,N1)+UT%R(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! 	DX=NRXF%R(1,N1)-NRXF%M(1,N2)
-! 	DY=NRXF%R(2,N1)-NRXF%M(2,N2)
-! 	DZ=NRXF%R(3,N1)-NRXF%M(3,N2)
-! 	L=SQRT(DX**2+DY**2+DZ**2)
-! 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! 	V1=ABS(UT%R(6*N1-2)-UT%M(6*N2-2))
-! 	V2=ABS(UT%R(6*N1-1)-UT%M(6*N2-1))
-! 	V3=ABS(UT%R(6*N1-0)-UT%M(6*N2-0))
-! 	MAXV=MAX(V1,V2,V3)
-! 	LOAD=((DL-L)+0.05*MAXV)
-! 	IF (LOAD.GT.MML) MML=LOAD
-! 	 IF (LOAD.GT.MLOAD.AND.T.GT.fractime) THEN
-! 	 BCE=BCE+0.5*EFS % R(I)*S**2/LNN*(DL-L)**2
-!          EFS % R(I)=0.0
-! 	 BCC=BCC+1
-! 	 ENDIF
-! 	ENDIF
-!  	END DO
-! 	ENDIF
-
-! !across the boundaries...
-!         dest=myid+1
-!         source=myid-1
-!         tag=131
-!         IF (MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-!         CALL MPI_Send(EFS % R,NTOT_prev % R,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_WORLD,ierr)
-!         IF (MOD(myid,ntasks/YN).ne.0)&
-!         CALL MPI_Recv(EFS % L,NTOT_prev % L,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_WORLD,stat,ierr)
-
-!         IF (myid.le.(YN-1)*ntasks/YN) THEN
-!         DO I=1,NTOT_prev % F
-! 	N1=NANS_prev % F(1,I)
-! 	N2=NANS_prev % F(2,I)
-!         IF (EFS % F(I).GT.0.0) THEN
-! 	DDX=NRXF%F(1,N1)+UT%F(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! 	DDY=NRXF%F(2,N1)+UT%F(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! 	DDZ=NRXF%F(3,N1)+UT%F(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! 	DX=NRXF%F(1,N1)-NRXF%M(1,N2)
-! 	DY=NRXF%F(2,N1)-NRXF%M(2,N2)
-! 	DZ=NRXF%F(3,N1)-NRXF%M(3,N2)
-! 	L=SQRT(DX**2+DY**2+DZ**2)
-! 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! 	V1=ABS(UT%F(6*N1-2)-UT%M(6*N2-2))
-! 	V2=ABS(UT%F(6*N1-1)-UT%M(6*N2-1))
-! 	V3=ABS(UT%F(6*N1-0)-UT%M(6*N2-0))
-! 	MAXV=MAX(V1,V2,V3)
-! 	LOAD=((DL-L)+0.05*MAXV)
-! 	IF (LOAD.GT.MML) MML=LOAD
-! 	 IF (LOAD.GT.MLOAD.AND.T.GT.fractime) THEN
-! 	 BCE=BCE+0.5*EFS % F(I)*S**2/LNN*(DL-L)**2
-!          EFS % F(I)=0.0
-! 	 BCC=BCC+1
-! 	 ENDIF
-! 	ENDIF
-!  	END DO
-! 	ENDIF
-
-!         dest=myid+ntasks/YN
-!         source=myid-ntasks/YN
-!         tag=132
-!         IF (myid.lt.(YN-1)*ntasks/YN)&
-!         CALL MPI_Send(EFS % F,NTOT_prev % F,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_WORLD,ierr)
-!         IF (myid.ge.ntasks/YN)&
-!         CALL MPI_Recv(EFS % B,NTOT_prev % B,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_WORLD,stat,ierr)
-
-!         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-!         DO I=1,NTOT_prev % FL
-! 	N1=NANS_prev % FL(1,I)
-! 	N2=NANS_prev % FL(2,I)
-!         IF (EFS % FL(I).GT.0.0) THEN
-! 	DDX=NRXF%FL(1,N1)+UT%FL(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! 	DDY=NRXF%FL(2,N1)+UT%FL(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! 	DDZ=NRXF%FL(3,N1)+UT%FL(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! 	DX=NRXF%FL(1,N1)-NRXF%M(1,N2)
-! 	DY=NRXF%FL(2,N1)-NRXF%M(2,N2)
-! 	DZ=NRXF%FL(3,N1)-NRXF%M(3,N2)
-! 	L=SQRT(DX**2+DY**2+DZ**2)
-! 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! 	V1=ABS(UT%FL(6*N1-2)-UT%M(6*N2-2))
-! 	V2=ABS(UT%FL(6*N1-1)-UT%M(6*N2-1))
-! 	V3=ABS(UT%FL(6*N1-0)-UT%M(6*N2-0))
-! 	MAXV=MAX(V1,V2,V3)
-! 	LOAD=((DL-L)+0.05*MAXV)
-! 	IF (LOAD.GT.MML) MML=LOAD
-! 	 IF (LOAD.GT.MLOAD.AND.T.GT.fractime) THEN
-! 	 BCE=BCE+0.5*EFS % FL(I)*S**2/LNN*(DL-L)**2
-!          EFS % FL(I)=0.0
-! 	 BCC=BCC+1
-! 	 ENDIF
-! 	ENDIF
-!  	END DO
-! 	ENDIF
-
-!         dest=myid+ntasks/YN-1
-!         source=myid-ntasks/YN+1
-!         tag=133
-!         IF (myid.lt.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-!         CALL MPI_Send(EFS % FL,NTOT_prev % FL,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_WORLD,ierr)
-!         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-!         CALL MPI_Recv(EFS % BR,NTOT_prev % BR,MPI_DOUBLE_PRECISION,& 
-!         source,tag,MPI_COMM_WORLD,stat,ierr)
-
-!         IF (myid.le.(YN-1)*ntasks/YN.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-!         DO I=1,NTOT_prev % FR
-! 	N1=NANS_prev % FR(1,I)
-! 	N2=NANS_prev % FR(2,I)
-!         IF (EFS % FR(I).GT.0.0) THEN
-! 	DDX=NRXF%FR(1,N1)+UT%FR(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! 	DDY=NRXF%FR(2,N1)+UT%FR(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! 	DDZ=NRXF%FR(3,N1)+UT%FR(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! 	DX=NRXF%FR(1,N1)-NRXF%M(1,N2)
-! 	DY=NRXF%FR(2,N1)-NRXF%M(2,N2)
-! 	DZ=NRXF%FR(3,N1)-NRXF%M(3,N2)
-! 	L=SQRT(DX**2+DY**2+DZ**2)
-! 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! 	V1=ABS(UT%FR(6*N1-2)-UT%M(6*N2-2))
-! 	V2=ABS(UT%FR(6*N1-1)-UT%M(6*N2-1))
-! 	V3=ABS(UT%FR(6*N1-0)-UT%M(6*N2-0))
-! 	MAXV=MAX(V1,V2,V3)
-! 	LOAD=((DL-L)+0.05*MAXV)
-! 	IF (LOAD.GT.MML) MML=LOAD
-! 	 IF (LOAD.GT.MLOAD.AND.T.GT.fractime) THEN
-! 	 BCE=BCE+0.5*EFS % FR(I)*S**2/LNN*(DL-L)**2
-!          EFS % FR(I)=0.0
-! 	 BCC=BCC+1
-! 	 ENDIF
-! 	ENDIF
-!  	END DO
-! 	ENDIF
-
-!         dest=myid+ntasks/YN+1
-!         source=myid-ntasks/YN-1
-!         tag=134
-!         IF (myid.lt.(YN-1)*ntasks/YN&
-!         .AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1)&
-!         CALL MPI_Send(EFS % FR,NTOT_prev % FR,MPI_DOUBLE_PRECISION,&
-!         dest,tag,MPI_COMM_WORLD,ierr)
-!         IF (myid.ge.ntasks/YN.AND.MOD(myid,ntasks/YN).ne.0)&
-!         CALL MPI_Recv(EFS % BL,NTOT_prev % BL,MPI_DOUBLE_PRECISION,&
-!         source,tag,MPI_COMM_WORLD,stat,ierr)
-
-! !        IF (myid.gt.(ntasks-1)/YN) THEN
-! !        DO I=1,NTOT_prev % B
-! !	N1=NANS_prev % B(1,I)
-! !	N2=NANS_prev % B(2,I)
-! !        IF (EFS % B(I).GT.0.0) THEN
-! !	DDX=NRXF%B(1,N1)+UT%B(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! !	DDY=NRXF%B(2,N1)+UT%B(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! !	DDZ=NRXF%B(3,N1)+UT%B(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! !	DX=NRXF%B(1,N1)-NRXF%M(1,N2)
-! !	DY=NRXF%B(2,N1)-NRXF%M(2,N2)
-! !	DZ=NRXF%B(3,N1)-NRXF%M(3,N2)
-! !	L=SQRT(DX**2+DY**2+DZ**2)
-! !	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! !	V1=ABS(UT%F(6*N1-2)-UT%M(6*N2-2))
-! !	V2=ABS(UT%F(6*N1-1)-UT%M(6*N2-1))
-! !	V3=ABS(UT%F(6*N1-0)-UT%M(6*N2-0))
-! !	MAXV=MAX(V1,V2,V3)
-! !	LOAD=((DL-L)+0.05*MAXV)
-! !	IF (LOAD.GT.MML) MML=LOAD
-! !	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-! !	 BCE=BCE+0.5*EFS % B(I)*S**2/LNN*(DL-L)**2
-! !         EFS % B(I)=0.0
-! !	 BCC=BCC+1
-! !	 ENDIF
-! !	ENDIF
-! ! 	END DO
-! !	ENDIF
-
-! !        IF (myid.gt.(ntasks-1)/YN.AND.MOD(myid,ntasks/YN).ne.0) THEN
-! !        DO I=1,NTOT_prev % BL
-! !	N1=NANS_prev % BL(1,I)
-! !	N2=NANS_prev % BL(2,I)
-! !        IF (EFS % BL(I).GT.0.0) THEN
-! !	DDX=NRXF%BL(1,N1)+UT%BL(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! !	DDY=NRXF%BL(2,N1)+UT%BL(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! !	DDZ=NRXF%BL(3,N1)+UT%BL(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! !	DX=NRXF%BL(1,N1)-NRXF%M(1,N2)
-! !	DY=NRXF%BL(2,N1)-NRXF%M(2,N2)
-! !	DZ=NRXF%BL(3,N1)-NRXF%M(3,N2)
-! !	L=SQRT(DX**2+DY**2+DZ**2)
-! !	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! !	V1=ABS(UT%FL(6*N1-2)-UT%M(6*N2-2))
-! !	V2=ABS(UT%FL(6*N1-1)-UT%M(6*N2-1))
-! !	V3=ABS(UT%FL(6*N1-0)-UT%M(6*N2-0))
-! !	MAXV=MAX(V1,V2,V3)
-! !	LOAD=((DL-L)+0.05*MAXV)
-! !	IF (LOAD.GT.MML) MML=LOAD
-! !	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-! !	 BCE=BCE+0.5*EFS % BL(I)*S**2/LNN*(DL-L)**2
-! !         EFS % BL(I)=0.0
-! !	 BCC=BCC+1
-! !	 ENDIF
-! !	ENDIF
-! ! 	END DO
-! !	ENDIF
-
-! !        IF (myid.gt.(ntasks-1)/YN
-! !     1	.AND.MOD(myid,ntasks/YN).ne.ntasks/YN-1) THEN
-! !        DO I=1,NTOT_prev % BR
-! !	N1=NANS_prev % BR(1,I)
-! !	N2=NANS_prev % BR(2,I)
-! !        IF (EFS % BR(I).GT.0.0) THEN
-! !	DDX=NRXF%BR(1,N1)+UT%BR(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-! !	DDY=NRXF%BR(2,N1)+UT%BR(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-! !	DDZ=NRXF%BR(3,N1)+UT%BR(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-! !	DX=NRXF%BR(1,N1)-NRXF%M(1,N2)
-! !	DY=NRXF%BR(2,N1)-NRXF%M(2,N2)
-! !	DZ=NRXF%BR(3,N1)-NRXF%M(3,N2)
-! !	L=SQRT(DX**2+DY**2+DZ**2)
-! !	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-! !	V1=ABS(UT%FR(6*N1-2)-UT%M(6*N2-2))
-! !	V2=ABS(UT%FR(6*N1-1)-UT%M(6*N2-1))
-! !	V3=ABS(UT%FR(6*N1-0)-UT%M(6*N2-0))
-! !	MAXV=MAX(V1,V2,V3)
-! !	LOAD=((DL-L)+0.05*MAXV)
-! !	IF (LOAD.GT.MML) MML=LOAD
-! !	 IF (LOAD.GT.MLOAD.AND.T.GT.1.0) THEN
-! !	 BCE=BCE+0.5*EFS % BR(I)*S**2/LNN*(DL-L)**2
-! !         EFS % BR(I)=0.0
-! !	 BCC=BCC+1
-! !	 ENDIF
-! !	ENDIF
-! ! 	END DO
-! !	ENDIF
-
+!update UT
 	DO I=1,6*NN
-	UTM2%M(I)=UT2%M(I)
-	UT2%M(I)=UTP(I)
+	UTM%M(I)=UT%M(I)
+	UT%M(I)=UTP(I)
 	END DO
 
 !--------------- Start of output ----------------------
@@ -1185,11 +957,11 @@ END IF
 
           IF(.NOT. CSVOutput) THEN
 
-          CALL BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF2,UT2,&
-               UTM2,NANS,NTOT,NANPart,DoublePrec)
+          CALL BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
+               UTM,NANS,NTOT,NANPart,DoublePrec)
           
 
-          CALL BinarySTROutput(NRY,resdir,runname,NRXF2,UT2,&
+          CALL BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
                NANS,NTOT,NANPart,DoublePrec)
           
           ELSE
@@ -1203,7 +975,7 @@ END IF
           !to send others too. Or just scrap CSV Output?
           tag=151
           IF (myid.NE.0)&
-          CALL MPI_Send(UT2%M,6*NN,MPI_DOUBLE_PRECISION,&
+          CALL MPI_Send(UT%M,6*NN,MPI_DOUBLE_PRECISION,&
           dest,tag,MPI_COMM_WORLD,ierr)
 
           tag=152
@@ -1213,7 +985,7 @@ END IF
 
           tag=161
           IF (myid.NE.0)&
-          CALL MPI_Send(NRXF2%M,3*NN,MPI_DOUBLE_PRECISION,&
+          CALL MPI_Send(NRXF%M,3*NN,MPI_DOUBLE_PRECISION,&
           dest,tag,MPI_COMM_WORLD,ierr)
 
           IF (myid.EQ.0) THEN
@@ -1269,28 +1041,28 @@ END IF
           END DO
 
           DO I=1,NN
-	  X=NRXF2%M(1,I)+UT2%M(6*I-5)
-	  Y=NRXF2%M(2,I)+UT2%M(6*I-4)
-	  Z=NRXF2%M(3,I)+UT2%M(6*I-3)
+	  X=NRXF%M(1,I)+UT%M(6*I-5)
+	  Y=NRXF%M(2,I)+UT%M(6*I-4)
+	  Z=NRXF%M(3,I)+UT%M(6*I-3)
           WRITE(910,12) X,Y,Z
           END DO
 
           DO I=1,NTOT
-	  X=(NRXF2%M(1,NANS(1,I))+UT2%M(6*NANS(1,I)-5)+&
-            NRXF2%M(1,NANS(2,I))+UT2%M(6*NANS(2,I)-5))/2.0
-	  Y=(NRXF2%M(2,NANS(1,I))+UT2%M(6*NANS(1,I)-4)+&
-            NRXF2%M(2,NANS(2,I))+UT2%M(6*NANS(2,I)-4))/2.0
-	  Z=(NRXF2%M(3,NANS(1,I))+UT2%M(6*NANS(1,I)-3)+&
-            NRXF2%M(3,NANS(2,I))+UT2%M(6*NANS(2,I)-3))/2.0
+	  X=(NRXF%M(1,NANS(1,I))+UT%M(6*NANS(1,I)-5)+&
+            NRXF%M(1,NANS(2,I))+UT%M(6*NANS(2,I)-5))/2.0
+	  Y=(NRXF%M(2,NANS(1,I))+UT%M(6*NANS(1,I)-4)+&
+            NRXF%M(2,NANS(2,I))+UT%M(6*NANS(2,I)-4))/2.0
+	  Z=(NRXF%M(3,NANS(1,I))+UT%M(6*NANS(1,I)-3)+&
+            NRXF%M(3,NANS(2,I))+UT%M(6*NANS(2,I)-3))/2.0
 	  
 	N1=NANS(1,I)
 	N2=NANS(2,I)
-	DDX=NRXF2%M(1,N1)+UT2%M(6*N1-5)-NRXF2%M(1,N2)-UT2%M(6*N2-5)
-	DDY=NRXF2%M(2,N1)+UT2%M(6*N1-4)-NRXF2%M(2,N2)-UT2%M(6*N2-4)
-	DDZ=NRXF2%M(3,N1)+UT2%M(6*N1-3)-NRXF2%M(3,N2)-UT2%M(6*N2-3)
-	DX=NRXF2%M(1,N1)-NRXF2%M(1,N2)
-	DY=NRXF2%M(2,N1)-NRXF2%M(2,N2)
-	DZ=NRXF2%M(3,N1)-NRXF2%M(3,N2)
+	DDX=NRXF%M(1,N1)+UT%M(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
+	DDY=NRXF%M(2,N1)+UT%M(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
+	DDZ=NRXF%M(3,N1)+UT%M(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
+	DX=NRXF%M(1,N1)-NRXF%M(1,N2)
+	DY=NRXF%M(2,N1)-NRXF%M(2,N2)
+	DZ=NRXF%M(3,N1)-NRXF%M(3,N2)
 	L=SQRT(DX**2+DY**2+DZ**2)
 	DL=SQRT(DDX**2+DDY**2+DDZ**2)
 	STR=(DL-L)/L
@@ -1372,10 +1144,11 @@ END IF
 CONTAINS
 
  SUBROUTINE WriteRestart()
+        INTEGER :: counter
+
    ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')
-	WRITE(117+myid,*) NN,NTOT,BCC
-        WRITE(117+myid,*) NRXF2%cstrt, NRXF2%NC
+	WRITE(117+myid,*) NRXF%NN,NRXF%cstrt,NRXF%NC,NRXF%pstrt,NRXF%NP,SIZE(NRXF%A,2),NTOT,BCC
 	WRITE(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
 	WRITE(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
 
@@ -1390,8 +1163,8 @@ CONTAINS
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
-	WRITE(117+myid,*) UT2%M(6*I-5),UT2%M(6*I-4),UT2%M(6*I-3),UT2%M(6*I-2),UT2%M(6*I-1),UT2%M(6*I-0)
-	WRITE(117+myid,*) UTM2%M(6*I-5),UTM2%M(6*I-4),UTM2%M(6*I-3),UTM2%M(6*I-2),UTM2%M(6*I-1),UTM2%M(6*I-0)
+	WRITE(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
+	WRITE(117+myid,*) UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
 	END DO
 	CLOSE (117+myid)
 
@@ -1402,6 +1175,14 @@ CONTAINS
  !NRXF%M - the original locations of all the particles
  !EF - Youngs modulus
 
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/ONODFIL2'//na(myid),STATUS='UNKNOWN')
+        counter = 0
+        DO I=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
+          IF(NRXF%PartInfo(1,i) == -1) CALL FatalError("Programming error in ONODFIL2")
+          WRITE(117+myid,*) i,NRXF%PartInfo(:,i)
+        END DO
+	CLOSE (117+myid)
+
 !====================== FROM HERE ==========================
 
  !TODO - don't need to reread NRXF - could just communicate
@@ -1409,9 +1190,9 @@ CONTAINS
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOT
 	WRITE(117+myid,*) NANS(1,SI),NANS(2,SI),NANPart(SI),&
-           NRXF2%A(1,NANS(1,SI)),NRXF2%A(2,NANS(1,SI)),&
-           NRXF2%A(3,NANS(1,SI)),NRXF2%A(1,NANS(2,SI)),&
-           NRXF2%A(2,NANS(2,SI)),NRXF2%A(3,NANS(2,SI)),EFS(SI)
+           NRXF%A(1,NANS(1,SI)),NRXF%A(2,NANS(1,SI)),&
+           NRXF%A(3,NANS(1,SI)),NRXF%A(1,NANS(2,SI)),&
+           NRXF%A(2,NANS(2,SI)),NRXF%A(3,NANS(2,SI)),EFS(SI)
 	END DO
 	CLOSE (117+myid)
 

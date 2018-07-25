@@ -283,8 +283,8 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   INTEGER :: NRY,PNN(:)
   CHARACTER(LEN=256) :: resdir, runname
   INTEGER :: NTOT, NANS(2,NTOT),NANPart(NTOT)
-  TYPE(NRXF2_t) :: NRXF
-  TYPE(UT2_t) :: UT, UTM
+  TYPE(NRXF_t) :: NRXF
+  TYPE(UT_t) :: UT, UTM
   LOGICAL :: DoublePrec
   !----------------------------------
   INTEGER :: NN,NNTot,NBeamsTot,counter,ms_counter,VTK_Offset
@@ -606,8 +606,8 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   INTEGER :: NRY
   CHARACTER(LEN=256) :: resdir, runname
   INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT)
-  TYPE(UT2_t), TARGET :: UT
-  TYPE(NRXF2_t), TARGET :: NRXF
+  TYPE(UT_t), TARGET :: UT
+  TYPE(NRXF_t), TARGET :: NRXF
   LOGICAL :: DoublePrec
   !----------------------------------
   INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter

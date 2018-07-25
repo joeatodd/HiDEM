@@ -43,8 +43,8 @@ CONTAINS
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
         INTEGER ierr
         INTEGER, ALLOCATABLE :: FXF(:,:),NANS(:,:)
-        TYPE(UT2_t) :: UT, UTM
-        TYPE(NRXF2_t) :: NRXF
+        TYPE(UT_t) :: UT, UTM
+        TYPE(NRXF_t) :: NRXF
         LOGICAL :: FirstTime=.TRUE.
 
         SAVE :: FirstTime, A,C,F,D!,DUT

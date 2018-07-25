@@ -21,16 +21,11 @@ MODULE TypeDefs
   END TYPE NTOT_t
 
   TYPE NRXF_t
-     REAL*8 :: M(3,NOMA), L(3,NOMA), R(3,NOMA), F(3,NOMA), B(3,NOMA), &
-          FR(3,NOMA), FL(3,NOMA), BR(3,NOMA), BL(3,NOMA)
-  END TYPE NRXF_t
-
-  TYPE NRXF2_t
      REAL*8, ALLOCATABLE :: A(:,:)
      REAL*8, POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
      INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
      INTEGER, ALLOCATABLE :: PartInfo(:,:)
-  END TYPE NRXF2_t
+  END TYPE NRXF_t
 
   !Type to hold information on particles shared between partitions
   !Our partition receives 'CCount' connected and 'PCount' proximal particles
@@ -61,14 +56,9 @@ MODULE TypeDefs
   END TYPE NEI_t
 
   TYPE UT_t
-     REAL*8 :: M(NODM), L(NODM), R(NODM), F(NODM),&
-          B(NODM), FR(NODM),FL(NODM), BR(NODM), BL(NODM)
-  END TYPE UT_t
-
-  TYPE UT2_t
      REAL*8, ALLOCATABLE :: A(:)
      REAL*8, POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
-  END TYPE UT2_t
+  END TYPE UT_t
 
   TYPE FXF_t
      INTEGER :: M(2,NODC),L(2,NODC),R(2,NODC),F(2,NODC),B(2,NODC),&

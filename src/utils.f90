@@ -82,12 +82,23 @@ MODULE UTILS
 
     END SUBROUTINE Expand2IntArray
 
-    SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand)
-      TYPE(NRXF2_T), TARGET :: NRXF
+    SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand, arrsize)
+      TYPE(NRXF_T), TARGET :: NRXF
       INTEGER :: n,n_tot
-      REAL*8 :: partexpand
+      REAL*8,OPTIONAL :: partexpand
+      INTEGER,OPTIONAL :: arrsize
 
-      n_tot = n + CEILING(n * partexpand)
+      IF(PRESENT(partexpand) .EQV. PRESENT(arrsize)) THEN
+        PRINT *,myid,' PointDataInitNRXF: Programming error, &
+             &should provide one of partexpand and arrsize!'
+        STOP
+      END IF
+
+      IF(PRESENT(partexpand)) THEN
+        n_tot = n + CEILING(n * partexpand)
+      ELSE
+        n_tot = arrsize
+      END IF
 
       IF(ALLOCATED(NRXF%A)) THEN
         PRINT *, "Programming error: abuse of PointDataInitNRXF"
@@ -114,12 +125,23 @@ MODULE UTILS
 
     END SUBROUTINE PointDataInitNRXF
 
-    SUBROUTINE PointDataInitUT(UT, n, partexpand)
-      TYPE(UT2_T), TARGET :: UT
+    SUBROUTINE PointDataInitUT(UT, n, partexpand, arrsize)
+      TYPE(UT_T), TARGET :: UT
       INTEGER :: n,n_tot
-      REAL*8 :: partexpand
+      REAL*8, OPTIONAL :: partexpand
+      INTEGER,OPTIONAL :: arrsize
 
-      n_tot = n + CEILING(n * partexpand)
+      IF(PRESENT(partexpand) .EQV. PRESENT(arrsize)) THEN
+        PRINT *,myid,' PointDataInitNRXF: Programming error, &
+             &should provide one of partexpand and arrsize!'
+        STOP
+      END IF
+
+      IF(PRESENT(partexpand)) THEN
+        n_tot = n + CEILING(n * partexpand)
+      ELSE
+        n_tot = arrsize
+      END IF
 
       IF(ALLOCATED(UT%A)) THEN
         PRINT *, "Programming error: abuse of PointDataInitUT"
@@ -136,8 +158,8 @@ MODULE UTILS
     END SUBROUTINE PointDataInitUT
 
     SUBROUTINE PointDataInitUTNRXF(UT, NRXF)
-      TYPE(UT2_T), TARGET :: UT
-      TYPE(NRXF2_T) :: NRXF
+      TYPE(UT_T), TARGET :: UT
+      TYPE(NRXF_T) :: NRXF
       INTEGER :: n_tot, NN
 
       n_tot = SIZE(NRXF%A,2)
@@ -159,12 +181,12 @@ MODULE UTILS
 
     SUBROUTINE InvPartInfoInit(InvPartInfo,neighparts,initsize_in)
       TYPE(InvPartInfo_t),ALLOCATABLE :: InvPartInfo(:)
-      INTEGER :: neighparts(:)
+      LOGICAL :: neighparts(0:)
       INTEGER, OPTIONAL :: initsize_in
       !------------------------------
       INTEGER :: initsize,i,j,neighcount
 
-      neighcount = COUNT(neighparts /= -1)
+      neighcount = COUNT(neighparts)
 
       initsize = 100
       IF(PRESENT(initsize_in)) initsize = initsize_in
@@ -178,8 +200,8 @@ MODULE UTILS
         InvPartInfo(i) % spcount = 0
       END DO
 
-      DO i=1,neighcount
-        j = neighparts(i)
+      DO j=0,ntasks-1
+        IF(.NOT. neighparts(j)) CYCLE
         ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
              InvPartInfo(j) % ConnLocs(initsize),&
              InvPartInfo(j) % ProxIDs(initsize),&
@@ -224,8 +246,8 @@ MODULE UTILS
 
     SUBROUTINE ResizePointDataNRXF(NRXF,scale,UT,UTM,do_M,do_C,do_P)
 
-      TYPE(NRXF2_T), TARGET :: NRXF
-      TYPE(UT2_T), OPTIONAL, TARGET :: UT, UTM
+      TYPE(NRXF_T), TARGET :: NRXF
+      TYPE(UT_T), OPTIONAL, TARGET :: UT, UTM
       REAL*8 :: scale
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
@@ -310,7 +332,8 @@ MODULE UTILS
       pstrt_new = m_newsize + c_newsize + 1
 
       IF(DebugMode) PRINT *,myid,' debug resize nrxf: ',a_oldsize, m_oldsize, c_oldsize, p_oldsize,&
-           'new: ',a_newsize, m_newsize, c_newsize, p_newsize, 'strts: ', cstrt_new, pstrt_new
+            'strts: ', NRXF%cstrt, NRXF%pstrt, 'new: ',a_newsize, m_newsize, c_newsize, p_newsize,&
+            'strts: ', cstrt_new, pstrt_new
 
       IF(a_oldsize < 0 .OR. m_oldsize < 0 .OR. c_oldsize < 0 .OR. p_oldsize < 0 .OR. &
            a_newsize < 0 .OR. m_newsize < 0 .OR. c_newsize < 0 .OR. p_newsize < 0) THEN
@@ -375,7 +398,7 @@ MODULE UTILS
 
     SUBROUTINE ResizePointDataUT(UT,scale,do_M,do_C,do_P)
 
-      TYPE(UT2_T), TARGET :: UT
+      TYPE(UT_T), TARGET :: UT
       REAL*8 :: scale
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------

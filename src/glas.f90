@@ -29,7 +29,7 @@ INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NAN
 CHARACTER(LEN=256) :: wrkdir,geomfile
 LOGICAL :: StrictDomain
 !TYPE(NTOT_t) :: NTOT
-TYPE(NRXF2_t) :: NRXF
+TYPE(NRXF_t) :: NRXF
 TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
 !Open(300,file='mass.dat',STATUS='OLD')
 
@@ -86,12 +86,12 @@ REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL*8, ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
 INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
-INTEGER neighcount,NTOT
+INTEGER NTOT,neighcount
 INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
-     particles_G(:),particles_L(:),neighparts(:), NANS(:,:),NANPart(:)
+     particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir
 LOGICAL :: StrictDomain
-LOGICAL, ALLOCATABLE :: SharedNode(:)
+LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
 
 !metis stuff
 INTEGER :: objval,counter
@@ -100,7 +100,7 @@ INTEGER, POINTER :: vwgt=>NULL(),vsize=>NULL(),adjwgt=>NULL(),xadj(:),adjncy(:),
 REAL*8, POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 
 !TYPE(NTOT_t) :: NTOT
-TYPE(NRXF2_t), TARGET :: NRXF
+TYPE(NRXF_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
 TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
 
@@ -258,12 +258,11 @@ CALL MPI_BCast(particlepart,ip,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
 NN = COUNT(particlepart == myid)
 ALLOCATE(particles_G(NN),NCN(NN),&
      CN(NN,12),CNpart(NN,12),&
-     neighparts(ntasks),SharedNode(NN),&
+     neighparts(0:ntasks-1),SharedNode(NN),&
      counters(ntasks),particles_L(ip))
 
 particles_G = 0
-neighparts = -1 !partitions we share a connection with
-neighcount = 0
+neighparts = .FALSE. !partitions we share a connection with
 SharedNode = .FALSE.
 counters = 0
 particles_L = 0
@@ -304,21 +303,17 @@ DO i=1,ip
       pown = particlepart(CN_All(i,j))
       CNpart(counter,j) = pown
 
-      !Add partition to list of neighbours if not already found
-      IF((.NOT. ANY(neighparts == pown)) .AND. (myid /= pown)) THEN
-        neighcount = neighcount + 1
-        neighparts(neighcount) = pown
-      END IF
-
+      IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
     END DO
   END IF
 END DO
+
+neighcount = COUNT(neighparts)
 
 IF(DebugMode) PRINT *,'DEBUG ',myid,' SUM PARTICLES_L ',SUM(particles_L),' min, max: ',&
      MINVAL(particles_L),MAXVAL(particles_L)
 IF(DebugMode) PRINT *,'DEBUG ',myid,' counted ',counter,' nodes, NN: ',NN
 IF(DebugMode) PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(NCN),MAXVAL(NCN)
-IF(DebugMode) PRINT *,'DEBUG ',myid,' neighparts: ',neighparts(1:neighcount)
 
 DO i=1,NN
   IF(ANY(CNPart(i,1:NCN(i)) /= myid)) SharedNode(i) = .TRUE.
@@ -359,9 +354,9 @@ END DO
 CALL InvPartInfoInit(InvPartInfo, neighparts)
 
 counter = NRXF%cstrt - 1
-DO j=1,neighcount
-  n = neighparts(j)
-  IF(DebugMode) PRINT *,myid, 'neighbour ',j,' is ',InvPartInfo(n) % NID
+DO n=0,ntasks-1
+  IF(.NOT. neighparts(n)) CYCLE
+  IF(DebugMode) PRINT *,myid, 'neighbour is ',InvPartInfo(n) % NID
   DO i=1,NTOT
     IF (NANPart(i) /= InvPartInfo(n) % NID) CYCLE
     IF (ANY(InvPartInfo(n) % ConnIDs == NANS(1,i))) CYCLE
@@ -385,6 +380,7 @@ DO j=1,neighcount
     NRXF%NC = NRXF%NC + 1
   END DO
 END DO
+NRXF%pstrt = NRXF%cstrt + NRXF%NC
 
 !Change NANS to array loc:
 DO i=1,NTOT
@@ -428,9 +424,9 @@ OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
 DO i=1,NN
   WRITE(510+myid,12) i,NRXF%A(:,i),1.0
 END DO
-DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
-  WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
-END DO
+! DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
+!   WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
+! END DO
 CLOSE(510+myid)
 
 IF(DebugMode .AND. .FALSE.) THEN
@@ -503,8 +499,8 @@ End Subroutine
    INCLUDE 'mpif.h'
 
    INTEGER ::  NN,i
-   TYPE(UT2_t) :: UT
-   TYPE(NRXF2_t) :: NRXF
+   TYPE(UT_t) :: UT
+   TYPE(NRXF_t) :: NRXF
    !-----------------
    INTEGER :: ierr
    REAL*8 :: BBox(6),workarr(6*ntasks),X,Y,Z
@@ -579,9 +575,9 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
   INCLUDE 'mpif.h'
   
   INTEGER, ALLOCATABLE :: NANS(:,:)
-  TYPE(NRXF2_t) :: NRXF
+  TYPE(NRXF_t) :: NRXF
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
-  TYPE(UT2_t), OPTIONAL :: UT, UTM
+  TYPE(UT_t), OPTIONAL :: UT, UTM
   LOGICAL, OPTIONAL :: passNRXF
   !--------------------
   REAL*8 :: T1,T2
@@ -785,8 +781,8 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
   INCLUDE 'mpif.h'
 
-  TYPE(NRXF2_t) :: NRXF
-  TYPE(UT2_t) :: UT, UTM
+  TYPE(NRXF_t) :: NRXF
+  TYPE(UT_t) :: UT, UTM
   INTEGER :: NN
   REAL*8 :: SCL, PBBox(6,0:ntasks-1)
   LOGICAL :: PartIsNeighbour(0:ntasks-1)
@@ -1092,7 +1088,7 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
   INTEGER, ALLOCATABLE :: NANS(:,:), NANPart(:)
   REAL*8, ALLOCATABLE :: EFS(:)
-  TYPE(NRXF2_t) :: NRXF
+  TYPE(NRXF_t) :: NRXF
   !-----------------------------
   INTEGER :: i,j,k,neigh,counter,N1,N2,NTOT,ierr,recvtot
   INTEGER, ALLOCATABLE :: stats(:)
@@ -1215,8 +1211,8 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
 
   USE Octree
 
-  TYPE(NRXF2_t) :: NRXF
-  TYPE(UT2_t) :: UT
+  TYPE(NRXF_t) :: NRXF
+  TYPE(UT_t) :: UT
   INTEGER :: NN,ND
   INTEGER, ALLOCATABLE :: NDL(:,:)
   REAL*8 :: SCL, LNN, BBox(6)
@@ -1409,8 +1405,8 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
   REAL*8 RC,RCX,RCY,RCZ,FRX(NN),FRY(NN),FRZ(NN)
   INTEGER NTOT,I,N1,N2,IS,NN
-  TYPE(UT2_t) :: UT
-  TYPE(NRXF2_t) :: NRXF
+  TYPE(UT_t) :: UT
+  TYPE(NRXF_t) :: NRXF
   LOGICAL :: own(2)
 
   CALL CPU_Time(T1)
@@ -1507,8 +1503,8 @@ END SUBROUTINE FindCollisions
 
 FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
   INTEGER :: i
-  TYPE(NRXF2_t) :: NRXF
-  TYPE(UT2_t) :: UT
+  TYPE(NRXF_t) :: NRXF
+  TYPE(UT_t) :: UT
   REAL*8 :: BBox(6)
   REAL*8, OPTIONAL :: Buff
   LOGICAL :: InBB

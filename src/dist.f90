@@ -30,8 +30,8 @@
 	INTEGER ierr,YN
 	INTEGER NNA,I,J,PNN(0:5000)
         INTEGER :: NDL(2,NNA*12)
-        TYPE(UT2_t) :: UT
-        TYPE(NRXF2_t) :: NRXF
+        TYPE(UT_t) :: UT
+        TYPE(NRXF_t) :: NRXF
         TYPE(NTOT_t) :: ND
 !        TYPE(FXF_t) :: NDL
 !	OPEN(UNIT=10,FILE='TSR',STATUS='UNKNOWN')
