@@ -539,7 +539,7 @@ END IF
 
  DO 100 RY=RY0,RY0+STEPS0 
 
-        IF(myid==0 .AND. (PrintTimes .OR. MOD(RY,250).EQ.1 )) PRINT *,'Time step: ',RY
+        IF(myid==0 .AND. PrintTimes) PRINT *,'Time step: ',RY
         CALL CPU_TIME(TT1)
         TT(1) = TT1
         TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))

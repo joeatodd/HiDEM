@@ -218,6 +218,7 @@ contains
             ngb_ids(num_ngb_point) = node%point_ids(i)
           else
             write(6, "('[Error]: octree: The ngb_ids array size is not enough!')")
+            PRINT *,'Point is: ',x(:)
             stop 1
           end if
         end if
