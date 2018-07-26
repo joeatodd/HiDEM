@@ -789,11 +789,12 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   !--------------------
   REAL*8 :: T1, T2, tstrt,tend
-  INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,neigh,neighcount,&
-       getcount,stat(MPI_STATUS_SIZE),ierr
+  INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,rmcnt,neigh,neighcount,&
+       getcount,rmcount,loc,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:),NRXFPointEx(:)
   LOGICAL, ALLOCATABLE :: IsConnected(:),PrevProx(:)
+  LOGICAL :: loss
 
   CALL CPU_Time(tstrt)
 
@@ -817,7 +818,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   CALL CPU_TIME(T1)
 
   !Count points in each BB
-  !TODO - strategy change here
+  !Strategy here:
   !If point is connected - don't send
   !If point wasn't already sent - send NRXF
   !InvPartInfo % ProxIDs, ProxLocs should contain only *unconnected* points
@@ -842,7 +843,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
     cnt = 0
     cnt2 = 0
-
+    rmcount = 0
     DO j=1,NN
 
       !If this particle is part of a beam shared w/ this partition, it's already been sent
@@ -870,13 +871,36 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
           IF(InvPartInfo(i) % spcount > SIZE(InvPartInfo(i) % SProxIDs)) &
                CALL ExpandIntArray(InvPartInfo(i) % SProxIDs)
           InvPartInfo(i) % SProxIDs(InvPartInfo(i) % spcount) = j
+          PrevProx(j) = .TRUE.
         END IF
-
+      ELSE IF(PrevProx(j)) THEN
+        IF(DebugMode) PRINT *,myid,' debug, point ',j,' no longer near partition ',i
+        PrevProx(j) = .FALSE.
+        rmcount = rmcount + 1
       END IF
     END DO
 
+    IF(rmcount > 0 .AND. DebugMode) PRINT *,myid,' rmcount: ',rmcount,i
+
+    !Mark any nodes previously sent but no longer needed
+    rmcount = 0
+    DO j=1,InvPartInfo(i) % spcount
+      IF(.NOT. PrevProx(InvPartInfo(i) % SProxIDs(j))) THEN
+        IF(DebugMode) PRINT *,myid,' debug particle ',InvPartInfo(i) % SProxIDs(j),&
+             ' no longer neighbour of ',i
+        InvPartInfo(i) % SProxIDs(j) = -1
+        rmcount = rmcount + 1
+      END IF
+    END DO
+
+    !Remove them from the array
+    InvPartInfo(i) % spcount = InvPartInfo(i) % spcount - rmcount
+    InvPartInfo(i) % SProxIDs(1:InvPartInfo(i) % spcount) = &
+         PACK(InvPartInfo(i) % SProxIDs,InvPartInfo(i) % SProxIDs /= -1)
+    InvPartInfo(i) % SProxIDs(InvPartInfo(i) % spcount+1:UBOUND(InvPartInfo(i) % SProxIDs,1)) = -1
+
     IF(DebugMode) PRINT *,myid,' sending to ',i,' prox: ', &
-         cnt, ' already sent conn: ',COUNT(IsConnected), ' prev sent nrxf: ',COUNT(PrevProx)
+         cnt, ' already sent conn: ',COUNT(IsConnected), ' prev sent nrxf: ',NRXFPointEx(i) % scount
 
     ALLOCATE(PointEx(i) % S(12 * PointEx(i) % scount))
     CALL MPI_ISend(PointEx(i) % scount,1,MPI_INTEGER,i,&
@@ -1033,10 +1057,53 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     IF(.NOT. PartIsNeighbour(i)) CYCLE
 
     CALL sort_int2(InvPartInfo(i) % ProxIDs, InvPartInfo(i) % ProxLocs, InvPartInfo(i) % Pcount)
+
+    !Deal with loss of particles
+    IF(InvPartInfo(i) % PCount > PointEx(i) % rcount) THEN
+      IF(DebugMode) PRINT *,myid,' debug, detecting loss of nearby points from part ',i,&
+           ' pcount,rcount: ',InvPartInfo(i) % PCount, PointEx(i) % rcount
+      rmcount = 0
+      DO j=1,InvPartInfo(i) % Pcount
+        loss = .FALSE.
+        IF(j-rmcount > PointEx(i) % rcount) THEN
+          loss = .TRUE.
+        ELSE IF( InvPartInfo(i) % ProxIDs(j) /= PointEx(i) % RecvIDs(j-rmcount)) THEN
+          loss = .TRUE.
+        END IF
+        IF(loss) THEN
+          rmcount = rmcount + 1
+          loc = InvPartInfo(i) % ProxLocs(j)
+          NRXF%A(:,loc) = 0.0
+          NRXF%PartInfo(:,loc) = -1
+          !NRXF%NP = NRXF%NP - 1
+          UT%A(6*loc-5: 6*loc) = 0.0
+          UTM%A(6*loc-5: 6*loc) = 0.0
+          InvPartInfo(i) % ProxIDs(j) = -1
+        END IF
+      END DO
+
+      InvPartInfo(i) % PCount = InvPartInfo(i) % PCount - rmcount
+      !Tidy up ProxLocs
+      InvPartInfo(i) % ProxLocs(1:InvPartInfo(i) % PCount) = &
+           PACK(InvPartInfo(i) % ProxLocs,InvPartInfo(i) % ProxIDs /= -1)
+      InvPartInfo(i) % ProxLocs(InvPartInfo(i) % PCount+1:UBOUND(InvPartInfo(i) % ProxLocs,1)) = -1
+      !And ProxIDs
+      InvPartInfo(i) % ProxIDs(1:InvPartInfo(i) % PCount) = &
+           PACK(InvPartInfo(i) % ProxIDs,InvPartInfo(i) % ProxIDs /= -1)
+      InvPartInfo(i) % ProxIDs(InvPartInfo(i) % PCount+1:UBOUND(InvPartInfo(i) % ProxIDs,1)) = -1
+
+    ELSE IF(InvPartInfo(i) % PCount < PointEx(i) % rcount) THEN
+      CALL FatalError("ExchangeProxPoints - got more points than we ought")
+    END IF
+
     DO j=1,PointEx(i) % rcount
       IF(PointEx(i) % RecvIDs(j) /= InvPartInfo(i) % ProxIDs(j)) THEN
         PRINT *,myid,' debug, j,recvid,proxid: ',j, PointEx(i) % RecvIDs(j), &
              InvPartInfo(i) % ProxIDs(j)
+        PRINT *,myid,' debug, j,all recvid ,proxid: ',j, PointEx(i) % RecvIDs(:), &
+             InvPartInfo(i) % ProxIDs(:)
+        PRINT *,myid,' debug, j,SIZE recvid ,proxid: ',j, SIZE(PointEx(i) % RecvIDs), &
+             SIZE(InvPartInfo(i) % ProxIDs), InvPartInfo(i) % Pcount, PointEx(i) % rcount
         CALL FatalError("ExchangeProxPoints: Incorrect sorting assumption")
       END IF
       put_loc = InvPartInfo(i) % ProxLocs(j)
@@ -1424,6 +1491,9 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   DO I=1,ND
     N1=NDL(1,I)
     N2=NDL(2,I)
+
+    !Particle may no longer be nearby
+    IF(NRXF%PartInfo(1,N1) == -1 .OR. NRXF%PartInfo(1,N2) == -1) CYCLE
 
     own(1) = N1 <= NN
     own(2) = N2 <= NN

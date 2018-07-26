@@ -468,6 +468,51 @@ MODULE UTILS
 
     END SUBROUTINE ResizePointDataUT
 
+    !Subroutine to intermittently clear out old (presumably prox) points
+    !which are no longer near our partition, therefore no longer sent
+    !These are marked with NRXF%PartInfo(:,i) == -1
+    SUBROUTINE ClearOldParticles(NRXF,UT,UTM,InvPartInfo)
+      TYPE(NRXF_t) :: NRXF
+      TYPE(UT_t) :: UT,UTM
+      TYPE(InvPartInfo_t) :: InvPartInfo(0:)
+      !-------------------------
+      INTEGER :: i,j,pstrt, pend, NP,upper, newNP
+      LOGICAL, ALLOCATABLE :: UTValid(:)
+
+      NP = NRXF%NP
+      pstrt = NRXF%pstrt
+      pend = pstrt+NP-1
+
+      upper = UBOUND(NRXF%A,2)
+      newNP = COUNT(NRXF%PartInfo(1,pstrt:pend) /= -1)
+
+      ALLOCATE(UTValid(SIZE(UT%A)))
+      UTValid = .TRUE.
+      DO i=pstrt, upper
+        IF(NRXF%PartInfo(1,i) == -1) UTValid(i*6-5:i*6) = .FALSE.
+      END DO
+
+      IF(DebugMode) PRINT *,myid,' debug clear: pstrt,pend,np,upper,newNP :',pstrt,pend,np,upper,newNP
+
+      UT%A(pstrt*6 - 5 : (pstrt + newNP - 1)*6) = PACK(UT%A(pstrt*6-5 : upper*6),&
+           UTValid(pstrt*6-5:upper*6))
+
+      UTM%A(pstrt*6 - 5 : (pstrt + newNP - 1)*6) = PACK(UTM%A(pstrt*6-5 : upper*6),&
+           UTValid(pstrt*6-5:upper*6))
+
+      DO i=1,3
+        NRXF%A(i,pstrt : pstrt + newNP - 1) = PACK(NRXF%A(i,pstrt : upper),&
+             NRXF%PartInfo(1,pstrt : upper) /= -1)
+      END DO
+      DO i=1,2
+        NRXF%PartInfo(i,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(i,pstrt : upper),&
+             NRXF%PartInfo(1,pstrt : upper) /= -1)
+      END DO
+
+      NRXF%NP = newNP
+
+    END SUBROUTINE ClearOldParticles
+
     !A subroutine to quicksort an int array (arr1)
     ! while also sorting arr2 by arr1
     SUBROUTINE sort_int2(arr1,arr2,n)

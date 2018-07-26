@@ -555,7 +555,12 @@ END IF
 
 	IF (MOD(RY,250).EQ.1 .OR. (RY.EQ.RY0)) THEN
           IF(DebugMode) PRINT *,'About to find nearby particles'
-          CALL  FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
+
+          !Clear out invalid particles - those which were previously near our partition
+          !but are no longer
+          CALL ClearOldParticles(NRXF,UT,UTM,InvPartInfo)
+          !Identify possible collisions
+          CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
         END IF
 
        !circ checks which particles are really in contact and computes the forces

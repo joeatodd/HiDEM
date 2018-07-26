@@ -19,7 +19,13 @@ MODULE TypeDefs
   TYPE NTOT_t
      INTEGER :: M=0, L=0, R=0, F=0, B=0, FR=0, FL=0, BR=0, BL=0
   END TYPE NTOT_t
-
+  
+  !Structure for holding initial position of this partition's points, as well
+  !as relevant neighbouring [C]onnected and [P]roximal points.
+  !Note that %C & %P are not currently in use.
+  !NB: The %NP member, in particular, represents the *size* of the array
+  ! which may contain proximal points, but NOT the total number of proximal 
+  ! points at any given time (because some may be invalid) - check for PartInfo == -1
   TYPE NRXF_t
      REAL*8, ALLOCATABLE :: A(:,:)
      REAL*8, POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
