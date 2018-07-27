@@ -430,8 +430,8 @@ END IF
           countptr = countptr + 1
 
           IF(countptr > SIZE(InvPartInfo(Part) % ConnIDs)) THEN
-            CALL ExpandIntArray(InvPartInfo(n) % ConnIDs)
-            CALL ExpandIntArray(InvPartInfo(n) % ConnLocs)
+            CALL ExpandIntArray(InvPartInfo(Part) % ConnIDs)
+            CALL ExpandIntArray(InvPartInfo(Part) % ConnLocs)
           END IF
 
           InvPartInfo(Part) % ConnIDs(countptr) = ID
