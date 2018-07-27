@@ -298,10 +298,11 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(4), fh_mystarts(4)
   INTEGER, ALLOCATABLE :: work_int(:)
-  LOGICAL :: OutputBeams,OutputDisplacement
+  LOGICAL :: OutputBeams,OutputDisplacement,OutputPartition
 
   lfeed = CHAR(10) !line feed character
   OutputDisplacement = .TRUE.
+  OutputPartition = .TRUE.
 
   !Some MPI setup - define types and sizes
   IF(DoublePrec) THEN
@@ -418,6 +419,18 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     fh_mystarts(ms_counter) = fh_starts(ms_counter)
   END IF
 
+  IF(OutputPartition) THEN
+    DO i=1,ntasks
+      IF(i > myid) EXIT
+      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*intsize
+    END DO
+    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
+
+    ms_counter = ms_counter + 1
+    fh_starts(ms_counter) = fh_starts(ms_counter-1) + NNTot*intsize + intsize
+    fh_mystarts(ms_counter) = fh_starts(ms_counter)
+  END IF
+
   CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
 
@@ -481,11 +494,20 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     WRITE( output_str,'(A)') '      <PointData>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement" &
-         &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    IF(OutputDisplacement) THEN
+      WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement" &
+           &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
+      CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
+      VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
+    END IF
+    IF(OutputPartition) THEN
+      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="Partition" &
+           &NumberOfComponents="1" format="appended" offset="',VTK_Offset,'"/>'//lfeed
+      CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+      VTK_Offset = VTK_Offset + NNTot*intsize + intsize
+    END IF
 
     WRITE( output_str,'(A)') '      </PointData>'//lfeed
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
@@ -573,6 +595,21 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     END IF
     ms_counter = ms_counter + 1
   END IF
+
+  IF(OutputPartition) THEN
+
+    IF(ALLOCATED(work_int)) DEALLOCATE(work_int)
+    ALLOCATE(work_int(NN))
+    work_int = myid
+
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+    !Write byte count for connectivity
+    IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_int)), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write_All(fh, work_int, NN, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+
+    ms_counter = ms_counter + 1
+  END IF
+
   !---- Writing VTU Footer -----
 
 
