@@ -336,7 +336,7 @@ DO k=1,2
   DO i=1,NN
     DO j=1,NCN(i)
       !Count each beam only once - except across boundaries, both need to count
-      IF(CN(i,j) > i .OR. CNPart(i,j) /= myid) THEN
+      IF(particles_L(CN(i,j)) > i .OR. CNPart(i,j) /= myid) THEN
         counter = counter + 1
         IF(k==2) THEN
           NANS(1,counter) = particles_L(CN(i,j)) !Note - folows convention N1 = other part

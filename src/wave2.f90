@@ -280,7 +280,7 @@ END IF
 
         IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
 
-	PRINT *, myid,NN,NTOT
+	PRINT *, 'Part: ',myid,' NN: ',NN,' NTOT: ',NTOT
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         !NN - particles in each core
