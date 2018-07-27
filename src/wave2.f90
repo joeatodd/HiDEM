@@ -944,12 +944,6 @@ END IF
         ENDIF
  	END DO
 
-!update UT
-	DO I=1,6*NN
-	UTM%M(I)=UT%M(I)
-	UT%M(I)=UTP(I)
-	END DO
-
 !--------------- Start of output ----------------------
 
 	IF (MOD(RY,OUTINT).EQ.1) THEN
@@ -1085,6 +1079,13 @@ END IF
         END IF !CSV or Binary output
       
       ENDIF !output interval
+
+      !update UT
+      DO I=1,6*NN
+        UTM%M(I)=UT%M(I)
+        UT%M(I)=UTP(I)
+      END DO
+
 
 !--------------- End of output --------------------
 
