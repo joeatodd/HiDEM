@@ -474,10 +474,12 @@ MODULE UTILS
     SUBROUTINE ClearOldParticles(NRXF,UT,UTM,InvPartInfo)
       TYPE(NRXF_t) :: NRXF
       TYPE(UT_t) :: UT,UTM
-      TYPE(InvPartInfo_t) :: InvPartInfo(0:)
+      TYPE(InvPartInfo_t), TARGET :: InvPartInfo(0:)
       !-------------------------
-      INTEGER :: i,j,pstrt, pend, NP,upper, newNP
+      INTEGER :: i,j,pstrt, pend, NP,upper, newNP, rmcount
+      INTEGER, ALLOCATABLE :: locLUT(:)
       LOGICAL, ALLOCATABLE :: UTValid(:)
+      TYPE(InvPartInfo_t), POINTER :: IPI=>NULL()
 
       NP = NRXF%NP
       pstrt = NRXF%pstrt
@@ -486,13 +488,33 @@ MODULE UTILS
       upper = UBOUND(NRXF%A,2)
       newNP = COUNT(NRXF%PartInfo(1,pstrt:pend) /= -1)
 
+      IF(DebugMode) PRINT *,myid,' debug clear: pstrt,pend,np,upper,newNP :',pstrt,pend,np,upper,newNP
+
+      IF(newNP == NP) THEN
+        IF(DebugMode) PRINT *,myid,' debug, didnt need to clear any removed points.'
+        RETURN
+      END IF
+
       ALLOCATE(UTValid(SIZE(UT%A)))
       UTValid = .TRUE.
       DO i=pstrt, upper
         IF(NRXF%PartInfo(1,i) == -1) UTValid(i*6-5:i*6) = .FALSE.
       END DO
 
-      IF(DebugMode) PRINT *,myid,' debug clear: pstrt,pend,np,upper,newNP :',pstrt,pend,np,upper,newNP
+      ALLOCATE(locLUT(pstrt:pend))
+      locLUT = 0
+      rmcount = 0
+      DO i=pstrt,pend
+        IF(NRXF%PartInfo(1,i) == -1) THEN
+          rmcount = rmcount + 1
+          locLUT(i) = -1
+        ELSE
+          locLUT(i) = i-rmcount
+        END IF
+      END DO
+
+
+      !TODO - set the rest to -1?
 
       UT%A(pstrt*6 - 5 : (pstrt + newNP - 1)*6) = PACK(UT%A(pstrt*6-5 : upper*6),&
            UTValid(pstrt*6-5:upper*6))
@@ -504,13 +526,27 @@ MODULE UTILS
         NRXF%A(i,pstrt : pstrt + newNP - 1) = PACK(NRXF%A(i,pstrt : upper),&
              NRXF%PartInfo(1,pstrt : upper) /= -1)
       END DO
-      DO i=1,2
-        NRXF%PartInfo(i,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(i,pstrt : upper),&
-             NRXF%PartInfo(1,pstrt : upper) /= -1)
-      END DO
+
+      NRXF%PartInfo(2,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(2,pstrt : upper),&
+           NRXF%PartInfo(1,pstrt : upper) /= -1)
+
+      NRXF%PartInfo(1,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(1,pstrt : upper),&
+           NRXF%PartInfo(1,pstrt : upper) /= -1)
 
       NRXF%NP = newNP
 
+
+      !Correct locations in InvPartInfo
+      DO i=0,ntasks-1
+        IPI => InvPartInfo(i)
+        DO j=1,IPI%Pcount
+          IPI % ProxLocs(j) = locLUT(IPI % ProxLocs(j))
+          IF(locLUT(IPI % ProxLocs(j)) <= 0) THEN
+            PRINT *,myid," Programming Error in locLUT"
+            STOP
+          END IF
+        END DO
+      END DO
     END SUBROUTINE ClearOldParticles
 
     !A subroutine to quicksort an int array (arr1)
