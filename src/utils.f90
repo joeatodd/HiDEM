@@ -567,4 +567,60 @@ MODULE UTILS
       RETURN
     END SUBROUTINE sort_int2_r
 
+    !A subroutine to quicksort a real array (arr1)
+    ! while also sorting an index arrayarr2 by arr1
+    SUBROUTINE sort_real2(arr1,arr2,n)
+      IMPLICIT NONE
+      INTEGER :: arr2(:),n
+      REAL*8 :: arr1(:)
+      IF(n <= 1) RETURN
+      CALL sort_real2_r(arr1,arr2,1,n)
+    END SUBROUTINE sort_real2
+
+    !Does the actual sorting - needs a wrapper to avoid
+    !having to pass the extents first
+    RECURSIVE SUBROUTINE sort_real2_r(arr1,arr2,start,fin)
+      IMPLICIT NONE
+      INTEGER :: arr2(:)
+      REAL*8 :: arr1(:),hold,pivot_val
+      INTEGER :: start,fin,pivot,i,j,hold_int
+      !-----------------------------------
+
+      i=start
+      j=fin
+      pivot = (fin + start) / 2
+      pivot_val = arr1(pivot)
+
+      DO WHILE(.TRUE.)
+        DO WHILE(arr1(i) < pivot_val)
+          i=i+1
+        END DO
+        DO WHILE(arr1(j) > pivot_val)
+          j=j-1
+        END DO
+        !    PRINT *,'debug ij: ',i,j,pivot
+        IF(i>=j) EXIT
+
+        hold = arr1(i)
+        arr1(i) = arr1(j)
+        arr1(j) = hold
+
+        hold_int = arr2(i)
+        arr2(i) = arr2(j)
+        arr2(j) = hold_int
+
+        i=i+1
+        j=j-1
+      END DO
+
+      IF(j+1 < fin) THEN
+        CALL sort_real2_r(arr1,arr2,j+1,fin)
+      END IF
+      IF(start < i-1) THEN
+        CALL sort_real2_r(arr1,arr2,start, i-1)
+      END IF
+
+      RETURN
+    END SUBROUTINE sort_real2_r
+
 END MODULE UTILS
