@@ -494,7 +494,7 @@ MODULE UTILS
       TYPE(UT_t) :: UT,UTM
       TYPE(InvPartInfo_t), TARGET :: InvPartInfo(0:)
       !-------------------------
-      INTEGER :: i,j,pstrt, pend, NP,upper, newNP, rmcount
+      INTEGER :: i,j,pstrt, pend, newPend, NP, newNP, upper, rmcount
       INTEGER, ALLOCATABLE :: locLUT(:)
       LOGICAL, ALLOCATABLE :: UTValid(:)
       TYPE(InvPartInfo_t), POINTER :: IPI=>NULL()
@@ -505,6 +505,7 @@ MODULE UTILS
 
       upper = UBOUND(NRXF%A,2)
       newNP = COUNT(NRXF%PartInfo(1,pstrt:pend) /= -1)
+      newPend = pstrt + newNP - 1
 
       IF(DebugMode) PRINT *,myid,' debug clear: pstrt,pend,np,upper,newNP :',pstrt,pend,np,upper,newNP
 
@@ -513,12 +514,15 @@ MODULE UTILS
         RETURN
       END IF
 
+      !Create a logical array to enable PACKing of UT
       ALLOCATE(UTValid(SIZE(UT%A)))
       UTValid = .TRUE.
       DO i=pstrt, upper
         IF(NRXF%PartInfo(1,i) == -1) UTValid(i*6-5:i*6) = .FALSE.
       END DO
 
+      !This lookup table gives the updated index (in NRXF%A,PartInfo)
+      !once the invalid values have been removed
       ALLOCATE(locLUT(pstrt:pend))
       locLUT = 0
       rmcount = 0
@@ -531,25 +535,30 @@ MODULE UTILS
         END IF
       END DO
 
-
-      !TODO - set the rest to -1?
-
-      UT%A(pstrt*6 - 5 : (pstrt + newNP - 1)*6) = PACK(UT%A(pstrt*6-5 : upper*6),&
+      !TODO - most of these 'upper's should be newPend - but i'm scared it might 
+      !break something...
+      !shift, and delete (= 0.0) beyond newPend
+      UT%A(pstrt*6 - 5 : newPend*6) = PACK(UT%A(pstrt*6-5 : upper*6),&
            UTValid(pstrt*6-5:upper*6))
+      UT%A(newPend*6 + 1) = 0.0
 
-      UTM%A(pstrt*6 - 5 : (pstrt + newNP - 1)*6) = PACK(UTM%A(pstrt*6-5 : upper*6),&
+      UTM%A(pstrt*6 - 5 : newPend*6) = PACK(UTM%A(pstrt*6-5 : upper*6),&
            UTValid(pstrt*6-5:upper*6))
+      UTM%A(newPend*6 + 1) = 0.0
 
       DO i=1,3
-        NRXF%A(i,pstrt : pstrt + newNP - 1) = PACK(NRXF%A(i,pstrt : upper),&
+        NRXF%A(i,pstrt : newPend) = PACK(NRXF%A(i,pstrt : upper),&
              NRXF%PartInfo(1,pstrt : upper) /= -1)
       END DO
+      NRXF%A(:,newPend+1:upper) = 0.0
 
-      NRXF%PartInfo(2,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(2,pstrt : upper),&
+      !shift, and delete (= -1) beyond newPend
+      NRXF%PartInfo(2,pstrt : newPend) = PACK(NRXF%PartInfo(2,pstrt : upper),&
+           NRXF%PartInfo(1,pstrt : upper) /= -1)
+      NRXF%PartInfo(1,pstrt : newPend) = PACK(NRXF%PartInfo(1,pstrt : upper),&
            NRXF%PartInfo(1,pstrt : upper) /= -1)
 
-      NRXF%PartInfo(1,pstrt : pstrt + newNP - 1) = PACK(NRXF%PartInfo(1,pstrt : upper),&
-           NRXF%PartInfo(1,pstrt : upper) /= -1)
+      NRXF%PartInfo(:,newPend+1:upper) = -1
 
       NRXF%NP = newNP
 
@@ -558,11 +567,11 @@ MODULE UTILS
       DO i=0,ntasks-1
         IPI => InvPartInfo(i)
         DO j=1,IPI%Pcount
-          IPI % ProxLocs(j) = locLUT(IPI % ProxLocs(j))
           IF(locLUT(IPI % ProxLocs(j)) <= 0) THEN
             PRINT *,myid," Programming Error in locLUT"
             STOP
           END IF
+          IPI % ProxLocs(j) = locLUT(IPI % ProxLocs(j))
         END DO
       END DO
     END SUBROUTINE ClearOldParticles
