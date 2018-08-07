@@ -24,6 +24,11 @@ MODULE UTILS
       INTEGER, OPTIONAL :: newsize_in,fill_in
       INTEGER :: newsize, oldsize, fill
 
+      IF(.NOT. ALLOCATED(intarr)) THEN
+        PRINT *,myid,' Error: Expand1IntArray received an unallocated array!'
+        STOP
+      END IF
+
       oldsize = SIZE(intarr)
       IF(PRESENT(newsize_in)) THEN
         newsize = newsize_in
@@ -42,6 +47,7 @@ MODULE UTILS
       workarr(1:oldsize) = intarr(1:oldsize)
 
       !FORTRAN 2003 feature...
+      DEALLOCATE(intarr) !Cray compiler bug?
       CALL MOVE_ALLOC(workarr, intarr)
 
       IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
@@ -53,6 +59,11 @@ MODULE UTILS
       INTEGER, ALLOCATABLE :: intarr(:,:), workarr(:,:)
       INTEGER, OPTIONAL :: newsize_in,fill_in
       INTEGER :: newsize, oldsize, dim1size, fill
+
+      IF(.NOT. ALLOCATED(intarr)) THEN
+        PRINT *,myid,' Error: Expand2IntArray received an unallocated array!'
+        STOP
+      END IF
 
       oldsize = SIZE(intarr,2)
 
@@ -76,6 +87,7 @@ MODULE UTILS
       workarr(:,1:oldsize) = intarr(:,1:oldsize)
 
       !FORTRAN 2003 feature...
+      DEALLOCATE(intarr) !Cray compiler bug?
       CALL MOVE_ALLOC(workarr, intarr)
 
       IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
@@ -299,7 +311,8 @@ MODULE UTILS
 
       p_oldsize = a_oldsize - NRXF%pstrt + 1
       IF(NRXF%NP > p_oldsize) THEN
-        IF(DebugMode) PRINT *,myid,' WARNING: ResizePointDataNRXF: NRXF%NP overlaps array end'
+        !TODO - this would lead to invalid array reads, I think
+        PRINT *,myid,' WARNING: ResizePointDataNRXF: NRXF%NP overlaps array end'
         p_oldsize = NRXF%NP
       END IF
 
@@ -352,7 +365,9 @@ MODULE UTILS
       work_int(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
       work_int(:,pstrt_new : pstrt_new+p_oldsize-1) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
 
+      DEALLOCATE(NRXF%A) !Cray compiler bug?
       CALL MOVE_ALLOC(work_arr, NRXF%A)
+      DEALLOCATE(NRXF%PartInfo) !Cray compiler bug?
       CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
 
       cstrt_old = NRXF%cstrt
@@ -374,6 +389,7 @@ MODULE UTILS
         work_arr1((pstrt_new-1)*6 - 1 : (pstrt_new-1)*6 + p_oldsize*6) = &
              UT%A((pstrt_old-1)*6 - 1 : (pstrt_old-1)*6 + p_oldsize*6)
 
+        DEALLOCATE(UT%A) !Cray compiler bug?
         CALL MOVE_ALLOC(work_arr1, UT%A)
         UT%M => UT%A(1:m_newsize*6)
       END IF
@@ -388,6 +404,7 @@ MODULE UTILS
         work_arr1((pstrt_new-1)*6 - 1 : (pstrt_new-1)*6 + p_oldsize*6) = &
              UTM%A((pstrt_old-1)*6 - 1 : (pstrt_old-1)*6 + p_oldsize*6)
 
+        DEALLOCATE(UTM%A) !Cray compiler bug?
         CALL MOVE_ALLOC(work_arr1, UTM%A)
         UTM%M => UTM%A(1:m_newsize*6)
       END IF
@@ -461,6 +478,7 @@ MODULE UTILS
       work_arr(1:m_oldsize) = UT % M(1:m_oldsize)
       work_arr(m_newsize+1 : m_newsize+p_oldsize) = UT % P(1:p_oldsize)
 
+      DEALLOCATE(UT%A) !Cray compiler bug?
       CALL MOVE_ALLOC(work_arr, UT%A)
 
       UT%M => UT%A(1:m_newsize)
