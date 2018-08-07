@@ -97,7 +97,7 @@ MODULE UTILS
     SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand, arrsize)
       TYPE(NRXF_T), TARGET :: NRXF
       INTEGER :: n,n_tot
-      REAL*8,OPTIONAL :: partexpand
+      REAL(KIND=dp),OPTIONAL :: partexpand
       INTEGER,OPTIONAL :: arrsize
 
       IF(PRESENT(partexpand) .EQV. PRESENT(arrsize)) THEN
@@ -140,7 +140,7 @@ MODULE UTILS
     SUBROUTINE PointDataInitUT(UT, n, partexpand, arrsize)
       TYPE(UT_T), TARGET :: UT
       INTEGER :: n,n_tot
-      REAL*8, OPTIONAL :: partexpand
+      REAL(KIND=dp), OPTIONAL :: partexpand
       INTEGER,OPTIONAL :: arrsize
 
       IF(PRESENT(partexpand) .EQV. PRESENT(arrsize)) THEN
@@ -260,10 +260,10 @@ MODULE UTILS
 
       TYPE(NRXF_T), TARGET :: NRXF
       TYPE(UT_T), OPTIONAL, TARGET :: UT, UTM
-      REAL*8 :: scale
+      REAL(KIND=dp) :: scale
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
-      REAL*8, ALLOCATABLE :: work_arr(:,:),work_arr1(:)
+      REAL(KIND=dp), ALLOCATABLE :: work_arr(:,:),work_arr1(:)
       INTEGER, ALLOCATABLE :: work_int(:,:)
       INTEGER :: a_oldsize,m_oldsize,c_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,c_newsize,p_newsize
@@ -416,10 +416,10 @@ MODULE UTILS
     SUBROUTINE ResizePointDataUT(UT,scale,do_M,do_C,do_P)
 
       TYPE(UT_T), TARGET :: UT
-      REAL*8 :: scale
+      REAL(KIND=dp) :: scale
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
-      REAL*8, ALLOCATABLE :: work_arr(:)
+      REAL(KIND=dp), ALLOCATABLE :: work_arr(:)
       INTEGER :: a_oldsize,m_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,p_newsize
       LOGICAL :: doM,doC,doP
@@ -626,7 +626,7 @@ MODULE UTILS
     SUBROUTINE sort_real2(arr1,arr2,n)
       IMPLICIT NONE
       INTEGER :: arr2(:),n
-      REAL*8 :: arr1(:)
+      REAL(KIND=dp) :: arr1(:)
       IF(n <= 1) RETURN
       CALL sort_real2_r(arr1,arr2,1,n)
     END SUBROUTINE sort_real2
@@ -636,7 +636,7 @@ MODULE UTILS
     RECURSIVE SUBROUTINE sort_real2_r(arr1,arr2,start,fin)
       IMPLICIT NONE
       INTEGER :: arr2(:)
-      REAL*8 :: arr1(:),hold,pivot_val
+      REAL(KIND=dp) :: arr1(:),hold,pivot_val
       INTEGER :: start,fin,pivot,i,j,hold_int
       !-----------------------------------
 

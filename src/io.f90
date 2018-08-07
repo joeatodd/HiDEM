@@ -28,9 +28,9 @@ CONTAINS
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
       StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
-   REAL*8 :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
-   REAL*8 :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
-   REAL*8 :: fractime
+   REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
+   REAL(KIND=dp) :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
+   REAL(KIND=dp) :: fractime
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
@@ -289,11 +289,11 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   !----------------------------------
   INTEGER :: NN,NNTot,NBeamsTot,counter,ms_counter,VTK_Offset
   INTEGER :: i,j,GlobalNNOffset(ntasks)
-  REAL*8 :: X,Y,Z
+  REAL(KIND=dp) :: X,Y,Z
   CHARACTER(LEN=1024) :: output_str,datatype_str
   CHARACTER :: lfeed
-  REAL*8, ALLOCATABLE :: work_real_dp(:), displacements(:)
-  REAL*4, ALLOCATABLE :: work_real_sp(:)
+  REAL(KIND=dp), ALLOCATABLE :: work_real_dp(:), displacements(:)
+  REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
   INTEGER :: fh,ierr,testsum,contig_type,realsize,intsize
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(4), fh_mystarts(4)
@@ -651,9 +651,9 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   INTEGER :: i,j,N1,N2
   CHARACTER(LEN=1024) :: output_str
   CHARACTER :: lfeed
-  REAL*8 X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
-  REAL*8, ALLOCATABLE :: work_real(:)
-  REAL*4, ALLOCATABLE :: work_real_sp(:)
+  REAL(KIND=dp) :: X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
+  REAL(KIND=dp), ALLOCATABLE :: work_real(:)
+  REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
   INTEGER :: fh,ierr,realsize
   INTEGER :: ntotal,othertask
   INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart

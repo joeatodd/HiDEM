@@ -27,16 +27,16 @@ CONTAINS
 
 	IMPLICIT NONE
         include 'mpif.h'
-        REAL*8 :: MFIL(NN),VDP(NN)
-	REAL*8 :: LNN,DPE,S
-	REAL*8 :: CT(NTOT*12),EN(NN*6),R(NN*6)
-	REAL*8 :: T1,T2
-	REAL*8 :: T,DT,M,JS,DMP,DMP2
+        REAL(KIND=dp) :: MFIL(NN),VDP(NN)
+	REAL(KIND=dp) :: LNN,DPE,S
+	REAL(KIND=dp) :: CT(NTOT*12),EN(NN*6),R(NN*6)
+	REAL(KIND=dp) :: T1,T2
+	REAL(KIND=dp) :: T,DT,M,JS,DMP,DMP2
         INTEGER :: NTOT,NN
  !-----------------------------------------------
-	REAL*8 DX1,DY1,DZ1,DX2,DY2,DZ2
-	REAL*8 X1,Y1,Z1,X2,Y2,Z2,TT(12,12),DUT(12)
-        REAL*8,ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)!,DUT(:)
+	REAL(KIND=dp) :: DX1,DY1,DZ1,DX2,DY2,DZ2
+	REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,TT(12,12),DUT(12)
+        REAL(KIND=dp),ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)!,DUT(:)
 
 	INTEGER N,NL,NB,N1,N2,X,XL,XR
 	INTEGER I,J,RY,FXC

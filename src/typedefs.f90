@@ -1,8 +1,9 @@
 MODULE TypeDefs
 
-  REAL*8 :: part_expand=0.5
-  INTEGER :: myid, ntasks
   INTEGER, PARAMETER :: dp = SELECTED_REAL_KIND(12)
+  INTEGER, PARAMETER :: sp = SELECTED_REAL_KIND(6,37)
+  REAL(KIND=dp) :: part_expand=0.5
+  INTEGER :: myid, ntasks
   LOGICAL :: DebugMode,PrintTimes
 
   INCLUDE 'param.dat'
@@ -23,12 +24,13 @@ MODULE TypeDefs
   !Structure for holding initial position of this partition's points, as well
   !as relevant neighbouring [C]onnected and [P]roximal points.
   !Note that %C & %P are not currently in use.
-  !NB: The %NP member, in particular, represents the *size* of the array
+  !NB: The %NP member, in particular, represents the *size* 
+  ! of the array (from first to last active member)
   ! which may contain proximal points, but NOT the total number of proximal 
   ! points at any given time (because some may be invalid) - check for PartInfo == -1
   TYPE NRXF_t
-     REAL*8, ALLOCATABLE :: A(:,:)
-     REAL*8, POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
+     REAL(KIND=dp), ALLOCATABLE :: A(:,:)
+     REAL(KIND=dp), POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
      INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
      INTEGER, ALLOCATABLE :: PartInfo(:,:)
   END TYPE NRXF_t
@@ -53,7 +55,7 @@ MODULE TypeDefs
   END TYPE InvPartInfo_t
 
   TYPE EF_t
-     REAL*8 :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&
+     REAL(KIND=dp) :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&
           FL(NOCON),BR(NOCON),BL(NOCON)
   END TYPE EF_t
 
@@ -62,8 +64,8 @@ MODULE TypeDefs
   END TYPE NEI_t
 
   TYPE UT_t
-     REAL*8, ALLOCATABLE :: A(:)
-     REAL*8, POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
+     REAL(KIND=dp), ALLOCATABLE :: A(:)
+     REAL(KIND=dp), POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
   END TYPE UT_t
 
   TYPE FXF_t
@@ -74,6 +76,6 @@ MODULE TypeDefs
   TYPE PointEx_t
      INTEGER :: partid=-1,scount=0,rcount=0
      INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
-     REAL*8, ALLOCATABLE :: S(:),R(:)
+     REAL(KIND=dp), ALLOCATABLE :: S(:),R(:)
   END TYPE PointEx_t
 END MODULE TypeDefs

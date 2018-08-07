@@ -19,11 +19,11 @@ SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo
   IMPLICIT NONE
   INCLUDE 'na90.dat'
 
-!Real*8,ALLOCATABLE :: surf(:,:),bed(:,:)
-Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
-Real*8 :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
-Real*8 :: box,b,SCL
-INTEGER :: l,NN,i,j
+!Real(KIND=dp),ALLOCATABLE :: surf(:,:),bed(:,:)
+Real(KIND=dp) :: surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
+Real(KIND=dp) :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
+Real(KIND=dp) :: box,b,SCL
+INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
 INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile
@@ -78,12 +78,12 @@ SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart,
   INCLUDE 'na90.dat'
   INCLUDE 'mpif.h'
 
-Real*8 surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
-Real*8 b,x0(3,4),box,SCL
-REAL*8 gridminx, gridmaxx, gridminy, gridmaxy,T1,T2
-REAL*8 z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
-REAL*8 :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
-REAL*8, ALLOCATABLE :: xo(:,:),work_arr(:,:)
+Real(KIND=dp) :: surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
+Real(KIND=dp) :: b,x0(3,4),box,SCL
+REAL(KIND=dp) :: gridminx, gridmaxx, gridminy, gridmaxy,T1,T2
+REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
+REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
+REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
 INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
 INTEGER NTOT,neighcount
@@ -97,7 +97,7 @@ LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
 INTEGER :: objval,counter
 INTEGER, ALLOCATABLE :: metis_options(:), particlepart(:),counters(:)
 INTEGER, POINTER :: vwgt=>NULL(),vsize=>NULL(),adjwgt=>NULL(),xadj(:),adjncy(:),countptr
-REAL*8, POINTER :: tpwgts=>NULL(),ubvec=>NULL()
+REAL(KIND=dp), POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t), TARGET :: NRXF
@@ -470,7 +470,7 @@ END SUBROUTINE Initializefcc
 
 Subroutine BIPINT(x,y,f11,f12,f21,f22,fint)
 Implicit none
-Real*8 :: x,y,f11,f12,f21,f22,fint
+Real(KIND=dp) :: x,y,f11,f12,f21,f22,fint
 fint=f11*(1.0-x)*(1.0-y)+f21*x*(1.0-y)+f12*(1.0-x)*y+f22*x*y
 End Subroutine
 
@@ -478,8 +478,8 @@ End Subroutine
 
 Subroutine BIPINTN(x,y,f11,f12,f21,f22,dix,diy,diz,grid)
 Implicit none
-Real*8 :: x,y,f11,f12,f21,f22,dix,diy,diz,grid
-REAL*8 norm
+Real(KIND=dp) :: x,y,f11,f12,f21,f22,dix,diy,diz,grid
+REAL(KIND=dp) norm
 dix=(-f11*(1.0-y)+f21*(1.0-y)-f12*y+f22*y)/grid
 diy=(-f11*(1.0-x)-f21*x+f12*(1.0-x)+f22*x)/grid
 diz=1.0
@@ -542,16 +542,17 @@ End Subroutine
  END SUBROUTINE GetBBoxes
 
  SUBROUTINE FindNeighbours(PBBox,PartIsNeighbour)
-   REAL*8 :: PBBox(:,0:)
+   REAL(KIND=dp) :: PBBox(:,0:)
    LOGICAL :: PartIsNeighbour(0:ntasks-1)
    !-------------------------------
    INTEGER :: i
-   REAL*8 :: BBox(6),Buffer
+   REAL(KIND=dp) :: BBox(6),Buffer
 
    BBox = PBBox(:,myid)
    Buffer = 200.0
 
    PartIsNeighbour = .FALSE.
+
 
    !Cycle each partition
    DO i=0,ntasks-1
@@ -580,7 +581,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
   TYPE(UT_t), OPTIONAL :: UT, UTM
   LOGICAL, OPTIONAL :: passNRXF
   !--------------------
-  REAL*8 :: T1,T2
+  REAL(KIND=dp) :: T1,T2
   INTEGER :: i,j,id,counter,loc,neigh,getcount,sendcount,ierr
   INTEGER, ALLOCATABLE :: stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
@@ -784,11 +785,11 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   TYPE(NRXF_t) :: NRXF
   TYPE(UT_t) :: UT, UTM
   INTEGER :: NN
-  REAL*8 :: SCL, PBBox(6,0:ntasks-1)
+  REAL(KIND=dp) :: SCL, PBBox(6,0:ntasks-1)
   LOGICAL :: PartIsNeighbour(0:ntasks-1)
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   !--------------------
-  REAL*8 :: T1, T2, tstrt,tend
+  REAL(KIND=dp) :: T1, T2, tstrt,tend
   INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,rmcnt,neigh,neighcount,&
        getcount,rmcount,loc,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
@@ -1154,12 +1155,12 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
   INCLUDE 'mpif.h'
 
   INTEGER, ALLOCATABLE :: NANS(:,:), NANPart(:)
-  REAL*8, ALLOCATABLE :: EFS(:)
+  REAL(KIND=dp), ALLOCATABLE :: EFS(:)
   TYPE(NRXF_t) :: NRXF
   !-----------------------------
   INTEGER :: i,j,k,neigh,counter,N1,N2,NTOT,ierr,recvtot
   INTEGER, ALLOCATABLE :: stats(:)
-  REAL*8 :: T1,T2
+  REAL(KIND=dp) :: T1,T2
   LOGICAL :: Send
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
@@ -1282,14 +1283,14 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   TYPE(UT_t) :: UT
   INTEGER :: NN,ND
   INTEGER, ALLOCATABLE :: NDL(:,:)
-  REAL*8 :: SCL, LNN, BBox(6)
+  REAL(KIND=dp) :: SCL, LNN, BBox(6)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
   INTEGER i,j,cnt,npoints, num_ngb, totsize
   integer, allocatable :: seed(:), ngb_ids(:)
-  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
-  REAL*8 :: dist, max_dist, min_dist,tstrt,tend
+  REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
+  REAL(KIND=dp) :: dist, max_dist, min_dist,tstrt,tend
 
   CALL CPU_Time(tstrt)
 
@@ -1381,8 +1382,8 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   
   USE Octree
 
-  REAL*8, ALLOCATABLE :: xo(:,:)
-  REAL*8 :: SCL
+  REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
+  REAL(KIND=dp) :: SCL
   INTEGER :: ip,nbeams
   INTEGER, ALLOCATABLE :: NCN(:), CN(:,:)
   !-----------------------
@@ -1390,8 +1391,8 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   type(point_type), allocatable :: points(:)
   INTEGER i,j,k, num_ngb,counter
   integer, allocatable :: seed(:), ngb_ids(:)
-  REAL*8 :: x(3), dx(3),oct_bbox(2,3),eps
-  REAL*8 :: dist, max_dist, min_dist, searchdist
+  REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
+  REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
 
   ALLOCATE(points(ip),&
        NCN(ip),&
@@ -1461,16 +1462,16 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
 
   IMPLICIT NONE
   INCLUDE 'mpif.h'
-  REAL*8 X1,X2,Y1,Y2,Z1,Z2
-  REAL*8 T1,T2
-  REAL*8, ALLOCATABLE :: EFC(:)
-  REAL*8 SX,SY,SZ,SUM,T,WE(:),L0
-  REAL*8 DDEL,DWE,OWE,DT,ESUM,LNN
-  REAL*8 LS,LS2,DEL,SCL
+  REAL(KIND=dp) ::  X1,X2,Y1,Y2,Z1,Z2
+  REAL(KIND=dp) ::  T1,T2
+  REAL(KIND=dp), ALLOCATABLE :: EFC(:)
+  REAL(KIND=dp) ::  SX,SY,SZ,SUM,T,WE(:),L0
+  REAL(KIND=dp) ::  DDEL,DWE,OWE,DT,ESUM,LNN
+  REAL(KIND=dp) ::  LS,LS2,DEL,SCL
   INTEGER ierr,FXC,ND
   INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
-  REAL*8 RC,RCX,RCY,RCZ,FRX(NN),FRY(NN),FRZ(NN)
+  REAL(KIND=dp) ::  RC,RCX,RCY,RCZ,FRX(NN),FRY(NN),FRZ(NN)
   INTEGER NTOT,I,N1,N2,IS,NN
   TYPE(UT_t) :: UT
   TYPE(NRXF_t) :: NRXF
@@ -1575,11 +1576,11 @@ FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
   INTEGER :: i
   TYPE(NRXF_t) :: NRXF
   TYPE(UT_t) :: UT
-  REAL*8 :: BBox(6)
-  REAL*8, OPTIONAL :: Buff
+  REAL(KIND=dp) :: BBox(6)
+  REAL(KIND=dp), OPTIONAL :: Buff
   LOGICAL :: InBB
   !------------------------
-  REAL*8 :: X,Y,Z, Buffer
+  REAL(KIND=dp) :: X,Y,Z, Buffer
 
   IF(PRESENT(Buff)) THEN
     Buffer = Buff
