@@ -207,9 +207,9 @@ End Do
 IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
 IF(DebugMode) PRINT *,myid,' Finding connections...'
 
-CALL CPU_TIME(T1)
+IF(PrintTimes) CALL CPU_TIME(T1)
 CALL FindBeams(xo, ip, SCL, NCN_All, CN_All, nbeams)
-CALL CPU_TIME(T2)
+IF(PrintTimes) CALL CPU_TIME(T2)
 
 IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
@@ -587,7 +587,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   LOGICAL :: doNRXF=.TRUE.
 
-  CALL CPU_Time(T1)
+  IF(PrintTimes) CALL CPU_TIME(T1)
 
   IF(PRESENT(passNRXF)) doNRXF = passNRXF
 
@@ -762,8 +762,10 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
     END DO
   END IF
 
-  CALL CPU_Time(T2)
-  IF(PrintTimes) PRINT *,myid,'Exchange Conn Points took: ',T2-T1,' secs'
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,'Exchange Conn Points took: ',T2-T1,' secs'
+  END IF
 
   CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -797,7 +799,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   LOGICAL, ALLOCATABLE :: IsConnected(:),PrevProx(:)
   LOGICAL :: loss
 
-  CALL CPU_Time(tstrt)
+  if(PrintTimes) CALL CPU_TIME(tstrt)
 
   ALLOCATE(PointEx(0:ntasks-1),NRXFPointEx(0:ntasks-1), &
        stats(0:ntasks*4-1),IsConnected(NN),PrevProx(NN))
@@ -816,7 +818,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     NRXFPointEx(i) % rcount = 0
   END DO
 
-  CALL CPU_TIME(T1)
+  IF(PrintTimes) CALL CPU_TIME(T1)
 
   !Count points in each BB
   !Strategy here:
@@ -1047,10 +1049,11 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   CALL MPI_Waitall(ntasks*4, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
-  CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,' ExchangeProxPoints Part 1 time: ',T2-T1,' secs'
-  CALL CPU_TIME(T1)
-
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,' ExchangeProxPoints Part 1 time: ',T2-T1,' secs'
+    CALL CPU_TIME(T1)
+  END IF
   !Store UT & UTM
   ! PointEx(i) % rcount = InvPartInfo(i) % Pcount, and the values of
   ! InvPartInfo(i) % ProxIDs are all present in PointEx(i) % RecvIDs
@@ -1133,11 +1136,14 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     END DO
   END DO
 
-  CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,' ExchangeProxPoints Part 2 time: ',T2-T1,' secs'
 
-  CALL CPU_Time(tend)
-  IF(PrintTimes) PRINT *,myid,'Exchange Prox Points took: ',tend -  tstrt,' secs'
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,' ExchangeProxPoints Part 2 time: ',T2-T1,' secs'
+
+    CALL CPU_TIME(tend)
+    PRINT *,myid,'Exchange Prox Points took: ',tend -  tstrt,' secs'
+  END IF
 
   IF(DebugMode) PRINT *,myid,' successfully completed ExchangeProxPoints.'
   CALL MPI_Barrier(MPI_COMM_WORLD, ierr)
@@ -1324,12 +1330,14 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     Points(cnt) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
   END DO
 
-  CALL CPU_TIME(T1)
+  IF(PrintTimes) CALL CPU_TIME(T1)
   CALL Octree_build(Points)
 
-  CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,'FindNearbyParticles: Time to build octree: ',T2-T1
-  CALL CPU_TIME(T1)
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,'FindNearbyParticles: Time to build octree: ',T2-T1
+    CALL CPU_TIME(T1)
+  END IF
 
   ALLOCATE(ngb_ids(100))
 
@@ -1365,14 +1373,17 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     ! IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
   END DO
 
-  CALL CPU_TIME(T2)
-  IF(DebugMode) PRINT *,myid,'FindNearbyParticles: Time to search octree: ',T2-T1
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,'FindNearbyParticles: Time to search octree: ',T2-T1
+  END IF
 
   CALL Octree_final()
 
-  CALL CPU_Time(tend)
-  IF(PrintTimes) PRINT *,myid,'Finding nearby particles took: ',tend - tstrt,' secs'
-
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(tend)
+    PRINT *,myid,'Finding nearby particles took: ',tend - tstrt,' secs'
+  END IF
 
 END SUBROUTINE FindNearbyParticles
 
@@ -1477,7 +1488,7 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   TYPE(NRXF_t) :: NRXF
   LOGICAL :: own(2)
 
-  CALL CPU_Time(T1)
+  IF(PrintTimes) CALL CPU_TIME(T1)
 
   IF(.NOT. ALLOCATED(FXF)) ALLOCATE(FXF(2,NN*12))
   FXF = 0 !particle proximity info
@@ -1564,8 +1575,10 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
     ENDIF
   ENDDO
 
-  CALL CPU_Time(T2)
-  IF(PrintTimes) PRINT *,myid,' Finding collisions took: ',T2-T1,' secs'
+  IF(PrintTimes) THEN
+    CALL CPU_TIME(T2)
+    PRINT *,myid,' Finding collisions took: ',T2-T1,' secs'
+  END IF
 
   RETURN
 

@@ -530,20 +530,22 @@ END IF
 !================= START THE TIME LOOP ======================
 !============================================================
 
- CALL CPU_TIME(T1)
- TS1=0.0
-
- TTCUM=0.0
- TT=0.0
-
+ IF(PrintTimes) THEN
+   CALL CPU_TIME(T1)
+   TS1=0.0
+   TTCUM=0.0
+   TT=0.0
+ END IF
 
  DO 100 RY=RY0,RY0+STEPS0 
 
-        IF(myid==0 .AND. PrintTimes) PRINT *,'Time step: ',RY
-        CALL CPU_TIME(TT1)
-        TT(1) = TT1
-        TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
-        !TODO  TIME 1
+   IF(myid==0 .AND. PrintTimes) THEN
+     PRINT *,'Time step: ',RY
+     CALL CPU_TIME(TT1)
+     TT(1) = TT1
+     TTCUM(1) = TTCUM(1) + (TT(1) - TT(11))
+     !TODO  TIME 1
+   END IF
 
         CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, .FALSE.) !Don't pass NRXF...
 
@@ -633,8 +635,10 @@ END IF
 !============================ END Old Prox/Collision Strategy ===============================
 
        !TODO  TIME 4
-       CALL CPU_TIME(TT(4))
-       TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(TT(4))
+          TTCUM(4) = TTCUM(4) + (TT(4) - TT(3))
+        END IF
 
        !Calculates elastic forces from beams. Stiffness matrix K
 	CALL EFFLOAD(S,NTOT,NN,T,DT,MN,JS,DMP,DMP2,UT,UTM,R,EN,RY,&
@@ -643,12 +647,15 @@ END IF
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-        CALL CPU_TIME(TT2)
-	TS1=TS1+(TT2-TT1)
+        IF(PrintTimes) THEN
 
-        !TODO  TIME 5
-       CALL CPU_TIME(TT(5))
-       TTCUM(5) = TTCUM(5) + (TT(5) - TT(4))
+          CALL CPU_TIME(TT2)
+          TS1=TS1+(TT2-TT1)
+
+          !TODO  TIME 5
+          CALL CPU_TIME(TT(5))
+          TTCUM(5) = TTCUM(5) + (TT(5) - TT(4))
+        END IF
 
 	WEN=0.0
 	KIN=0.0
@@ -664,10 +671,12 @@ END IF
 
 	DO I=1,NN !Cycle over particles
 
-        !TODO  TIME 6
-        CALL CPU_TIME(TT(6))
-        IF(I>1) THEN
-          TTCUM(6) = TTCUM(6) + (TT(6) - TT(9))
+        IF(PrintTimes) THEN
+          !TODO  TIME 6
+          CALL CPU_TIME(TT(6))
+          IF(I>1) THEN
+            TTCUM(6) = TTCUM(6) + (TT(6) - TT(9))
+          END IF
         END IF
 
 	X=NRXF%M(1,I)+UT%M(6*I-5)  !<- x,y,z actual positions, NRXF%M = original, UT%M = displacement
@@ -712,9 +721,10 @@ END IF
           ENDIF
         ENDIF
 
-        !TODO  TIME 7
-       CALL CPU_TIME(TT(7))
-       TTCUM(7) = TTCUM(7) + (TT(7) - TT(6))
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(TT(7))
+          TTCUM(7) = TTCUM(7) + (TT(7) - TT(6))
+        END IF
 
         CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)),&
         BED(INT(X/GRID),INT(Y/GRID)+1),BED(INT(X/GRID)+1,INT(Y/GRID)+1),DIX,DIY,DIZ,GRID)
@@ -754,9 +764,10 @@ END IF
 	BOYY(I)=GRAV*MFIL(I)*SSB
 	ENDIF
 
-        !TODO  TIME 8
-       CALL CPU_TIME(TT(8))
-       TTCUM(8) = TTCUM(8) + (TT(8) - TT(7))
+       IF(PrintTimes) THEN
+         CALL CPU_TIME(TT(8))
+         TTCUM(8) = TTCUM(8) + (TT(8) - TT(7))
+       END IF
 
  !Jan's code for smoothing the buoyant forces across the waterline
         ! IF (Z.LT.WL-0.4*SCL) THEN
@@ -866,10 +877,10 @@ END IF
 	MGH=MGH+9.8*MFIL(I)*ABS(Z-WL-Y*SSB)/SQB
 	ENDIF
 
-        !TODO  TIME 9
-       CALL CPU_TIME(TT(9))
-       TTCUM(9) = TTCUM(9) + (TT(9) - TT(8))
-
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(TT(9))
+          TTCUM(9) = TTCUM(9) + (TT(9) - TT(8))
+        END IF
        END DO !loop over particles
 
 
@@ -910,10 +921,10 @@ END IF
 	
 	MML=0.0
 
-        !TODO  TIME 10
-       CALL CPU_TIME(TT(10))
-       TTCUM(10) = TTCUM(10) + (TT(10) - TT(9))
-
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(TT(10))
+          TTCUM(10) = TTCUM(10) + (TT(10) - TT(9))
+        END IF
 !--------------- Check for fracture -------------------
 
 !internally
@@ -1127,9 +1138,10 @@ END IF
           BCC=0
 	ENDIF
 
-        !TODO  TIME 11
-       CALL CPU_TIME(TT(11))
-       TTCUM(11) = TTCUM(11) + (TT(11) - TT(10))
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(TT(11))
+          TTCUM(11) = TTCUM(11) + (TT(11) - TT(10))
+        END IF
 
  100	CONTINUE !end of time loop
 
@@ -1137,7 +1149,7 @@ END IF
 !================= END OF TIME LOOP ======================
 !=========================================================
 
-        CALL CPU_TIME(T2)
+        IF(PrintTimes) CALL CPU_TIME(T2)
 
         CALL WriteRestart()
 
