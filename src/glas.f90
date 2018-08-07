@@ -14,7 +14,7 @@ CONTAINS
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,neighcount,l,&
-     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain)
+     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked)
 
   IMPLICIT NONE
   INCLUDE 'na90.dat'
@@ -27,7 +27,7 @@ INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
 INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile
-LOGICAL :: StrictDomain
+LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t) :: NRXF
 TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
@@ -37,20 +37,27 @@ TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
  13    FORMAT(4F14.7)
  14    FORMAT(3F14.7)
 
-surf=-100.0
-bed=1000.0
+surf=-100.0_dp
+bed=1000.0_dp
+melta = 0.0_dp
 
 !TODO pass through file once to check extent, then allocate bed, surf, melt
 ! then reread
 OPEN(400,file=TRIM(geomfile),STATUS='OLD')
 READ(400,*) N2
 DO I=1,N2
-  READ(400,*) x,y,s1,b1,b2,z1
+  IF(GeomMasked) THEN
+    READ(400,*) x,y,s1,b1,b2,z1,mask
+  ELSE
+    READ(400,*) x,y,s1,b1,b2,z1
+  END IF
   xk=INT(x/grid)
   yk=INT(y/grid)
-  IF (xk.GE.-100.AND.yk.GE.-100) bed(xk,yk)=b1
-  IF (xk.GE.-100.AND.yk.GE.-100) surf(xk,yk)=s1
-  IF (xk.GE.-100.AND.yk.GE.-100) melt(xk,yk)=melta*0.0
+  IF (xk.GE.-100.AND.yk.GE.-100 .AND. xk.LE.2000.AND.yk.LE.2000) THEN
+    bed(xk,yk)=b1
+    surf(xk,yk)=s1
+    melt(xk,yk)=melta*0.0
+  END IF
 ENDDO
 CLOSE(400)
 

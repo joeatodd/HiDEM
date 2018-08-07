@@ -258,7 +258,7 @@ END IF
         !Go to glas.f90 to make the grid
 	CALL FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
         neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,&
-        StrictDomain)
+        StrictDomain,GeomMasked)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
 
