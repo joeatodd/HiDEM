@@ -266,13 +266,9 @@ END IF
         CALL PointDataInit(UT,NRXF)
         CALL PointDataInit(UTM,NRXF)
 
- !TODO - test output of NCN, CN, particles_g, NRXF
-
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-        CALL GetBBoxes(NRXF, UT, NN, BBox, PBBox)
-
-        !PRINT *, myid,' neighparts: ',neighparts(1:neighcount)
+        CALL GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
 
         MAXX = BBox(2)
         MAXY = BBox(4)
@@ -549,7 +545,8 @@ END IF
 
         CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, .FALSE.) !Don't pass NRXF...
 
-        CALL GetBBoxes(NRXF, UT, NN, BBox, PBBox)
+        CALL GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
+
         CALL FindNeighbours(PBBox, PartIsNeighbour)
 
         CALL ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
