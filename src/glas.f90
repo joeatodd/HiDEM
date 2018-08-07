@@ -1062,7 +1062,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
           InvPartInfo(i) % spcount = InvPartInfo(i) % spcount + 1
           IF(InvPartInfo(i) % spcount > SIZE(InvPartInfo(i) % SProxIDs)) &
-               CALL ExpandIntArray(InvPartInfo(i) % SProxIDs)
+               CALL ExpandIntArray(InvPartInfo(i) % SProxIDs,fill_in=-1)
           InvPartInfo(i) % SProxIDs(InvPartInfo(i) % spcount) = j
           PrevProx(j) = .TRUE.
         END IF
@@ -1080,7 +1080,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     DO j=1,InvPartInfo(i) % spcount
       IF(.NOT. PrevProx(InvPartInfo(i) % SProxIDs(j))) THEN
         IF(DebugMode) PRINT *,myid,' debug particle ',InvPartInfo(i) % SProxIDs(j),&
-             ' no longer neighbour of ',i
+             ' no longer neighbour of ',i,NRXF%A(:,InvPartInfo(i) % SProxIDs(j))
         InvPartInfo(i) % SProxIDs(j) = -1
         rmcount = rmcount + 1
       END IF
@@ -1162,8 +1162,8 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
       cnt = InvPartInfo(i) % PCount
 
       IF(cnt > SIZE(InvPartInfo(i) % ProxIDs)) THEN
-        CALL ExpandIntArray(InvPartInfo(i) % ProxIDs)
-        CALL ExpandIntArray(InvPartInfo(i) % ProxLocs)
+        CALL ExpandIntArray(InvPartInfo(i) % ProxIDs, fill_in=-1)
+        CALL ExpandIntArray(InvPartInfo(i) % ProxLocs, fill_in=-1)
       END IF
       InvPartInfo(i) % ProxIDs(cnt) = new_id
       InvPartInfo(i) % ProxLocs(cnt) = put_loc
@@ -1253,20 +1253,27 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
     CALL sort_int2(InvPartInfo(i) % ProxIDs, InvPartInfo(i) % ProxLocs, InvPartInfo(i) % Pcount)
 
     !Deal with loss of particles
+    !e.g. if we lost particles 7 & 25:
+    ! pcount=7,ProxIDs:  5  7  9  11 17  20  25
+    ! rcount=5,RecvIDs:  5  9  11 17 20
     IF(InvPartInfo(i) % PCount > PointEx(i) % rcount) THEN
       IF(DebugMode) PRINT *,myid,' debug, detecting loss of nearby points from part ',i,&
            ' pcount,rcount: ',InvPartInfo(i) % PCount, PointEx(i) % rcount
       rmcount = 0
       DO j=1,InvPartInfo(i) % Pcount
         loss = .FALSE.
-        IF(j-rmcount > PointEx(i) % rcount) THEN
+        IF(j-rmcount > PointEx(i) % rcount) THEN !this catches loss of e.g. '25'
           loss = .TRUE.
-        ELSE IF( InvPartInfo(i) % ProxIDs(j) /= PointEx(i) % RecvIDs(j-rmcount)) THEN
+        ELSE IF( InvPartInfo(i) % ProxIDs(j) /= PointEx(i) % RecvIDs(j-rmcount)) THEN !this catches '7'
           loss = .TRUE.
         END IF
         IF(loss) THEN
           rmcount = rmcount + 1
           loc = InvPartInfo(i) % ProxLocs(j)
+
+          IF(DebugMode) PRINT *,myid,' debug lost: ',InvPartInfo(i) % ProxIDs(j),&
+               ' from ',i,' loc: ',loc,NRXF%A(:,loc),NRXF%PartInfo(:,loc)
+
           NRXF%A(:,loc) = 0.0
           NRXF%PartInfo(:,loc) = -1
           !NRXF%NP = NRXF%NP - 1
@@ -1325,7 +1332,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
 
     END DO
   END DO
-
 
   IF(PrintTimes) THEN
     CALL CPU_TIME(T2)
