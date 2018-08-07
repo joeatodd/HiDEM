@@ -1541,8 +1541,10 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
 
   ALLOCATE(ngb_ids(1000))
 
-  !TODO - don't actually need to find neighbours for other partition's points do we?
   DO i=1,npoints
+
+    IF(NRXF%PartInfo(1,point_loc(i)) /= myid) CYCLE
+
     num_ngb = 0
     ngb_ids = 0
     CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
@@ -1563,7 +1565,10 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     END IF
 
     DO j=1,num_ngb
-      IF(point_loc(ngb_ids(j)) <= point_loc(i)) CYCLE !Only save each pair once
+      !Only save each pair once
+      !This works w/ other partition points too because they are 
+      !guaranteed to be higher up in the array than our own (>NN)
+      IF(point_loc(ngb_ids(j)) <= point_loc(i)) CYCLE
 
       ND = ND + 1
       IF(ND > SIZE(NDL,2)) CALL ExpandIntArray(NDL)
