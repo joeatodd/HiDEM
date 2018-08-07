@@ -1490,10 +1490,12 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   !octree stuff
   type(point_type), allocatable :: points(:)
   INTEGER i,j,cnt,npoints, num_ngb, totsize
-  integer, allocatable :: seed(:), ngb_ids(:)
+  INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), point_loc(:)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
   REAL(KIND=dp) :: dist, max_dist, min_dist,tstrt,tend
 
+  REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2
+  INTEGER :: id
   CALL CPU_Time(tstrt)
 
   eps = 1.0
@@ -1504,8 +1506,9 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   IF(DebugMode) PRINT *, myid, 'debug nrxf count: ',nn,npoints,SIZE(NRXF%PartInfo,2)
 
   IF(.NOT. ALLOCATED(NDL)) ALLOCATE(NDL(2,npoints*12)) !guess size
-  ALLOCATE(points(npoints)) 
+  ALLOCATE(points(npoints),point_loc(npoints)) 
 
+  point_loc = 0
   ND = 0
   NDL = 0
 
@@ -1520,7 +1523,8 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   DO i=1,totsize
     IF(NRXF%PartInfo(1,i) == -1) CYCLE
     cnt = cnt+1
-    Points(cnt) % id = i
+    point_loc(cnt) = i
+    Points(cnt) % id = cnt
     Points(cnt) % x(1) = NRXF%A(1,i) + UT%A(6*I-5)
     Points(cnt) % x(2) = NRXF%A(2,i) + UT%A(6*I-4)
     Points(cnt) % x(3) = NRXF%A(3,i) + UT%A(6*I-3)
@@ -1535,38 +1539,37 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     CALL CPU_TIME(T1)
   END IF
 
-  ALLOCATE(ngb_ids(100))
+  ALLOCATE(ngb_ids(1000))
 
+  !TODO - don't actually need to find neighbours for other partition's points do we?
   DO i=1,npoints
     num_ngb = 0
     ngb_ids = 0
     CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
 
-    ! IF(DebugMode) THEN
-    !   max_dist = -HUGE(max_dist)
-    !   min_dist = HUGE(max_dist)
-    ! END IF
+    IF(num_ngb > 50) THEN
+      id = point_loc(i)
+      X1 = NRXF%A(1,id) + UT%A(id*6 - 5)
+      Y1 = NRXF%A(2,id) + UT%A(id*6 - 4)
+      Z1 = NRXF%A(3,id) + UT%A(id*6 - 3)
+      PRINT *,myid,'Node ',point_loc(i),' has ',num_ngb,' neighbours: ',X1,Y1,Z1
+      DO j=1,num_ngb
+        id = point_loc(ngb_ids(j))
+        X2 = NRXF%A(1,id) + UT%A(id*6 - 5)
+        Y2 = NRXF%A(2,id) + UT%A(id*6 - 4)
+        Z2 = NRXF%A(3,id) + UT%A(id*6 - 3)
+        PRINT *,myid,' Node ',i,' neigh ',j,id,'PartInfo: ',NRXF%PartInfo(:,id),' is :',X2,Y2,Z2
+      END DO
+    END IF
 
     DO j=1,num_ngb
-      IF(ngb_ids(j) <= i) CYCLE !Only save each pair once
+      IF(point_loc(ngb_ids(j)) <= point_loc(i)) CYCLE !Only save each pair once
 
       ND = ND + 1
       IF(ND > SIZE(NDL,2)) CALL ExpandIntArray(NDL)
-      NDL(1,ND) = points(i) % id
-      NDL(2,ND) = ngb_ids(j)
-
-      ! IF(DebugMode) THEN
-      !   dist = ((((NRXF%A(1,i) + UT%A(6*i-5)) - (NRXF%A(1,ngb_ids(j)) + &
-      !        UT%A(6*ngb_ids(j)-5)))**2.0) + (((NRXF%A(2,i) + UT%A(6*i-4)) - &
-      !        (NRXF%A(2,ngb_ids(j)) + UT%A(6*ngb_ids(j)-4)))**2.0) + &
-      !        (((NRXF%A(3,i) + UT%A(6*i-3)) - (NRXF%A(3,ngb_ids(j)) + &
-      !        UT%A(6*ngb_ids(j)-3)))**2.0)) ** 0.5_dp
-      !   max_dist = MAX(max_dist, dist)
-      !   min_dist = MIN(min_dist, dist)
-      ! END IF
+      NDL(1,ND) = point_loc(i)
+      NDL(2,ND) = point_loc(ngb_ids(j))
     END DO
-
-    ! IF(DebugMode) PRINT *,myid,' node ',i,' noneigh: ',num_ngb,' max/min dist: ',max_dist, min_dist
   END DO
 
   IF(PrintTimes) THEN
