@@ -787,12 +787,12 @@ END IF
 	KIN2=KIN2+0.5*JS*((UT%M(6*I-0)-UTM%M(6*I-0))/DT)**2
 
 !Calculate final UTP
-	UTP(6*I-5)=(R(6*I-5)+FRX(I)+WSX(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-4)=(R(6*I-4)+FRY(I)+BOYY(I)+WSY(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-3)=(R(6*I-3)+BOYZ(I)+FRZ(I))/((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
-	UTP(6*I-2)=R(6*I-2)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTP(6*I-1)=R(6*I-1)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
-	UTP(6*I-0)=R(6*I-0)/((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
+	UTP(6*I-5)= (R(6*I-5)+FRX(I)+WSX(I)) / ((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-4)= (R(6*I-4)+FRY(I)+BOYY(I)+WSY(I)) / ((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-3)= (R(6*I-3)+BOYZ(I)+FRZ(I)) / ((MFIL(I)/DT**2)+VDP(I)/(2.*DT))
+	UTP(6*I-2)= R(6*I-2) / ((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
+	UTP(6*I-1)= R(6*I-1) / ((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
+	UTP(6*I-0)= R(6*I-0) / ((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 
         !Check that particles haven't left the domain
         !and freeze them if they have!
