@@ -636,7 +636,7 @@ MODULE UTILS
       INTEGER :: n
       REAL(KIND=dp) :: arr1(:)
       IF(n <= 1) RETURN
-      CALL sort_real2_r(arr1,1,n)
+      CALL sort_real_r(arr1,1,n)
     END SUBROUTINE sort_real
 
     !Does the actual sorting - needs a wrapper to avoid
