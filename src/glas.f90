@@ -1418,7 +1418,7 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
       CALL MPI_IRecv(PointEx(i) % R,counter,MPI_DOUBLE_PRECISION,neigh,&
            190,MPI_COMM_WORLD,stats(i*2),ierr)
 
-      CALL MPI_IRecv(PointEx(i) % RecvIDs,counter*2,MPI_DOUBLE_PRECISION,neigh,&
+      CALL MPI_IRecv(PointEx(i) % RecvIDs,counter*2,MPI_INTEGER,neigh,&
            191,MPI_COMM_WORLD,stats(i*2+1),ierr)
 
     END IF
