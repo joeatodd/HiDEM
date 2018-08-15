@@ -24,6 +24,8 @@
 
 MODULE octree
 
+  USE TypeDefs
+
   implicit none
 
   private
@@ -38,13 +40,13 @@ MODULE octree
   type config_type
     integer max_num_point ! Maximum point number contained in leaf node.
     integer max_depth     ! Maximum level of branch and leaf nodes
-    real(8) bbox(2, 3)
+    real(KIND=dp) :: bbox(2, 3)
   end type config_type
 
   ! Points should be indexed by their id.
   type point_type
     integer id
-    real(8) x(3)
+    real(KIND=dp) :: x(3)
   end type point_type
 
   ! There are two kinds of nodes:
@@ -52,7 +54,7 @@ MODULE octree
   !   2. Leaf node without child but containing points.
   type node_type
     integer depth
-    real(8) bbox(2, 3)
+    real(KIND=dp) :: bbox(2, 3)
     integer num_point
     integer, allocatable :: point_ids(:)
     type(node_type), pointer :: parent
@@ -73,7 +75,7 @@ contains
 
     integer, intent(in), optional :: max_num_point
     integer, intent(in), optional :: max_depth
-    real(8), intent(in), optional :: bbox(2, 3)
+    real(KIND=dp), intent(in), optional :: bbox(2, 3)
 
     config%max_num_point = merge(max_num_point, 3, present(max_num_point))
     config%max_depth = merge(max_depth, 10, present(max_depth))
@@ -177,14 +179,14 @@ contains
 
   recursive subroutine octree_search(x, distance, num_ngb_point, ngb_ids, node_)
 
-    real(8), intent(in) :: x(3)
-    real(8), intent(in) :: distance
+    real(KIND=dp), intent(in) :: x(3)
+    real(KIND=dp), intent(in) :: distance
     integer, intent(inout) :: num_ngb_point
     integer, intent(inout) :: ngb_ids(:)
     type(node_type), intent(in), target, optional :: node_
 
     type(node_type), pointer :: node
-    real(8) d2, dx(3)
+    real(KIND=dp) d2, dx(3)
     integer i
 
     if (present(node_)) then
@@ -244,8 +246,12 @@ contains
     type(node_type), intent(inout), target :: node
 
     integer i, j, k, l
-    real(8) bbox(2, 3)
+    REAL(KIND=dp) bbox(2, 3), mid_point(3)
 
+    mid_point(1) = (node%bbox(2,1) + node%bbox(1,1)) * 0.5d0
+    mid_point(2) = (node%bbox(2,2) + node%bbox(1,2)) * 0.5d0
+    mid_point(3) = (node%bbox(2,3) + node%bbox(1,3)) * 0.5d0
+    
     allocate(node%children(8))
     l = 1
     do k = 1, 2
@@ -254,12 +260,31 @@ contains
           call reset_node(node%children(l))
           node%children(l)%depth = node%depth + 1
           node%children(l)%parent => node
-          node%children(l)%bbox(1, 1) = node%bbox(1, 1) + (i - 1) * (node%bbox(2, 1) - node%bbox(1, 1)) * 0.5d0
-          node%children(l)%bbox(2, 1) = node%bbox(2, 1) - (2 - i) * (node%bbox(2, 1) - node%bbox(1, 1)) * 0.5d0
-          node%children(l)%bbox(1, 2) = node%bbox(1, 2) + (j - 1) * (node%bbox(2, 2) - node%bbox(1, 2)) * 0.5d0
-          node%children(l)%bbox(2, 2) = node%bbox(2, 2) - (2 - j) * (node%bbox(2, 2) - node%bbox(1, 2)) * 0.5d0
-          node%children(l)%bbox(1, 3) = node%bbox(1, 3) + (k - 1) * (node%bbox(2, 3) - node%bbox(1, 3)) * 0.5d0
-          node%children(l)%bbox(2, 3) = node%bbox(2, 3) - (2 - k) * (node%bbox(2, 3) - node%bbox(1, 3)) * 0.5d0
+
+          IF(i==1) THEN
+            node%children(l)%bbox(1, 1) = node%bbox(1, 1)
+            node%children(l)%bbox(2, 1) = mid_point(1)
+          ELSE
+            node%children(l)%bbox(1, 1) = mid_point(1)
+            node%children(l)%bbox(2, 1) = node%bbox(2, 1)
+          END IF
+
+          IF(j==1) THEN
+            node%children(l)%bbox(1, 2) = node%bbox(1, 2)
+            node%children(l)%bbox(2, 2) = mid_point(2)
+          ELSE
+            node%children(l)%bbox(1, 2) = mid_point(2)
+            node%children(l)%bbox(2, 2) = node%bbox(2, 2)
+          END IF
+
+          IF(k==1) THEN
+            node%children(l)%bbox(1, 3) = node%bbox(1, 3)
+            node%children(l)%bbox(2, 3) = mid_point(3)
+          ELSE
+            node%children(l)%bbox(1, 3) = mid_point(3)
+            node%children(l)%bbox(2, 3) = node%bbox(2, 3)
+          END IF
+
           node%children(l)%parent => node
           l = l + 1
         end do
