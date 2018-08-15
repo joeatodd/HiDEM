@@ -26,7 +26,6 @@ CONTAINS
         USE TypeDefs
 
 	IMPLICIT NONE
-        include 'mpif.h'
         REAL(KIND=dp) :: MFIL(NN),VDP(NN)
 	REAL(KIND=dp) :: LNN,DPE,S
 	REAL(KIND=dp) :: CT(NTOT*12),EN(NN*6),R(NN*6)

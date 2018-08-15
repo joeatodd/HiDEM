@@ -83,7 +83,6 @@ SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart,
   IMPLICIT NONE
 
   INCLUDE 'na90.dat'
-  INCLUDE 'mpif.h'
 
 Real(KIND=dp) :: surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
 Real(KIND=dp) :: b,x0(3,4),box,SCL
@@ -503,7 +502,6 @@ End Subroutine
 SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
 
    IMPLICIT NONE
-   INCLUDE 'mpif.h'
 
    INTEGER ::  NN, NTOT
    INTEGER :: NANS(:,:)
@@ -763,7 +761,6 @@ SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
 !Determine and pass point information between partitions (based on beams/connections)
 SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
 
-  INCLUDE 'mpif.h'
   
   INTEGER, ALLOCATABLE :: NANS(:,:)
   TYPE(NRXF_t) :: NRXF
@@ -972,7 +969,6 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   USE INOUT
   USE UTILS
 
-  INCLUDE 'mpif.h'
 
   TYPE(NRXF_t) :: NRXF
   TYPE(UT_t) :: UT, UTM
@@ -1354,7 +1350,6 @@ END SUBROUTINE ExchangeProxPoints
 !this way is flexible to future change in EFS
 SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
-  INCLUDE 'mpif.h'
 
   INTEGER, ALLOCATABLE :: NANS(:,:), NANPart(:)
   REAL(KIND=dp), ALLOCATABLE :: EFS(:)
@@ -1678,7 +1673,6 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   USE Utils
 
   IMPLICIT NONE
-  INCLUDE 'mpif.h'
   REAL(KIND=dp) ::  X1,X2,Y1,Y2,Z1,Z2
   REAL(KIND=dp) ::  T1,T2
   REAL(KIND=dp), ALLOCATABLE :: EFC(:)

@@ -31,7 +31,6 @@
         USE Utils
 
 	IMPLICIT NONE
-        INCLUDE 'mpif.h'
         INCLUDE 'na90.dat'
 	REAL(KIND=dp), ALLOCATABLE :: EMM(:),BOYZ(:),BOYY(:),WSY(:),WSX(:)
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)

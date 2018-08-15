@@ -7,6 +7,7 @@ MODULE TypeDefs
   LOGICAL :: DebugMode,PrintTimes
 
   INCLUDE 'param.dat'
+  INCLUDE 'mpif.h'
 
   !Types are defined here to save passing large numbers of arguments.
   !Type members refer to the arrays belonging to partitions:

@@ -22,7 +22,6 @@
         USE Utils
 
 	IMPLICIT NONE
-        include 'mpif.h'
 	REAL*8 DX1,DX2,DY1,DY2,DZ1,DZ2
 	REAL*8 X1,X2,Y1,Y2,Z1,Z2
 	REAL*8 RC,SCL,RT
