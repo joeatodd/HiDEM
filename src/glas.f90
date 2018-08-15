@@ -499,29 +499,19 @@ diz=diz/norm
 !if (diy.lt.-0.2) diy=-0.2
 End Subroutine
 
-SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
+SUBROUTINE GetBBoxes(NRXF, UT, NN, IsOutlier, BBox, PBBox)
 
    IMPLICIT NONE
 
-   INTEGER ::  NN, NTOT
-   INTEGER :: NANS(:,:)
-   REAL(KIND=dp), ALLOCATABLE :: EFS(:)
+   INTEGER ::  NN
    TYPE(UT_t) :: UT
    TYPE(NRXF_t) :: NRXF
+   REAL(KIND=dp) :: BBox(6),PBBox(6,0:ntasks)
+   LOGICAL, ALLOCATABLE :: IsOutlier(:)
    !-----------------
-   INTEGER :: i,j,ierr,max_gap_loc(3),idx_ulimit, idx_llimit
-   REAL(KIND=dp) :: BBox(6),workarr(6*ntasks),X,Y,Z,bbox_vol,bbox_vols(ntasks)
-   REAL(KIND=dp) :: PBBox(6,0:ntasks),max_gap(3),gap(3)
-   REAL(KIND=dp) :: outlier_gap_prop, outlier_arr_prop
-   REAL(KIND=dp) :: minx,maxx,miny,maxy,minz,maxz,midx,midy,midz
-   REAL(KIND=dp) :: dist(3,NN), pos(3,NN), sigma_dist(3,NN),mean_dist(3),std_dev(3)
-   INTEGER :: dist_sort(3,NN), pos_sort(3,NN)
-   LOGICAL :: outlier(3,NN), poutlier(NN),check_outliers
-
-   check_outliers = .FALSE.
-
-   ! outlier_gap_prop = 0.4
-   ! outlier_arr_prop = 0.05
+   INTEGER :: i,ierr
+   REAL(KIND=dp) :: workarr(6*ntasks),X,Y,Z
+   REAL(KIND=dp) :: minx,maxx,miny,maxy,minz,maxz
 
    minx = HUGE(minx)
    miny = HUGE(miny)
@@ -529,35 +519,18 @@ SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
    maxx = -HUGE(maxx)
    maxy = -HUGE(maxy)
    maxz = -HUGE(maxz)
-   midx = 0.0
-   midy = 0.0
-   midz = 0.0
-
-   !Find min, max & mean coords
    DO i=1,NN
+     IF(IsOutlier(i)) CYCLE
      X=NRXF%M(1,i)+UT%M(6*i-5)
      Y=NRXF%M(2,i)+UT%M(6*i-4)
      Z=NRXF%M(3,i)+UT%M(6*i-3)
-
-     pos(1,i) = X
-     pos(2,i) = Y
-     pos(3,i) = Z
-     pos_sort(:,i) = i
-
      minx = MIN(minx, x)
      miny = MIN(miny, y)
      minz = MIN(minz, z)
      maxx = MAX(maxx, x)
      maxy = MAX(maxy, y)
      maxz = MAX(maxz, z)
-     midx = midx + X
-     midy = midy + Y
-     midz = midz + Z
    END DO
-
-   midx = midx / NN
-   midy = midy / NN
-   midz = midz / NN
 
    BBox(1) = minx
    BBox(2) = maxx
@@ -565,161 +538,6 @@ SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
    BBox(4) = maxy
    BBox(5) = minz
    BBox(6) = maxz
-
-   !Communicate initial BBox volume - any partition with a much larger
-   !than average bbox volume will check for outlier particles
-   bbox_vol = (maxx - minx) * (maxy - miny) * (maxz - minz)
-   CALL MPI_AllGather(bbox_vol,1,MPI_DOUBLE_PRECISION,bbox_vols,1,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
-
-   IF(DebugMode) THEN
-     PRINT *,myid,' debug bbox vol: ',bbox_vol
-     IF(myid==0) PRINT *,' mean bbox vol: ',(SUM(bbox_vols)/ntasks)
-   END IF
-
-   IF(bbox_vol / (SUM(bbox_vols)/ntasks) > 2.0) THEN
-     IF(DebugMode) PRINT *,myid,' might have outliers!'
-     check_outliers = .TRUE.
-   END IF
-
-   IF(check_outliers) THEN
-   
-     !Compute the distance from mean in every dimension
-     dist = 0.0
-     dist(1,:) = pos(1,:) - midx
-     dist(2,:) = pos(2,:) - midy
-     dist(3,:) = pos(3,:) - midz
-
-     mean_dist(1) = SUM(ABS(dist(1,:)))/NN
-     mean_dist(2) = SUM(ABS(dist(2,:)))/NN
-     mean_dist(3) = SUM(ABS(dist(3,:)))/NN
-
-     !Compute std devs from mean position in each dimension
-     std_dev(1) = SQRT(SUM(dist(1,:)**2.0)/NN)
-     std_dev(2) = SQRT(SUM(dist(2,:)**2.0)/NN)
-     std_dev(3) = SQRT(SUM(dist(3,:)**2.0)/NN)
-
-     sigma_dist(1,:) = dist(1,:) / std_dev(1)
-     sigma_dist(2,:) = dist(2,:) / std_dev(2)
-     sigma_dist(3,:) = dist(3,:) / std_dev(3)
-
-     poutlier = .FALSE.
-
-     DO i=1,NN
-       poutlier(i) = ANY(ABS(sigma_dist(:,i)) > 3.0)
-     END DO
-
-     ! !Compute the distance from mean in every dimension
-     ! DO i=1,NN
-     !   dist(1,i) = NRXF%M(1,i)+UT%M(6*i-5) - midx
-     !   dist(2,i) = NRXF%M(2,i)+UT%M(6*i-4) - midy
-     !   dist(3,i) = NRXF%M(3,i)+UT%M(6*i-3) - midz
-     !   dist_sort(:,i) = i
-     ! END DO
-
-     ! !Sort the above
-     ! CALL sort_real2(dist(1,:),dist_sort(1,:),NN)
-     ! CALL sort_real2(dist(2,:),dist_sort(2,:),NN)
-     ! CALL sort_real2(dist(3,:),dist_sort(3,:),NN)
-
-
-
-     ! !Look for outliers
-     ! max_gap(1) = (maxx - minx) * outlier_gap_prop
-     ! max_gap(2) = (maxy - miny) * outlier_gap_prop
-     ! max_gap(3) = (maxz - minz) * outlier_gap_prop
-
-     ! idx_ulimit = NINT(NN * (1-outlier_arr_prop))
-     ! idx_llimit = NINT(NN * outlier_arr_prop)
-
-     ! outlier = .FALSE.
-     ! DO i=1,NN-1
-     !   gap(1) = dist(1,i+1) - dist(1,i)
-     !   gap(2) = dist(2,i+1) - dist(2,i)
-     !   gap(3) = dist(3,i+1) - dist(3,i)
-
-     !   DO j=1,3
-     !     IF(gap(j) > max_gap(j)) THEN
-     !       IF(i < idx_llimit) THEN
-     !         outlier(j,1:i) = .TRUE.
-     !       ELSE IF(i > idx_ulimit) THEN
-     !         outlier(j,i+1:NN) = .TRUE.
-     !       END IF
-     !     END IF
-     !   END DO
-     ! END DO
-
-     ! DO i=1,NN
-     !   DO j=1,3
-     !     IF(outlier(j,i)) poutlier(dist_sort(j,i)) = .TRUE.
-     !   END DO
-     ! END DO
-
-
-
-     IF(ANY(poutlier)) THEN
-       IF(DebugMode) PRINT *,myid, ' has ',COUNT(poutlier),' STDEV outliers: '
-       DO i=1,NN
-         IF(poutlier(i)) THEN
-           IF(DebugMode) PRINT *,myid, ' outlier: ',i,' stdev: ',sigma_dist(:,i),&
-                ' coords: ',NRXF%M(1,i)+UT%M(6*i-5),&
-                NRXF%M(2,i)+UT%M(6*i-4),NRXF%M(3,i)+UT%M(6*i-3)
-
-           DO j=1,NTOT
-             IF(ANY(NANS(:,j) == i)) THEN
-               IF(DebugMode) PRINT *,myid,' outlier ',i,j,' efs: ',EFS(j)
-               IF(EFS(j) > 0.0) poutlier(i) = .FALSE.
-             END IF
-           END DO
-         END IF
-       END DO
-     ENDIF
-
-     IF(DebugMode) THEN
-       IF(ANY(poutlier)) THEN
-         PRINT *,myid, ' has ',COUNT(poutlier),' actual outliers: '
-         DO i=1,NN
-           IF(poutlier(i)) THEN
-             PRINT *,myid, ' actual outlier: ',i,' stdev: ',sigma_dist(:,i),&
-                  ' coords: ',NRXF%M(1,i)+UT%M(6*i-5),&
-                  NRXF%M(2,i)+UT%M(6*i-4),NRXF%M(3,i)+UT%M(6*i-3)
-           END IF
-         END DO
-         PRINT *,myid,' old bbox: ',minx,maxx,miny,maxy,minz,maxz
-       ENDIF
-     END IF
-
-     !Recompute BB w/o outliers
-     minx = HUGE(minx)
-     miny = HUGE(miny)
-     minz = HUGE(minz)
-     maxx = -HUGE(maxx)
-     maxy = -HUGE(maxy)
-     maxz = -HUGE(maxz)
-     DO i=1,NN
-       IF(poutlier(i)) CYCLE
-       X=NRXF%M(1,i)+UT%M(6*i-5)
-       Y=NRXF%M(2,i)+UT%M(6*i-4)
-       Z=NRXF%M(3,i)+UT%M(6*i-3)
-       minx = MIN(minx, x)
-       miny = MIN(miny, y)
-       minz = MIN(minz, z)
-       maxx = MAX(maxx, x)
-       maxy = MAX(maxy, y)
-       maxz = MAX(maxz, z)
-     END DO
-
-     BBox(1) = minx
-     BBox(2) = maxx
-     BBox(3) = miny
-     BBox(4) = maxy
-     BBox(5) = minz
-     BBox(6) = maxz
-
-     IF(ANY(poutlier) .AND. DebugMode) THEN
-       PRINT *,myid,' new bbox: ',minx,maxx,miny,maxy,minz,maxz
-     END IF
-
-   END IF !check outliers
 
    CALL MPI_AllGather(BBox,6,MPI_DOUBLE_PRECISION,workarr,6,MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
 
@@ -1755,6 +1573,7 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
       ENDIF
 
       !if almost touching, add forces but don't register interaction
+      !NOTE - TODO - is this an attractive force??
       IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
         IF(own(1)) THEN
           FRX(N1)=FRX(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCX

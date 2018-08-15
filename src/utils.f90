@@ -576,6 +576,275 @@ MODULE UTILS
       END DO
     END SUBROUTINE ClearOldParticles
 
+    !Checks particle position and velocity for anything suspicious
+    !Freezes particles which are outside the domain, determines outliers 
+    !for the purpose of BBox calculation
+    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,Lost,Outlier)
+
+      INTEGER ::  NN, NTOT
+      INTEGER :: NANS(:,:)
+      REAL(KIND=dp), ALLOCATABLE :: EFS(:),UTP(:)
+      REAL(KIND=dp) :: DT,GRID,MAXUT
+      TYPE(UT_t) :: UT
+      TYPE(NRXF_t) :: NRXF
+      LOGICAL, ALLOCATABLE :: Lost(:), Outlier(:)
+      !-----------------------------------
+      INTEGER :: i,j,XIND,YIND,ierr
+      REAL(KIND=dp) :: BBox(6),bbox_vol,bbox_vols(ntasks),med_vol,max_gap(3),gap(3)
+      REAL(KIND=dp) :: outlier_gap_prop, outlier_arr_prop, freezer(3)
+      REAL(KIND=dp) :: X,Y,Z,dx,dy,dz,disp, disp_limit
+      REAL(KIND=dp) :: minx,maxx,miny,maxy,minz,maxz,midx,midy,midz,speed_limit, speed
+      REAL(KIND=dp) :: dist(3,NN), pos(3,NN), sigma_dist(3,NN),mean_dist(3),std_dev(3)
+      INTEGER :: dist_sort(3,NN), pos_sort(3,NN)
+      LOGICAL :: d_outlier(3,NN), poutlier(NN),check_outliers,too_fast(NN)
+
+
+      IF(.NOT. (ALLOCATED(Lost) .AND. ALLOCATED(Outlier))) THEN
+        PRINT *,myid," IsLost or IsOutlier not allocated!"
+        STOP
+      END IF
+
+      freezer(:) = -500.0
+      speed_limit = 50.0 !m/s - TODO unharcode
+      disp_limit = speed_limit * DT !save some calculations
+ 
+      check_outliers = .FALSE.
+      too_fast = .FALSE.
+
+      !First check for particles which have left the domain or are travelling too fast <- TODO 
+      !TODO - hook this up to the computations in effload etc
+      DO i=1,NN
+        IF(Lost(i)) CYCLE
+
+        !Check speed (not necessarily lost)
+        dx = UTP(6*I-5) - UT%M(6*I-5)
+        dy = UTP(6*I-4) - UT%M(6*I-4)
+        dz = UTP(6*I-3) - UT%M(6*I-3)
+        IF(ABS(dx) > disp_limit/2.0 .OR. ABS(dy) > disp_limit/2.0 &
+             .OR. ABS(dz) > disp_limit/2.0) THEN
+
+          disp = SQRT(dx**2.0 + dy**2.0 + dz**2.0)
+          IF(disp > disp_limit) THEN
+            PRINT *,myid,' debug, particle breaking the speed limit!'
+            too_fast(i) = .TRUE.
+          END IF
+        END IF
+
+        !Check location
+        !TODO - check vertical coordinate too
+        XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
+        YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
+        IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100) Lost(i) = .TRUE.
+
+        !Check total displacement
+        IF(ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
+             ABS(UTP(6*I-3)) > MAXUT) Lost(i) = .TRUE.
+
+        IF(Lost(i)) THEN
+          PRINT *, myid, " Lost a particle : ",I
+
+          !Set as outlier
+          Outlier(i) = .TRUE.
+
+          !Put it in the freezer
+          UTP(6*I-5) = freezer(1) - NRXF%M(1,I)
+          UTP(6*I-4) = freezer(2) - NRXF%M(2,I)
+          UTP(6*I-3) = freezer(3) - NRXF%M(3,I)
+          UTP(6*I-2) = UT%M(6*I-2)
+          UTP(6*I-1) = UT%M(6*I-1)
+          UTP(6*I-0) = UT%M(6*I-0)
+        END IF
+      END DO
+
+
+      minx = HUGE(minx)
+      miny = HUGE(miny)
+      minz = HUGE(minz)
+      maxx = -HUGE(maxx)
+      maxy = -HUGE(maxy)
+      maxz = -HUGE(maxz)
+      midx = 0.0
+      midy = 0.0
+      midz = 0.0
+
+      !Find min, max & mean coords
+      DO i=1,NN
+        IF(Outlier(i)) CYCLE !either because Lost above, or previous iteration outlier
+        X=NRXF%M(1,i)+UT%M(6*i-5)
+        Y=NRXF%M(2,i)+UT%M(6*i-4)
+        Z=NRXF%M(3,i)+UT%M(6*i-3)
+
+        pos(1,i) = X
+        pos(2,i) = Y
+        pos(3,i) = Z
+        pos_sort(:,i) = i
+
+        minx = MIN(minx, x)
+        miny = MIN(miny, y)
+        minz = MIN(minz, z)
+        maxx = MAX(maxx, x)
+        maxy = MAX(maxy, y)
+        maxz = MAX(maxz, z)
+        midx = midx + X
+        midy = midy + Y
+        midz = midz + Z
+      END DO
+
+      midx = midx / NN
+      midy = midy / NN
+      midz = midz / NN
+
+      BBox(1) = minx
+      BBox(2) = maxx
+      BBox(3) = miny
+      BBox(4) = maxy
+      BBox(5) = minz
+      BBox(6) = maxz
+
+      !Communicate initial BBox volume - any partition with a much larger
+      !than median bbox volume will check for outlier particles
+      bbox_vol = (maxx - minx) * (maxy - miny) * (maxz - minz)
+      CALL MPI_AllGather(bbox_vol,1,MPI_DOUBLE_PRECISION,bbox_vols,1,&
+           MPI_DOUBLE_PRECISION,MPI_COMM_WORLD, ierr)
+
+      CALL sort_real(bbox_vols,ntasks)
+      med_vol = bbox_vols(ntasks/2)
+
+      IF(DebugMode) THEN
+        PRINT *,myid,' debug bbox vol: ',bbox_vol
+        IF(myid==0) PRINT *,' median bbox vol: ',med_vol
+      END IF
+
+      IF(bbox_vol / med_vol > 2.0) THEN
+        IF(DebugMode) PRINT *,myid,' might have outliers!'
+        check_outliers = .TRUE.
+      END IF
+
+      IF(check_outliers) THEN
+
+        !Compute the distance from mean in every dimension
+        dist = 0.0
+        dist(1,:) = pos(1,:) - midx
+        dist(2,:) = pos(2,:) - midy
+        dist(3,:) = pos(3,:) - midz
+
+        mean_dist(1) = SUM(ABS(dist(1,:)))/NN
+        mean_dist(2) = SUM(ABS(dist(2,:)))/NN
+        mean_dist(3) = SUM(ABS(dist(3,:)))/NN
+
+        !Compute std devs from mean position in each dimension
+        std_dev(1) = SQRT(SUM(dist(1,:)**2.0)/NN)
+        std_dev(2) = SQRT(SUM(dist(2,:)**2.0)/NN)
+        std_dev(3) = SQRT(SUM(dist(3,:)**2.0)/NN)
+
+        sigma_dist(1,:) = dist(1,:) / std_dev(1)
+        sigma_dist(2,:) = dist(2,:) / std_dev(2)
+        sigma_dist(3,:) = dist(3,:) / std_dev(3)
+
+        poutlier = .FALSE.
+
+        DO i=1,NN
+          poutlier(i) = ANY(ABS(sigma_dist(:,i)) > 4.0)
+        END DO
+
+        ! !Compute the distance from mean in every dimension
+        ! DO i=1,NN
+        !   dist(1,i) = NRXF%M(1,i)+UT%M(6*i-5) - midx
+        !   dist(2,i) = NRXF%M(2,i)+UT%M(6*i-4) - midy
+        !   dist(3,i) = NRXF%M(3,i)+UT%M(6*i-3) - midz
+        !   dist_sort(:,i) = i
+        ! END DO
+
+        ! !Sort the above
+        ! CALL sort_real2(dist(1,:),dist_sort(1,:),NN)
+        ! CALL sort_real2(dist(2,:),dist_sort(2,:),NN)
+        ! CALL sort_real2(dist(3,:),dist_sort(3,:),NN)
+
+
+
+        ! !Look for outliers
+        ! max_gap(1) = (maxx - minx) * outlier_gap_prop
+        ! max_gap(2) = (maxy - miny) * outlier_gap_prop
+        ! max_gap(3) = (maxz - minz) * outlier_gap_prop
+
+        ! idx_ulimit = NINT(NN * (1-outlier_arr_prop))
+        ! idx_llimit = NINT(NN * outlier_arr_prop)
+
+        ! outlier = .FALSE.
+        ! DO i=1,NN-1
+        !   gap(1) = dist(1,i+1) - dist(1,i)
+        !   gap(2) = dist(2,i+1) - dist(2,i)
+        !   gap(3) = dist(3,i+1) - dist(3,i)
+
+        !   DO j=1,3
+        !     IF(gap(j) > max_gap(j)) THEN
+        !       IF(i < idx_llimit) THEN
+        !         outlier(j,1:i) = .TRUE.
+        !       ELSE IF(i > idx_ulimit) THEN
+        !         outlier(j,i+1:NN) = .TRUE.
+        !       END IF
+        !     END IF
+        !   END DO
+        ! END DO
+
+        ! DO i=1,NN
+        !   DO j=1,3
+        !     IF(outlier(j,i)) poutlier(dist_sort(j,i)) = .TRUE.
+        !   END DO
+        ! END DO
+
+
+
+        IF(ANY(poutlier)) THEN
+          IF(DebugMode) PRINT *,myid, ' has ',COUNT(poutlier),' STDEV outliers: '
+          DO i=1,NN
+            IF(poutlier(i)) THEN
+              IF(DebugMode) PRINT *,myid, ' outlier: ',i,' stdev: ',sigma_dist(:,i),&
+                   ' coords: ',NRXF%M(1,i)+UT%M(6*i-5),&
+                   NRXF%M(2,i)+UT%M(6*i-4),NRXF%M(3,i)+UT%M(6*i-3)
+
+              DO j=1,NTOT
+                IF(ANY(NANS(:,j) == i)) THEN
+                  IF(DebugMode) PRINT *,myid,' outlier ',i,j,' efs: ',EFS(j)
+                  IF(EFS(j) > 0.0) poutlier(i) = .FALSE.
+                END IF
+              END DO
+            END IF
+          END DO
+        ENDIF
+
+        IF(DebugMode) THEN
+          IF(ANY(poutlier)) THEN
+            PRINT *,myid, ' has ',COUNT(poutlier),' actual outliers: '
+            DO i=1,NN
+              IF(poutlier(i)) THEN
+                PRINT *,myid, ' actual outlier: ',i,' stdev: ',sigma_dist(:,i),&
+                     ' coords: ',NRXF%M(1,i)+UT%M(6*i-5),&
+                     NRXF%M(2,i)+UT%M(6*i-4),NRXF%M(3,i)+UT%M(6*i-3)
+              END IF
+            END DO
+            PRINT *,myid,' old bbox: ',minx,maxx,miny,maxy,minz,maxz
+          ENDIF
+        END IF
+
+        !Mark final outliers
+        DO i=1,NN
+          IF(poutlier(i)) Outlier(i) = .TRUE.
+        END DO
+
+      END IF !check_outliers
+
+      !halt any particles breaking the speed limit
+      DO i=1,NN
+        IF(too_fast(i)) THEN
+          UTP(6*I-5) = UT%M(6*I-5)
+          UTP(6*I-4) = UT%M(6*I-4)
+          UTP(6*I-3) = UT%M(6*I-3)
+        END IF
+      END DO
+
+    END SUBROUTINE CheckSolution
+
     !A subroutine to quicksort an int array (arr1)
     ! while also sorting arr2 by arr1
     SUBROUTINE sort_int2(arr1,arr2,n)
