@@ -35,7 +35,7 @@ CONTAINS
  !-----------------------------------------------
 	REAL(KIND=dp) :: DX1,DY1,DZ1,DX2,DY2,DZ2
 	REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,TT(12,12),DUT(12)
-        REAL(KIND=dp),ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)!,DUT(:)
+        REAL(KIND=dp),ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)
 
 	INTEGER N,NL,NB,N1,N2,X,XL,XR
 	INTEGER I,J,RY,FXC
@@ -46,13 +46,13 @@ CONTAINS
         TYPE(NRXF_t) :: NRXF
         LOGICAL :: FirstTime=.TRUE.
 
-        SAVE :: FirstTime, A,C,F,D!,DUT
+        SAVE :: FirstTime, A,C,F,D
 
         CALL CPU_Time(T1)
 
         IF(FirstTime) THEN
           FirstTime = .FALSE.
-          ALLOCATE(A(NN*6),C(NN*6),F(NN*6),D(NN*6)) !,DUT(NN*6))
+          ALLOCATE(A(NN*6),C(NN*6),F(NN*6),D(NN*6))
         END IF
 
         A = 0.0
@@ -61,10 +61,6 @@ CONTAINS
         F = 0.0
         DUT = 0.0
 
-!------------------------------------------------------
-      !Note - use of DUT here suggests N1 and N2 should be mutually 
-      !exclusive sets? but they aren't - NOTE - may be now (my mods)
-!----------------------------------------------
  	DO X=1,NTOT
         IF (EFS(X).NE.0.0) THEN
 
@@ -118,9 +114,6 @@ CONTAINS
         CT(12*X-0)=0.0
         ENDIF
       END DO
-
-!-------------------------------------------------------
-! TODO - again, A was only filled in for *our* particles
 
         DO X=1,NTOT
         N1=NANS(1,X)
@@ -181,7 +174,6 @@ CONTAINS
         END IF
 	ENDDO
 
-!------------------------------------------------------------------------
 
 	DO X=1,NN
 	C(6*X-5)= (MFIL(X)/DT**2)*UTM%M(6*X-5)-(2*MFIL(X)/DT**2)*UT%M(6*X-5)
@@ -194,9 +186,6 @@ CONTAINS
 	C(6*X-0)= ((MFIL(X)*JS/M)/DT**2)* &
       	UTM%M(6*X-0)-(2*(MFIL(X)*JS/M)/DT**2)*UT%M(6*X-0)
 	ENDDO
-
-!------------------------------------------------------------------------
-! TODO - when this was %L,%R etc, D was only saved for our nodes (not shared)
 
 
 	DO X=1,NTOT
@@ -232,23 +221,23 @@ CONTAINS
       	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
         END IF
 
+        !TODO - investigate if doing energy calcs every N timesteps 
+        ! makes things more efficient - below also
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
-     	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
+             -(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
-     	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
+             -(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
-     	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
+             -(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
-     	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
+             -(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
-     	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
+             -(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
-     	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
+             -(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
+
 	ENDIF
 	ENDDO
-
-!-----------------------------------------------------------------
-! TODO - when this was %L,%R etc, D was only saved for our nodes (not shared)
 
 	DO X=1,FXC
 	N1=FXF(1,X)
@@ -281,20 +270,20 @@ CONTAINS
 	D(6*N2-0)=D(6*N2-0)+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
      	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))
         END IF
+
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-5)-UT%A(6*N1-5)) &
-     	-(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
+             -(UTM%A(6*N2-5)-UTM%A(6*N1-5)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-4)-UT%A(6*N1-4)) &
-     	-(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
+             -(UTM%A(6*N2-4)-UTM%A(6*N1-4)))**2
         DPE=DPE+(DMP/DT)*((UT%A(6*N2-3)-UT%A(6*N1-3)) &
-     	-(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
+             -(UTM%A(6*N2-3)-UTM%A(6*N1-3)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-2)-UT%A(6*N1-2)) &
-     	-(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
+             -(UTM%A(6*N2-2)-UTM%A(6*N1-2)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-1)-UT%A(6*N1-1)) &
-     	-(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
+             -(UTM%A(6*N2-1)-UTM%A(6*N1-1)))**2
         DPE=DPE+(DMP2/DT)*((UT%A(6*N2-0)-UT%A(6*N1-0)) &
-     	-(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
+             -(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
 	ENDDO
-!---------------------------------------------------------
 
         DO X=1,NN
         F(6*X-5)= -(VDP(X)/(DT*2))*UTM%M(6*X-5)
@@ -305,13 +294,14 @@ CONTAINS
         F(6*X-0)= -(VDP(X)/(DT*2))*UTM%M(6*X-0)
 	END DO
 
-	DO X=1,6*NN
-	R(X)=-A(X)-C(X)-D(X)-F(X)
-	EN(X)=EN(X)+A(X)*(UT%M(X)-UTM%M(X))
-	END DO
+        !TODO - comment equation breakdown here for future ref
+	R=-A -C -D -F
+	EN=EN+A*(UT%M-UTM%M)
 
-        CALL CPU_Time(T2)
-        IF(PrintTimes) PRINT *,myid,' Effload took: ',T2-T1,' secs'
+        IF(PrintTimes) THEN
+          CALL CPU_TIME(T2)
+          PRINT *,myid,' Effload took: ',T2-T1,' secs'
+        END IF
 
 	RETURN
 END SUBROUTINE EFFLOAD

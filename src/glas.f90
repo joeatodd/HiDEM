@@ -1455,6 +1455,7 @@ SUBROUTINE ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)
 
       EFS(k) = PointEx(neigh) % R(j)
       counter = counter + 1
+      EXIT
     END DO
   END DO
 
