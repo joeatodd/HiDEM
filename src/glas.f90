@@ -731,15 +731,15 @@ SUBROUTINE GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
 
  END SUBROUTINE GetBBoxes
 
- SUBROUTINE FindNeighbours(PBBox,PartIsNeighbour)
-   REAL(KIND=dp) :: PBBox(:,0:)
+ SUBROUTINE FindNeighbours(PBBox,PartIsNeighbour,SCL)
+   REAL(KIND=dp) :: PBBox(:,0:),SCL
    LOGICAL :: PartIsNeighbour(0:ntasks-1)
    !-------------------------------
    INTEGER :: i
    REAL(KIND=dp) :: BBox(6),Buffer
 
    BBox = PBBox(:,myid)
-   Buffer = 200.0
+   Buffer = 4.0*SCL
 
    PartIsNeighbour = .FALSE.
 
@@ -1492,14 +1492,14 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   INTEGER i,j,cnt,npoints, num_ngb, totsize
   INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), point_loc(:)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
-  REAL(KIND=dp) :: dist, max_dist, min_dist,tstrt,tend
+  REAL(KIND=dp) :: search_dist,tstrt,tend
 
   REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2
   INTEGER :: id
   CALL CPU_Time(tstrt)
 
   eps = 1.0
-
+  search_dist = 1.87 * SCL
   npoints = COUNT(NRXF%PartInfo(1,:) /= -1)
   totsize = SIZE(NRXF%PartInfo,2)
 
@@ -1512,9 +1512,11 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   ND = 0
   NDL = 0
 
+  !buffer by search_dist to ensure all points belonging to this partition
+  !are contained, + eps to avoid floating point issues.
   DO i=1,3
-    oct_bbox(1,i) = BBox(i*2-1) - eps !buffer to ensure all points contained
-    oct_bbox(2,i) = BBox(i*2)   + eps
+    oct_bbox(1,i) = BBox(i*2-1) - search_dist - eps 
+    oct_bbox(2,i) = BBox(i*2)   + search_dist + eps
   END DO
 
   CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
@@ -1547,7 +1549,7 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
 
     num_ngb = 0
     ngb_ids = 0
-    CALL Octree_search(points(i) % x, SCL*1.87, num_ngb, ngb_ids)
+    CALL Octree_search(points(i) % x, search_dist, num_ngb, ngb_ids)
 
     IF(num_ngb > 50) THEN
       id = point_loc(i)
@@ -1809,9 +1811,9 @@ FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
   Y = NRXF%A(2,i) + UT%A(6*i - 4)
   Z = NRXF%A(3,i) + UT%A(6*i - 3)
   
-  InBB = (X > BBox(1)-Buffer .AND. X < BBox(2)+Buffer .AND. &
-       Y > BBox(3)-Buffer .AND. Y < BBox(4)+Buffer .AND. &
-       Z > BBox(5)-Buffer .AND. Z < BBox(6)+Buffer)
+  InBB = (X > (BBox(1)-Buffer) .AND. X < (BBox(2)+Buffer) .AND. &
+       Y > (BBox(3)-Buffer) .AND. Y < (BBox(4)+Buffer) .AND. &
+       Z > (BBox(5)-Buffer) .AND. Z < (BBox(6)+Buffer))
 END FUNCTION PInBBox
 
 END MODULE Lattice

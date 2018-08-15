@@ -547,7 +547,7 @@ END IF
 
         CALL GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
 
-        CALL FindNeighbours(PBBox, PartIsNeighbour)
+        CALL FindNeighbours(PBBox, PartIsNeighbour,SCL)
 
         CALL ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIsNeighbour)
 
