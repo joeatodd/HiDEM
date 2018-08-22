@@ -81,7 +81,7 @@
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput
         LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine
-        LOGICAL, ALLOCATABLE :: LostParticle(:), PartIsNeighbour(:)
+        LOGICAL, ALLOCATABLE :: IsLost(:), IsOutlier(:), PartIsNeighbour(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
 
 !        TYPE(EF_t) :: EFS
@@ -267,14 +267,6 @@ END IF
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-        CALL GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
-
-        MAXX = BBox(2)
-        MAXY = BBox(4)
-        MAXZ = BBox(6) !don't really use these...
-
-        IF(DebugMode) PRINT *,myid,' Got bbox: ',PBBox(:,myid)
-
 	PRINT *, 'Part: ',myid,' NN: ',NN,' NTOT: ',NTOT
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -299,8 +291,14 @@ END IF
         UT%M = 0.0    ! UT%M = current displacement
         UTM%M = 0.0   ! UTM%M = previous displacement
 
-        ALLOCATE(CT(NTOT*12),RAN(NTOT))
+        ALLOCATE(CT(NTOT*12),&
+             RAN(NTOT),&
+             IsLost(NN),&
+             IsOutlier(NN))
+
         CT = 0.0
+        IsLost = .FALSE. !Lost particles are completely removed from the solution
+        IsOutlier = .FALSE. !Outliers simply do not contribute to partition's BBox
 
         SEED=SEEDI+873*myid
         CALL RMARIN(SEED,0,0)
@@ -370,7 +368,11 @@ END IF
         CALL MPI_ALLGATHER(NTOT,1,MPI_INTEGER,&
         NTOTW,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
 
-        ALLOCATE(CT(12*NTOT))          ! CT - cumulative translation of all the beams
+        ALLOCATE(CT(12*NTOT),& ! CT - cumulative translation of all the beams
+             IsOutlier(NN),&
+             IsLost(NN))
+
+
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
 	DO I=1,NTOT
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
@@ -386,6 +388,7 @@ END IF
       	UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
 	READ(117+myid,*) UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),&
       	UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
+	READ(117+myid,*) IsOutlier(i), IsLost(i)
 	END DO
 	CLOSE (117+myid)
 
@@ -460,8 +463,7 @@ END IF
         !initialize some data
 
         !Keep track of any particles which leave the domain
-        ALLOCATE(LostParticle(NN),&
-             VDP(NN),&
+        ALLOCATE(VDP(NN),&
              FRX(NN),&
              FRY(NN),&
              FRZ(NN),&
@@ -478,8 +480,6 @@ END IF
              NRXFW(3,MAXVAL(PNN)))
 
         !ALLOCATE(CCN(NN),CCNW(NN))
-
-        LostParticle = .FALSE.
         VDP = 0.0     !VDP = drag coefficient
         EN = 0.0
         UTP = 0.0
@@ -544,7 +544,7 @@ END IF
 
         CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, .FALSE.) !Don't pass NRXF...
 
-        CALL GetBBoxes(NRXF, UT, NN, NANS, NTOT, EFS, BBox, PBBox)
+        CALL GetBBoxes(NRXF, UT, NN, IsOutlier, BBox, PBBox)
 
         CALL FindNeighbours(PBBox, PartIsNeighbour,SCL)
 
@@ -793,25 +793,6 @@ END IF
 	UTP(6*I-1)= R(6*I-1) / ((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 	UTP(6*I-0)= R(6*I-0) / ((MFIL(I)*JS/MN)/DT**2+VDP(I)/(2.*DT))
 
-        !Check that particles haven't left the domain
-        !and freeze them if they have!
-         XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
-         YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
-         IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100 .OR. &
-             ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
-             ABS(UTP(6*I-3)) > MAXUT) THEN
-           UTP(6*I-5) = UT%M(6*I-5)
-           UTP(6*I-4) = UT%M(6*I-4)
-           UTP(6*I-3) = UT%M(6*I-3)
-           UTP(6*I-2) = UT%M(6*I-2)
-           UTP(6*I-1) = UT%M(6*I-1)
-           UTP(6*I-0) = UT%M(6*I-0)
-           IF(.NOT. LostParticle(I)) THEN
-             PRINT *, myid, " Lost a particle : ",I," at time: ",T
-             LostParticle(i) = .TRUE.
-           END IF
-         END IF
-
 !	IF (X.LT.4000.0.AND.Y.LT.4000.0) THEN
 !	IF ((ZB.GT.WL-2.0*SCL.OR.Z-ZB.LT.5.0*SCL).AND.ABS(Z-ZB).LT.2.0*SCL) THEN
 
@@ -878,6 +859,11 @@ END IF
           TTCUM(9) = TTCUM(9) + (TT(9) - TT(8))
         END IF
        END DO !loop over particles
+
+       IF(DebugMode) PRINT *, myid,'going to check solution' 
+       ! !Check for particles leaving the domain, travelling suspiciously quickly, etc
+       CALL CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,IsLost,IsOutlier)
+       IF(DebugMode) PRINT *, myid,'done check solution' 
 
 
 !-------------- Gather and write energy -----------------
@@ -1151,7 +1137,7 @@ END IF
 
         CALL MPI_FINALIZE(rc)
 
-        DEALLOCATE(LostParticle)
+        DEALLOCATE(IsLost, IsOutlier)
 
   	STOP
 
@@ -1179,6 +1165,7 @@ CONTAINS
 	DO I=1,NN
 	WRITE(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
 	WRITE(117+myid,*) UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
+	WRITE(117+myid,*) IsOutlier(I), IsLost(I)
 	END DO
 	CLOSE (117+myid)
 
