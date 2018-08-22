@@ -73,7 +73,7 @@
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
-        INTEGER rc,ntasks_init,ierr,SEED,SEEDI,OUTINT,RESOUTINT,&
+        INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
         INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
              neighparts(:), NANS(:,:),NANPart(:),FXF(:,:), NDL(:,:),PNN(:)
@@ -135,15 +135,15 @@ END IF
              WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
 
    IF(myid==0) THEN
-     OPEN(UNIT=610,FILE=TRIM(wrkdir)//'/dtop00',STATUS='UNKNOWN',POSITION='APPEND')
-     OPEN(UNIT=611,FILE=TRIM(wrkdir)//'/dtop01',STATUS='UNKNOWN',POSITION='APPEND')
-     OPEN(UNIT=612,FILE=TRIM(wrkdir)//'/dtopr',STATUS='UNKNOWN',POSITION='APPEND')
-     OPEN(UNIT=613,FILE=TRIM(wrkdir)//'/kins2',STATUS='UNKNOWN',POSITION='APPEND')
-     OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
-     OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
-     OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
-     OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
-     !	OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
+     OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=611,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop01',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=612,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtopr',STATUS='UNKNOWN',POSITION='APPEND')
+     OPEN(UNIT=613,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_kins2',STATUS='UNKNOWN',POSITION='APPEND')
+     ! OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
+     ! OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
+     ! OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
+     ! OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
+     !OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
    END IF
 
 ! S = width/thickness of the beams, scaled by SCL
@@ -164,6 +164,9 @@ END IF
 	PI=ACOS(-1.0)
         DMP=DAMP1*SCL**3.0
         DMP2=DAMP2*SCL**3.0
+
+        !energy out int
+        ENoutint = MAX(outint/10,1)
 
 !accumulative energy terms - don't zero if restarting
 	IF (REST.EQ.0) THEN
@@ -256,8 +259,7 @@ END IF
 
         !Go to glas.f90 to make the grid
 	CALL FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
-        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,&
-        StrictDomain,GeomMasked)
+        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,StrictDomain,GeomMasked,RunName)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
 
@@ -393,7 +395,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read particle init pos from file if restarting
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/NODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_NODFIL2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
           READ(117+myid,*) IX,X,Y,Z,M
           NRXF%M(1,IX)=X
@@ -405,7 +407,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read in the partition & id of particles we share from other partitions
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/ONODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NC!+NP
           READ(117+myid,*) IX,Part,ID
           IF(IX >= NRXF%pstrt .OR. IX < NRXF%cstrt) THEN
@@ -437,7 +439,7 @@ END IF
         END DO
 
         ALLOCATE(EFS(NTOT), NANS(2,NTOT), NANPart(NTOT))
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_FS'//na(myid),STATUS='UNKNOWN')
         DO I=1,NTOT
           READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
           NANS(1,I)=N1
@@ -919,6 +921,22 @@ END IF
  	IF (myid.EQ.0) WRITE(613,19) T,KINS2,BCES,BCCS
 	END IF
 
+        !Flush output by closing and reopening files
+        IF (MOD(RY,ENOUTINT).EQ.1 .AND. myid.EQ.0) THEN
+          CLOSE(610)
+          CLOSE(611)
+          CLOSE(612)
+          CLOSE(613)
+          OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=611,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop01',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=612,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtopr',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=613,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_kins2',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+        END IF
+
 	T=T+DT
 	
 	MML=0.0
@@ -1196,7 +1214,7 @@ CONTAINS
  !NRXF%M - the original locations of all the particles
  !EF - Youngs modulus
 
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/ONODFIL2'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN')
         counter = 0
         DO I=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
           IF(NRXF%PartInfo(1,i) == -1) CALL FatalError("Programming error in ONODFIL2")
@@ -1208,7 +1226,7 @@ CONTAINS
 
  !TODO - don't need to reread NRXF - could just communicate
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_FS'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOT
 	WRITE(117+myid,*) NANS(1,SI),NANS(2,SI),NANPart(SI),&
            NRXF%A(1,NANS(1,SI)),NRXF%A(2,NANS(1,SI)),&

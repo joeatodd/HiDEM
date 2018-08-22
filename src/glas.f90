@@ -14,7 +14,7 @@ CONTAINS
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,neighcount,l,&
-     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked)
+     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
 
   IMPLICIT NONE
   INCLUDE 'na90.dat'
@@ -26,7 +26,7 @@ Real(KIND=dp) :: box,b,SCL
 INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
 INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
-CHARACTER(LEN=256) :: wrkdir,geomfile
+CHARACTER(LEN=256) :: wrkdir,geomfile,runname
 LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t) :: NRXF
@@ -66,7 +66,7 @@ CLOSE(400)
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
 CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
-     neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain)
+     neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain,RunName)
 
 CLOSE(400)
 
@@ -76,7 +76,7 @@ END SUBROUTINE FIBG3
 
 
 SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
-     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain)
+     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain,RunName)
 
   !USE INOUT
 
@@ -95,7 +95,7 @@ INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
 INTEGER NTOT,neighcount
 INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
      particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
-CHARACTER(LEN=256) :: wrkdir
+CHARACTER(LEN=256) :: wrkdir,runname
 LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
 
@@ -426,7 +426,7 @@ CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
 !Write out my particle to nodfil
 12    FORMAT(I8,' ',4F14.7,2I8)
-OPEN(510+myid,file=TRIM(wrkdir)//'/NODFIL2'//na(myid))
+OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
 DO i=1,NN
   WRITE(510+myid,12) i,NRXF%A(:,i),1.0
 END DO
