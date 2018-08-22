@@ -112,7 +112,7 @@ END IF
  7	FORMAT(7F13.7)
  8	FORMAT (A)
  9	FORMAT(I4,'     ',2F11.6)
- 10	FORMAT(5F28.1)
+ 10	FORMAT(5F28.4)
  11	FORMAT(2I8,' ',7F22.9)
  12	FORMAT(4F16.6)
  13	FORMAT(6F22.12)
@@ -557,16 +557,36 @@ END IF
           !Clear out invalid particles - those which were previously near our partition
           !but are no longer
           CALL ClearOldParticles(NRXF,UT,UTM,InvPartInfo)
+
+          !TODO - we could calculate/adjust the frequency with which we need to do
+          !this rather expensive operation:
+          !  collision radius = LNN = 1.1225 SCL
+          !  search radius    =       1.87   SCL
+          !  buffer distance 'buff_dist' ~ 0.75 SCL
+          !  Calculate top speed 'maxdut'
+          !  Steps since last computation = 'tick'
+          !  IF(buff_dist/maxdut >= tick) DO IT
+          !
+          !  Could go even further if we kept track of cumulative displacement...
+          !  UTtick(1:3) updated when FindNearbyParticles
+          !  Would need to take care of changing particle array locations, probably
+          !  easiest to add a member to UT_t
           !Identify possible collisions
           CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
         END IF
+
+        FRX = 0.0
+        FRY=0.0
+        FRZ=0.0
+        WE=0.0
 
        !circ checks which particles are really in contact and computes the forces
 	CALL FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
           T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
-       
+
+
         !TODO - should we still adopt the approach of finding nearby particles every N steps?
         ! - how efficient is octree vs prev strategy?
 
