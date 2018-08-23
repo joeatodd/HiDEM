@@ -12,9 +12,9 @@ See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://
 
 ## Compilation ##
 
-On Cray systems, HiDEM can be compiled using the script `compile.sh`.
+Configuration, compilation and installation is handled by Cmake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
 
-Additional compilation scripts are located in scripts/compilation.
+If you generate your own toolchain/compilation scripts for different systems, please get in touch or make a pull request!
 
 ## Input Files ##
 
@@ -90,8 +90,6 @@ mpirun -n 70 HiDEM
 ```
 
 An example PBS job script is provided in example.job
-
-HiDEM automatically partitions the model domain into squares in the XY plane, computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
 
 The user may specify a run name which is preprended on all output files:
 
@@ -344,64 +342,4 @@ Seems to get rid of UTP prediction, damping
 
 Domain needs to be orientated in XY because:
 
-Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask Jan)
-
-
-## METIS Conversion Notes ##
-
-NTOT %R - previously computed by dt.f90, the total number of beams between our %M nodes and %R particles
-
-ND - (NTOT_t) No. of potential particles interactions (computed by dist), this partition, other parts
-NDL(2,:) - (FXF_t) Particle IDs of potential interaction
-
-FXC %M, %R, - (NTOT_t) number of actual abutting interactions (computed by circ)
-FXF %M, %R, - (FXF_t) particle IDs of actually abutting particles
-
-FRX,FRY,FRZ(NOMA) - Force of interaction (per particle) - for cross-partition, FRX(N2) is computed, N1
-                    is not (because this is handled by the other partition), so FRX are only 
-		    of size (OUR PARTICLES)
-
-WE(:) - energy of particle interaction (only stored for one of the two particles?? - circ)
-
-NANS %M,%R(3,NOCON) - (NAN_t) particle nos. for each beam (only (2,NOCON) actually used!)
-
-EFS(:) %M, %R - (EF_t) the bond strength of each bond (per partition)
-
-In effload:
-
-DUT(NODM) - change in displacement (reused per partition)
-
-A,C,D,F(NODM) - per particle forces, only computed in effload for our partition (though the 
-	        computation requires info from other parts)
-
-CT(NODC) - beam displacement (12 DOFs * nocon) - but for *all* beams (inc between other parts)
-	   effload uses the offset (NTOT%M + NTOT%R..) to put CT in place
-
-
-
-
-NANS, N1, N2 issue - for e.g. NANS%L, the two particle numbers are *not* global 
-      	     	     (i.e. could be N1=1, N2=1, but in effload, they are treated as if they 
-		     are unique!) This is definitely a bug but in a test run it didn't seem to matter
-		     (i.e. the collision of IDs is rare)
-		     However, this should be fixed (actually DUT doesn't need to be large...)
-
-Requirements for new strategy for storing and sharing data (node and beam)
-------------------------
-
-The following entities are passed in various places:
-
-NRXF
-UT/UTM
-EFS - randomly generated beam strength
-NANS - but only for old style CSV output, can/should be converted to an MPI_File_Write_all
-
-Decided:
-
-- NANS need only be (2,NOCON), and contain array references to NRXF, UT, UTM
-- NRXF, UT, UTM can contain 1) our particles, 2) beam connected particles and 3) proximal particles from other parts <- this allows NANS, FXF to be partition agnostic.
-- NANS doesn't need to know which are from where, but need to know this info for passing, so make:
-
-- PartInfo(2,NOCON): PartId, LocalID of each particle (-1 to identify blank spaces) in nrxf,ut,utm
-- InvPartInfo(Neighcount) % IDs, % ArrLoc  - effectively the inverse of above <- but does this cover connected & proximal particles?
-    maybe, % ConnCount, ConnIDs, ConnArrLoc, ProxCount, ProxIDs, ProxArrLoc?
+Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask 
