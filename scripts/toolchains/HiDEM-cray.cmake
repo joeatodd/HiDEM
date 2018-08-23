@@ -1,0 +1,21 @@
+SET(CMAKE_SYSTEM_NAME Linux)
+SET(CMAKE_SYSTEM_PROCESSOR x86_64)
+SET(CMAKE_SYSTEM_VERSION 1)
+
+# Specify the cross compilers (serial)
+SET(CMAKE_C_COMPILER cc)
+SET(CMAKE_Fortran_COMPILER ftn)
+SET(CMAKE_CXX_COMPILER CC)
+
+# Specify the cross compilers (parallel)
+SET(MPI_C_COMPILER cc)
+SET(MPI_CXX_COMPILER CC)
+SET(MPI_Fortran_COMPILER ftn)
+
+# Compilation flags (i.e. with optimization)
+SET(CMAKE_C_FLAGS "-O3 -fPIC" CACHE STRING "")
+SET(CMAKE_CXX_FLAGS "-O3 -fPIC" CACHE STRING "")
+SET(CMAKE_Fortran_FLAGS "-O3 -fPIC" CACHE STRING "")
+
+SET ( MPIEXEC "aprun" CACHE STRING "")
+SET ( MPIEXEC_NUMPROC_FLAG  "-n" CACHE STRING "")

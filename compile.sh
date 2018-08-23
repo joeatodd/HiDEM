@@ -1,1 +1,0 @@
-scripts/compilation/compile_cray.sh
