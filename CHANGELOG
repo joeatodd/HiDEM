@@ -1,3 +1,16 @@
+## [2.1.0]
+### Added
+	- METIS partitioning scheme
+	- CMake based compilation/installation
+
+## [2.0.2] - 19/08/2018
+### Fixed
+	- Wrong argument order in raster interp calls (BIPINT)
+
+## [2.0.1] - 13/06/2018
+### Fixed
+	- Remove hardcoded terminus undercut
+
 ## [2.0.0] - 13/06/2018
 ### Added
 	- Automatic computation of domain partitioning

@@ -12,7 +12,7 @@ See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://
 
 ## Compilation ##
 
-Configuration, compilation and installation is handled by Cmake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
+Configuration, compilation and installation is handled by CMake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
 
 If you generate your own toolchain/compilation scripts for different systems, please get in touch or make a pull request!
 
