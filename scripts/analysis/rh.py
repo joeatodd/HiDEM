@@ -3,11 +3,12 @@ import getopt
 import sys
 import matplotlib.pyplot as plt
 import math
+import re
 
 # get input files from user
 
 def usage():
-    print ("Usage: " + sys.argv[0] + " -1 first_strain.csv -2 second_strain.csv")
+    print ("Usage: " + sys.argv[0] + " -1 first_strain.csv/bin -2 second_strain.csv/bin")
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],"1:2:")
@@ -25,12 +26,37 @@ for opt, arg in opts:
         usage()
         sys.exit(2)
 
+
+def str_from_file(fname,legacy_input):
+    if(legacy_input):
+        the_data = np.fromfile(fname,sep=" ")
+    else:
+        count_re = re.compile("Count: ([0-9]*)")
+        type_re = re.compile('Type: ([a-zA-Z0-9]*)')
+
+        indata = open(fname, 'rb')
+        header = indata.readline()
+        num_count = int(count_re.search(header).group(1))
+        float_type = type_re.search(header).group(1).lower()
+        
+        the_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*4)
+
+    return the_data.reshape((-1,4))
+
+ext = str1_file.split(".")[-1]
+if(ext =='csv'):
+    legacy_input = True
+elif(ext == 'bin'):
+    legacy_input = False
+else:
+    raise Exception("Didn't recognise input format: "+ext)
+
 #read files
-str1 = np.fromfile(str1_file,sep=" ").reshape((-1,4))
-str2 = np.fromfile(str2_file,sep=" ").reshape((-1,4))
+str1 = str_from_file(str1_file,legacy_input)
+str2 = str_from_file(str2_file,legacy_input)
 
 #get the strain 'rate'
-strate = str2[:,3] - str1[:,3]
+strate = abs(str2[:,3] - str1[:,3])
 
 extent_min = str1[:,:-1].min(0)
 extent_max = str1[:,:-1].max(0)

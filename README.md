@@ -12,9 +12,9 @@ See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://
 
 ## Compilation ##
 
-On Cray systems, HiDEM can be compiled using the script `compile.sh`.
+Configuration, compilation and installation is handled by Cmake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
 
-Additional compilation scripts are located in scripts/compilation.
+If you generate your own toolchain/compilation scripts for different systems, please get in touch or make a pull request!
 
 ## Input Files ##
 
@@ -90,8 +90,6 @@ mpirun -n 70 HiDEM
 ```
 
 An example PBS job script is provided in example.job
-
-HiDEM automatically partitions the model domain into squares in the XY plane, computing the size of each CPU's square. The model will report the total number of cores in use, and will halt if this is less than 80% of the total allocated. If this occurs, simply restart the job with the correct number of cores.
 
 The user may specify a run name which is preprended on all output files:
 
@@ -202,6 +200,12 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
 | Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
+| CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space! Default false)|
+| Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32). (doubles output filesize..., Default false)|
+| Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' |
+| Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane |
+| Fixed Inflow Margin | FixBack | If true, particles near the inflow margin are not permitted to move in XY plane |
+
 
 ### mass3.dat ####
 
@@ -215,6 +219,7 @@ output transformation matrix which takes from Elmer domain to HiDEM domain.
 
 make sure the bed is buffered beyond the edge of the ice, and define these regions by setting surf and base equal to bed.  
 
+User may optionally specify a 'mask' column in geometry input file, which tells the model which regions are ice (=1), fjord (=2), bedrock(=0). This is required for imposing lateral boundary conditions (Fixed Lateral Margins).
 
 ### Internal variables ###
 
@@ -237,11 +242,12 @@ make sure the bed is buffered beyond the edge of the ice, and define these regio
 | MFIL | mass of particles - per particle |
 | JS | moment of rotational inertia |
 | NAN | list of connections between particles e.g. NAN(1:2,1) lists the two particle numbers which make up connection 1   |
-| NRXF | initial position of this partition's particles   |
-| NRXFL,... | initial position of particles in the partition to the left   |
+| NRXF%M,%F | initial position of the particles  |
 
 
 ## Output - JYR and STR files ##
+
+By default the model produces particle information in .vtu format (readable in Paraview - use HiDEM_load.py macro) and bond strain information in binary format (readable by the python script rh.py). For CSV output, use the 'CSV Output' option in the inp.dat (beware this produces much larger files which make visualisation time consuming).
 
 JYR files list the position of all particles in x,y,z, every 2 seconds.  
 Read this in paraview quite easily.  
@@ -322,4 +328,18 @@ Seems to get rid of UTP prediction, damping
 
 ## TO DO ##
 
-Improve the partitioning scheme
+ * Improve the partitioning scheme
+
+ * Get rid of redundant code using pointers
+
+ * BC strategy
+
+ * KIND=dp?
+
+ * Translate & Rotate input
+
+ ## Notes ##
+
+Domain needs to be orientated in XY because:
+
+Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask 

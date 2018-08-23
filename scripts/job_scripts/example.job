@@ -2,7 +2,7 @@
 #PBS -N HiDEMSim
 #PBS -l select=3
 #PBS -l walltime=01:00:00
-#PBS -A n01-CALISMO
+#PBS -A YOUR_PBS_ACCOUNT
 export PBS_O_WORKDIR=$(readlink -f $PBS_O_WORKDIR)
 cd $PBS_O_WORKDIR
 export OMP_NUM_THREADS=1
