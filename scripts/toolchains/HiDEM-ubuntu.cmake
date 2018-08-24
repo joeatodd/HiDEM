@@ -13,6 +13,9 @@ SET(MPI_CXX_COMPILER mpic++)
 SET(MPI_Fortran_COMPILER mpif90)
 
 # Compilation flags (i.e. with optimization)
-SET(CMAKE_C_FLAGS "-O3 -fPIC" CACHE STRING "")
-SET(CMAKE_CXX_FLAGS "-O3 -fPIC" CACHE STRING "")
-SET(CMAKE_Fortran_FLAGS "-O3 -fPIC" CACHE STRING "")
+SET(CMAKE_C_FLAGS_RELEASE "-O3 -fPIC" CACHE STRING "")
+SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC" CACHE STRING "")
+SET(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fPIC" CACHE STRING "")
+
+# Debug compilation flags
+SET(CMAKE_Fortran_FLAGS_DEBUG "-g -fcheck=bounds,do" CACHE STRING "")
