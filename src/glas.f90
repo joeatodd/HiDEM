@@ -13,16 +13,16 @@ CONTAINS
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,neighcount,l,&
-     wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
+SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,&
+     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
 
   IMPLICIT NONE
   INCLUDE 'na90.dat'
 
-!Real(KIND=dp),ALLOCATABLE :: surf(:,:),bed(:,:)
-Real(KIND=dp) :: surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
+REAL(KIND=dp) :: surf(0:,0:),base(0:,0:)
+REAL(KIND=dp),ALLOCATABLE :: melt(:,:)
 Real(KIND=dp) :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
-Real(KIND=dp) :: box,b,SCL
+REAL(KIND=dp) :: box,b,SCL,origin(2)
 INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
 INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
@@ -37,36 +37,17 @@ TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
  13    FORMAT(4F14.7)
  14    FORMAT(3F14.7)
 
-surf=-100.0_dp
-bed=1000.0_dp
+!Not really used
+ALLOCATE(melt(0:UBOUND(surf,1),0:UBOUND(surf,2)))
 melta = 0.0_dp
-
-!TODO pass through file once to check extent, then allocate bed, surf, melt
-! then reread
-OPEN(400,file=TRIM(geomfile),STATUS='OLD')
-READ(400,*) N2
-DO I=1,N2
-  IF(GeomMasked) THEN
-    READ(400,*) x,y,s1,b1,b2,z1,mask
-  ELSE
-    READ(400,*) x,y,s1,b1,b2,z1
-  END IF
-  xk=INT(x/grid)
-  yk=INT(y/grid)
-  IF (xk.GE.-100.AND.yk.GE.-100 .AND. xk.LE.2000.AND.yk.LE.2000) THEN
-    bed(xk,yk)=b1
-    surf(xk,yk)=s1
-    melt(xk,yk)=melta*0.0
-  END IF
-ENDDO
-CLOSE(400)
+melt = melta*0.0_dp
 
 !box is never actualy used...
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
 CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
-     neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain,RunName)
+     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
 
 CLOSE(400)
 
@@ -76,7 +57,7 @@ END SUBROUTINE FIBG3
 
 
 SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
-     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,bed,melt,grid,wl,UC,StrictDomain,RunName)
+     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
 
   !USE INOUT
 
@@ -84,9 +65,10 @@ SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart,
 
   INCLUDE 'na90.dat'
 
-Real(KIND=dp) :: surf(-100:2000,-100:2000),bed(-100:2000,-100:2000),melt(-100:2000,-100:2000)
-Real(KIND=dp) :: b,x0(3,4),box,SCL
+REAL(KIND=dp) :: surf(0:,0:),base(0:,0:),melt(0:,0:)
+REAL(KIND=dp) :: b,x0(3,4),box,SCL,origin(2)
 REAL(KIND=dp) :: gridminx, gridmaxx, gridminy, gridmaxy,T1,T2
+REAL(KIND=dp) :: minx, miny
 REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
 REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
@@ -121,12 +103,13 @@ x0(:,:)=b/2.0d0; x0(:,1)=0.0d0; x0(3,2)=0.0d0; x0(2,3)=0.0d0; x0(1,4)=0.0d0
 !Use bed and surf to determine the extent of the domain
 !This is not perfect, just checks that there is SCL dist between surf and bed+melt
 
+!Find the ice extent in raster coordinates
 gridminx = HUGE(gridminx); gridminy = HUGE(gridminy)
 gridmaxx = -HUGE(gridmaxx); gridmaxy = -HUGE(gridmaxy)
 DO i=LBOUND(surf,1), UBOUND(surf,1)
 
   DO j=LBOUND(surf,2), UBOUND(surf,2)
-    IF(.NOT. surf(i,j) > (bed(i,j) + melt(i,j))) CYCLE
+    IF(.NOT. surf(i,j) > (base(i,j) + melt(i,j))) CYCLE
     !more CYCLE?
     if (i < gridminx) gridminx = i
     if (i > gridmaxx) gridmaxx = i
@@ -142,73 +125,71 @@ gridmaxx = gridmaxx + 1; gridmaxy = gridmaxy + 1
 nx = CEILING(((gridmaxx - gridminx) * grid) / b)
 ny = CEILING(((gridmaxy - gridminy) * grid) / b)
 
+!Minimum real coordinate with ice (i.e. location of a corner particle)
+minx = (gridminx * grid) + origin(1)
+miny = (gridminy * grid) + origin(2)
+
 !nx (ny) is the number of boxes in the x (y) direction
 ip=0
 DO i=1,nx !x step
-      DO j=1,ny !y step
-	DO k=-2,l !vertical layer
-	  Do k1=1,4
+  DO j=1,ny !y step
+    DO k=-2,l !vertical layer
+      DO k1=1,4
 
-             !These x,y coords are divided by grid just for the interp
-             x=(x0(1,k1) + REAL(i-1)*b)/grid
-             y=(x0(2,k1) + REAL(j-1)*b)/grid
-             xk=INT((x0(1,k1) + REAL(i-1)*b)/grid)
-             yk=INT((x0(2,k1) + REAL(j-1)*b)/grid)
+        x=(x0(1,k1) + minx + REAL(i-1)*b)
+        y=(x0(2,k1) + miny + REAL(j-1)*b)
+        z=x0(3,k1) + REAL(k-1)*b
 
-             !just beyond edge of geom def
-             IF(ANY(surf(xk:xk+1,yk:yk+1) == bed(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
+        xk = FLOOR((x-origin(1))/grid)
+        yk = FLOOR((y-origin(2))/grid)
 
-             Call BIPINT(x-xk,y-yk,bed(xk,yk),bed(xk,yk+1),bed(xk+1,yk),bed(xk+1,yk+1),bint)
-             Call BIPINT(x-xk,y-yk,surf(xk,yk),surf(xk,yk+1),surf(xk+1,yk),surf(xk+1,yk+1),sint)
-             Call BIPINT(x-xk,y-yk,melt(xk,yk),melt(xk,yk+1),melt(xk+1,yk),melt(xk+1,yk+1),mint)
-!             bint=bed(xk,yk)+(x-xk)*(bed(xk+1,yk)-bed(xk,yk))+(y-yk)*(bed(xk,yk+1)-bed(xk,yk))
-!             sint=surf(xk,yk)+(x-xk)*(surf(xk+1,yk)-surf(xk,yk))+(y-yk)*(surf(xk,yk+1)-surf(xk,yk))
+        !just beyond edge of geom def
+        IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
 
-              ! these are the actual point coords
-              z=x0(3,k1) + REAL(k-1)*b
-              y=x0(2,k1) + REAL(j-1)*b
-              x=x0(1,k1) + REAL(i-1)*b
+        bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
+        sint = InterpRast(X,Y,surf,grid,origin,INTERP_MISS_FILL,0.0_dp) ! i.e. no particle here
+        mint = InterpRast(X,Y,melt,grid,origin,INTERP_MISS_FILL,0.0_dp)
 
-!             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
-!             If (bed(xk,yk).ne.0.0.and.bed(xk,yk+1).ne.0.0.and.bed(xk+1,yk).ne.0.0&
-              ! .AND.bed(xk+1,yk+1).NE.0.0) THEN
+        !             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
+        !             If (base(xk,yk).ne.0.0.and.base(xk,yk+1).ne.0.0.and.base(xk+1,yk).ne.0.0&
+        ! .AND.base(xk+1,yk+1).NE.0.0) THEN
 
-              !TODO - unhardcode this
-              ! If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.&
-              ! (ABS(z-wl).LT.4.0*SCL.AND.bint.LT.wl))) THEN
-             IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
+        !TODO - unhardcode this
+        ! If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.&
+        ! (ABS(z-wl).LT.4.0*SCL.AND.bint.LT.wl))) THEN
+        IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
 
-             ! undercut shape functions
-             ! lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
-             ! UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
-             ! If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
-             ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
-             ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
+          ! undercut shape functions
+          ! lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
+          ! UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
+          ! If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
+          ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
+          ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
 
-             ip=ip+1
-             !More space if req'd - TODO, pass this size back (in place of NOMA)
-             IF(ip > SIZE(xo,2)) THEN
-               ALLOCATE(work_arr(3,ip-1))
-               work_arr = xo
-               DEALLOCATE(xo)
-               ALLOCATE(xo(3,ip*2))
-               xo(:,1:ip-1) = work_arr(:,1:ip-1)
-               DEALLOCATE(work_arr)
-               !CALL FatalError("NOMA not large enough (too many points)")
-               IF(DebugMode) CALL Warn("Doubling size of xo")
-             END IF
+          ip=ip+1
+          !More space if req'd - TODO, pass this size back (in place of NOMA)
+          IF(ip > SIZE(xo,2)) THEN
+            ALLOCATE(work_arr(3,ip-1))
+            work_arr = xo
+            DEALLOCATE(xo)
+            ALLOCATE(xo(3,ip*2))
+            xo(:,1:ip-1) = work_arr(:,1:ip-1)
+            DEALLOCATE(work_arr)
+            !CALL FatalError("NOMA not large enough (too many points)")
+            IF(DebugMode) CALL Warn("Doubling size of xo")
+          END IF
 
-	     xo(1,ip) = x0(1,k1) + REAL(i-1)*b	
-	     xo(2,ip) = x0(2,k1) + REAL(j-1)*b
-	     xo(3,ip) = x0(3,k1) + REAL(k-1)*b
-             ! EndIF
-             ! EndIF
-             EndIF
-!             EndIF
-	  EndDo
-	EndDo
-      EndDo
-End Do
+          xo(1,ip) = x
+          xo(2,ip) = y
+          xo(3,ip) = z
+          ! EndIF
+          ! EndIF
+        END IF
+        !EndIF
+      END DO
+    END DO
+  END DO
+END DO
 
 IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
 IF(DebugMode) PRINT *,myid,' Finding connections...'
@@ -471,33 +452,6 @@ END IF
 ! Our neighparts - neighparts
 
 END SUBROUTINE Initializefcc
-
-!-----------------------------------------------------
-
-Subroutine BIPINT(x,y,f11,f12,f21,f22,fint)
-Implicit none
-Real(KIND=dp) :: x,y,f11,f12,f21,f22,fint
-fint=f11*(1.0-x)*(1.0-y)+f21*x*(1.0-y)+f12*(1.0-x)*y+f22*x*y
-End Subroutine
-
-!-----------------------------------------------------
-
-Subroutine BIPINTN(x,y,f11,f12,f21,f22,dix,diy,diz,grid)
-Implicit none
-Real(KIND=dp) :: x,y,f11,f12,f21,f22,dix,diy,diz,grid
-REAL(KIND=dp) norm
-dix=(-f11*(1.0-y)+f21*(1.0-y)-f12*y+f22*y)/grid
-diy=(-f11*(1.0-x)-f21*x+f12*(1.0-x)+f22*x)/grid
-diz=1.0
-norm=SQRT(dix**2.0+diy**2.0+1.0)
-dix=-dix/norm
-diy=-diy/norm
-diz=diz/norm
-!if (dix.gt.0.2) dix=0.2
-!if (diy.gt.0.2) diy=0.2
-!if (dix.lt.-0.2) dix=-0.2
-!if (diy.lt.-0.2) diy=-0.2
-End Subroutine
 
 SUBROUTINE GetBBoxes(NRXF, UT, NN, IsOutlier, BBox, PBBox)
 

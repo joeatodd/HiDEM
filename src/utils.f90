@@ -1,6 +1,7 @@
 MODULE UTILS
 
   USE TypeDefs
+  USE INOUT
 
   IMPLICIT NONE
 
@@ -579,17 +580,17 @@ MODULE UTILS
     !Checks particle position and velocity for anything suspicious
     !Freezes particles which are outside the domain, determines outliers 
     !for the purpose of BBox calculation
-    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,Lost,Outlier)
+    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,DT,MAXUT,Lost,Outlier)
 
       INTEGER ::  NN, NTOT
       INTEGER :: NANS(:,:)
       REAL(KIND=dp), ALLOCATABLE :: EFS(:),UTP(:)
-      REAL(KIND=dp) :: DT,GRID,MAXUT
+      REAL(KIND=dp) :: DT,grid_bbox(4),MAXUT
       TYPE(UT_t) :: UT
       TYPE(NRXF_t) :: NRXF
       LOGICAL, ALLOCATABLE :: Lost(:), Outlier(:)
       !-----------------------------------
-      INTEGER :: i,j,XIND,YIND,ierr
+      INTEGER :: i,j,ierr
       REAL(KIND=dp) :: BBox(6),bbox_vol,bbox_vols(ntasks),med_vol,max_gap(3),gap(3)
       REAL(KIND=dp) :: outlier_gap_prop, outlier_arr_prop, freezer(3)
       REAL(KIND=dp) :: X,Y,Z,dx,dy,dz,disp, disp_limit
@@ -625,16 +626,18 @@ MODULE UTILS
 
           disp = SQRT(dx**2.0 + dy**2.0 + dz**2.0)
           IF(disp > disp_limit) THEN
-            PRINT *,myid,' debug, particle breaking the speed limit!'
+            IF(DebugMode) PRINT *,myid,' debug, particle breaking the speed limit!'
             too_fast(i) = .TRUE.
           END IF
         END IF
 
         !Check location
         !TODO - check vertical coordinate too
-        XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
-        YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
-        IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100) Lost(i) = .TRUE.
+        x = NRXF%M(1,I) + UTP(6*I-5)
+        y = NRXF%M(2,I) + UTP(6*I-4)
+        IF(x < grid_bbox(1) .OR. x > grid_bbox(2) .OR. y < grid_bbox(3) .OR. y > grid_bbox(4)) THEN
+          Lost(i) = .TRUE.
+        END IF
 
         !Check total displacement
         IF(ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
@@ -1005,4 +1008,92 @@ MODULE UTILS
       RETURN
     END SUBROUTINE sort_real2_r
 
+    FUNCTION InterpRast(x,y,RAST,grid,origin,miss_strategy,fill_val) RESULT(zval)
+      REAL(KIND=dp) :: x,y,grid,origin(2)
+      REAL(KIND=dp) :: RAST(0:,0:)
+      INTEGER :: miss_strategy
+      REAL(KIND=dp), OPTIONAL :: fill_val
+      !--------------------
+      REAL(KIND=dp) :: I1,I2,zval
+      INTEGER :: XK,YK
+
+      XK = FLOOR((x - origin(1))/grid)
+      YK = FLOOR((y - origin(2))/grid)
+      I1=(x-origin(1))/grid - XK
+      I2=(y-origin(2))/grid - YK
+
+      IF(ValidRasterIndex(xk,yk,RAST)) THEN
+        CALL BIPINT(I1,I2,RAST(XK,YK),RAST(XK,YK+1),RAST(XK+1,YK),RAST(XK+1,YK+1),zval)
+      ELSE
+        SELECT CASE(miss_strategy)
+        CASE(INTERP_MISS_FILL)
+
+          IF(.NOT. PRESENT(fill_val)) CALL FatalError("Programming error: &
+               &requested fill missing interp but no fill value specified!")
+          zval = fill_val
+          RETURN
+
+        CASE(INTERP_MISS_NEAREST)
+
+          IF(XK<0) THEN
+            XK=0
+          ELSE IF(XK>=UBOUND(RAST,1)) THEN
+            XK = UBOUND(RAST,1)
+          ELSE
+            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+          END IF
+          IF(YK<0) THEN
+            YK=0
+          ELSE IF(YK>=UBOUND(RAST,2)) THEN
+            YK = UBOUND(RAST,2)
+          ELSE
+            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+          END IF
+
+          zval = RAST(XK,YK)
+          RETURN
+
+        CASE (INTERP_MISS_ERR)
+          PRINT *,myid,' Debug, missing value xy: ',x,y
+          CALL FatalError("Unexpected missing value in raster interpolation.")
+        CASE DEFAULT
+          CALL FatalError("Programming Error: Missing Interp Strategy not understood.")
+        END SELECT
+      END IF
+    END FUNCTION InterpRast
+
+    !-----------------------------------------------------
+    Subroutine BIPINT(x,y,f11,f12,f21,f22,fint)
+      Implicit none
+      Real(KIND=dp) :: x,y,f11,f12,f21,f22,fint
+      fint=f11*(1.0-x)*(1.0-y)+f21*x*(1.0-y)+f12*(1.0-x)*y+f22*x*y
+    End Subroutine BIPINT
+
+    !-----------------------------------------------------
+    Subroutine BIPINTN(x,y,f11,f12,f21,f22,dix,diy,diz,grid)
+      Implicit none
+      Real(KIND=dp) :: x,y,f11,f12,f21,f22,dix,diy,diz,grid
+      REAL(KIND=dp) norm
+      dix=(-f11*(1.0-y)+f21*(1.0-y)-f12*y+f22*y)/grid
+      diy=(-f11*(1.0-x)-f21*x+f12*(1.0-x)+f22*x)/grid
+      diz=1.0
+      norm=SQRT(dix**2.0+diy**2.0+1.0)
+      dix=-dix/norm
+      diy=-diy/norm
+      diz=diz/norm
+      !if (dix.gt.0.2) dix=0.2
+      !if (diy.gt.0.2) diy=0.2
+      !if (dix.lt.-0.2) dix=-0.2
+      !if (diy.lt.-0.2) diy=-0.2
+    End Subroutine BIPINTN
+
+
+    FUNCTION ValidRasterIndex(i,j,rast) RESULT(valid)
+      INTEGER :: i,j
+      REAL(KIND=dp) :: rast(0:,0:)
+      LOGICAL :: valid
+
+      !'<' rather than '<=' because we also require that i+1 and j+1 are valid
+      valid = (i >= 0) .AND. (i < UBOUND(rast,1)) .AND. (j >= 0) .AND. (j < UBOUND(rast,2))
+    END FUNCTION ValidRasterIndex
 END MODULE UTILS

@@ -36,15 +36,14 @@
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
         REAL(KIND=dp), ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:),CT(:)
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
-	REAL(KIND=dp) :: BED(-100:2000,-100:2000)
-	REAL(KIND=dp) :: SUF(-100:2000,-100:2000)
-	REAL(KIND=dp) :: FBED(-100:2000,-100:2000)
+	REAL(KIND=dp) :: grid_bbox(4),origin(2)
+	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
 	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
         REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst
         REAL(KIND=dp), ALLOCATABLE :: PBBox(:,:)
 	INTEGER, ALLOCATABLE :: CCN(:),CCNW(:)
-	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
+	INTEGER NANW(3,NOCON),mask
 	INTEGER REST,RY0,NM2,noprocs, counter
         INTEGER, POINTER :: countptr
 	REAL(KIND=dp) M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
@@ -59,7 +58,7 @@
 	INTEGER NNO,NS,SI,NNT,BCCS
 	INTEGER YNOD,LS,KK,STEPS0
         INTEGER DST,ZNOD,J,XY,O
-	INTEGER P,BCC,XIND,YIND,gridratio
+	INTEGER P,BCC,XIND,YIND,gridratio,nx,ny
 	REAL(KIND=dp) :: KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
 	REAL(KIND=dp) :: WENS,GSUMS,DPES,BCES
 	REAL(KIND=dp) :: XE,DEX,DEY,RDE,MML,XI,ZI,YI
@@ -80,7 +79,7 @@
 
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput
-        LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine
+        LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine,InDomain
         LOGICAL, ALLOCATABLE :: IsLost(:), IsOutlier(:), PartIsNeighbour(:)
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
 
@@ -195,19 +194,54 @@ END IF
 
 !============= Read in the geometry from DEM ==============
 
-        !Set bed -1000.0 everywhere
-        DO I=-100,2000
-        DO J=-100,2000
-        BED(I,J)=-1000.0
-        ENDDO
-        ENDDO
+        !Read the geometry and friction
+        !into the grids BED, SUF, and FBED
+        
+        grid_bbox(1) = HUGE(grid_bbox(1))
+        grid_bbox(2) = -HUGE(grid_bbox(1))
+        grid_bbox(3) = HUGE(grid_bbox(1))
+        grid_bbox(4) = -HUGE(grid_bbox(1))
 
+        OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
+        READ(400,*) NM2
+
+        !determine range of x,y raster
+        DO I=1,NM2
+        IF(GeomMasked) THEN
+          READ(400,*) X,Y,S1,B2,B1,Z1,mask
+        ELSE
+          READ(400,*) X,Y,S1,B2,B1,Z1
+        END IF
+        grid_bbox(1) = MIN(grid_bbox(1),x)
+        grid_bbox(2) = MAX(grid_bbox(2),x)
+        grid_bbox(3) = MIN(grid_bbox(3),y)
+        grid_bbox(4) = MAX(grid_bbox(4),y)
+        END DO
+
+        nx = NINT((grid_bbox(2)-grid_bbox(1))/grid) + 1
+        ny = NINT((grid_bbox(4)-grid_bbox(3))/grid) + 1
+
+        origin(1) = grid_bbox(1)
+        origin(2) = grid_bbox(3)
+
+        IF(DebugMode) PRINT *,myid,' debug rast: nx: ',nx,' ny: ',ny,' minmaxx: ',&
+             grid_bbox(1),grid_bbox(2),' minmaxy: ',grid_bbox(3),grid_bbox(4)
+
+        !Allocate & initialise raster arrays
+        ALLOCATE(BED(0:nx-1,0:ny-1),&
+             SUF(0:nx-1,0:ny-1),&
+             FBED(0:nx-1,0:ny-1),&
+             GEOMMASK(0:nx-1,0:ny-1),&
+             BASE(0:nx-1,0:ny-1))
+
+        BED = -1000.0
+        BASE = -1000.0
+        SUF = -1000.0
+        FBED = 0.0
         !Geometry mask: 1=glacier, 2=fjord, 0=bedrock/outside domain
         GEOMMASK = 0
 
-        !Read the geometry and friction
-        !into the grids BED, SUF, and FBED
-        OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
+        REWIND(400)
         READ(400,*) NM2
 	DO I=1,NM2
         IF(GeomMasked) THEN
@@ -217,32 +251,16 @@ END IF
         END IF
 !        X=X-2000.0
 !        Y=Y-7000.0
-        XK=INT(X/GRID)
-        YK=INT(Y/GRID)
-        IF (XK.GE.-100.AND.YK.GE.-100) BED(XK,YK)=B1
-        IF (XK.GE.-100.AND.YK.GE.-100) SUF(XK,YK)=S1
-        IF (XK.GE.-100.AND.YK.GE.-100) FBED(XK,YK)=FRIC*SCL*SCL*Z1
-        IF (XK.GE.-100.AND.YK.GE.-100.AND.GeomMasked) GEOMMASK(XK,YK)=mask
+        XK=NINT((X-origin(1))/GRID)
+        YK=NINT((Y-origin(2))/GRID)
+        IF(XK < 0 .OR. YK < 0 .OR. XK > nx-1 .OR. YK > ny-1) &
+             CALL FatalError("Programming Error: Bad grid spec")
 
-        !Previously had commented from here
-        !------------
-        IF (YK.EQ.0.AND.XK.GE.-100) THEN
-        DO J=0,20
-        BED(XK,-J)=B1
-        SUF(XK,-J)=S1
-        FBED(XK,-J)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
-
-        IF (XK.EQ.0.AND.YK.GE.-100) THEN
-        DO J=0,20
-        BED(-J,YK)=B1
-        SUF(-J,YK)=S1
-        FBED(-J,YK)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
-        !To here
-        !------------
+        BED(XK,YK)=B1
+        BASE(XK,YK)=B2
+        SUF(XK,YK)=S1
+        FBED(XK,YK)=FRIC*SCL*SCL*Z1
+        IF(GeomMasked) GEOMMASK(XK,YK)=mask
 
 	ENDDO
 	CLOSE(400)
@@ -259,8 +277,9 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
-        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,StrictDomain,GeomMasked,RunName)
+	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, &
+          CN, CNPart, InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
+          UC,StrictDomain,GeomMasked,RunName)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
 
@@ -320,11 +339,7 @@ END IF
             Y1 = NRXF%A(2,N1)
             Z1 = NRXF%A(3,N1)
 
-            I1=X1/GRID-INT(X1/GRID)
-            I2=Y1/GRID-INT(Y1/GRID)
-            CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID),INT(Y1/GRID)+1),&
-                 SUF(INT(X1/GRID)+1,INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-
+            Zs = InterpRast(x1,y1,SUF,GRID,origin,INTERP_MISS_ERR)
             aboveShearLine = ABS(Z1-ZS).LT.SLIN
           END IF
 
@@ -503,15 +518,11 @@ END IF
 	X=NRXF%M(1,I)+UT%M(6*I-5)
         Y=NRXF%M(2,I)+UT%M(6*I-4)
         Z=NRXF%M(3,I)+UT%M(6*I-3)
-        I1=X/GRID-INT(X/GRID)
-	I2=Y/GRID-INT(Y/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-             BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
+        
+        Zb = InterpRast(X,Y,BED,GRID,origin,INTERP_MISS_NEAREST)
         
         IF (ABS(ZB-Z).LT.SCL*2.0) THEN
-        CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID),INT(Y/GRID)+1),&
-        FBED(INT(X/GRID)+1,INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
-!        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+          VDP(I) = InterpRast(X,Y,FBED,GRID,origin,INTERP_MISS_NEAREST)
         ELSE
           IF (Z.LT.WL) THEN
           VDP(I)=SCL*SCL*DRAG
@@ -719,19 +730,46 @@ END IF
 
 	WSX(I)=0.0
 
-	I1=X/GRID-INT(X/GRID)
-	I2=Y/GRID-INT(Y/GRID)
+        !Compute vars for repeat bilinear interpolation
+        XK = FLOOR((x - origin(1))/grid)
+        YK = FLOOR((y - origin(2))/grid)
+        I1 = (x-origin(1))/grid - XK
+        I2 = (y-origin(2))/grid - YK
+
+        !If outside domain, find nearest valid point
+        !NOTE: any point outside domain should be marked 'lost' by CheckSolution...
+        InDomain = ValidRasterIndex(xk,yk,BED)
+        IF(.NOT. InDomain) THEN
+          IF(XK<0) THEN
+            XK=0
+          ELSE IF(XK>=UBOUND(BED,1)) THEN
+            XK = UBOUND(BED,1)
+          ELSE
+            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+          END IF
+          IF(YK<0) THEN
+            YK=0
+          ELSE IF(YK>=UBOUND(BED,2)) THEN
+            YK = UBOUND(BED,2)
+          ELSE
+            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+          END IF
+        END IF
 
        !Update the drag calculation
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-        BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
-        CALL BIPINT(I1,I2,SUF(INT(X/GRID),INT(Y/GRID)),SUF(INT(X/GRID),INT(Y/GRID)+1),&
-        SUF(INT(X/GRID)+1,INT(Y/GRID)),SUF(INT(X/GRID)+1,INT(Y/GRID)+1),ZS)
+        IF(InDomain) THEN
+          CALL BIPINT(I1,I2,BED(XK,YK),BED(XK,YK+1),BED(XK+1,YK),BED(XK+1,YK+1),ZB)
+        ELSE
+          ZB = BED(XK,YK)
+        END IF
 
         IF (ABS(ZB-Z).LT.SCL*2.0) THEN
-        CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID),INT(Y/GRID)+1),&
-        FBED(INT(X/GRID)+1,INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
-!        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+          IF(InDomain) THEN
+            CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),VDP(i))
+          ELSE
+            VDP(i) = FBED(XK,YK)
+          END IF
+!         IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
         ELSE
           IF (Z.LT.WL) THEN
           VDP(I)=SCL*SCL*DRAG
@@ -745,8 +783,13 @@ END IF
           TTCUM(7) = TTCUM(7) + (TT(7) - TT(6))
         END IF
 
-        CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-        BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),DIX,DIY,DIZ,GRID)
+        IF(InDomain) THEN
+          CALL BIPINTN(I1,I2,BED(XK,YK),BED(XK,YK+1),BED(XK+1,YK),BED(XK+1,YK+1),DIX,DIY,DIZ,GRID)
+        ELSE
+          DIX = 0.0
+          DIY = 0.0
+          DIZ = 1.0
+        END IF
 
 !Bed interaction
 !Bed Normal
@@ -833,9 +876,9 @@ END IF
         !This code allows glacier edge/inflow boundary to be frozen in XY
         !TODO (esp for melange) - convert to contact BC/elastic rebound?
         IF(FixBack .OR. FixLat) THEN
-          XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
-          YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
-          gridratio = INT(MAX(SCL/GRID,1.0))
+          XIND = FLOOR((NRXF%M(1,I) + UTP(6*I-5) - origin(1))/GRID)
+          YIND = FLOOR((NRXF%M(2,I) + UTP(6*I-4) - origin(2))/GRID)
+          gridratio = FLOOR(MAX(SCL/GRID,1.0))
 
           !Freeze if near back plane
           IF(FixBack) THEN
@@ -886,7 +929,7 @@ END IF
 
        IF(DebugMode) PRINT *, myid,'going to check solution' 
        ! !Check for particles leaving the domain, travelling suspiciously quickly, etc
-       CALL CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,IsLost,IsOutlier)
+       CALL CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,DT,MAXUT,IsLost,IsOutlier)
        IF(DebugMode) PRINT *, myid,'done check solution' 
 
 
