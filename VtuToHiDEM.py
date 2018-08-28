@@ -90,6 +90,7 @@ class Params(object):
                 values = [(datatypes[i](data[i])) for i in range(len(data))]
                 self.__dict__[attr] = values if len(values) > 1 else values[0]
 
+
 params = Params(param_file)
 print params.downstream_extent
 print params.upstream_extent
@@ -114,6 +115,7 @@ upstream_extent = params.upstream_extent
 downstream_extent = params.downstream_extent
 grid_res = params.grid_res
 
+grid_buff = 4.0*grid_res
 #Define the grid for HiDEM (Store front)
 
 # #how far upstream behind the front do we want to go?
@@ -226,19 +228,34 @@ data = servermanager.Fetch(reader)
 rotate_angle = angle_between(front_orientation, np.array((0.0,1.0,0.0)))
 if(front_orientation[0] < 0): rotate_angle *= -1
 
+
+#load, convert and rotate fjord shapefile if given
+if(got_fjordfile):
+    fjord_shapefile = shapefile.Reader(fjord_file)
+    fjord_poly = fjord_shapefile.shapeRecords()[0].shape.__geo_interface__
+
+    fjord_shapely = shape(fjord_poly) #convert to shapely format
+
+    #rotate
+    fjord_shapely = shaf.rotate(fjord_shapely,rotate_angle,origin=(0,0)) 
+
+
 if(determine_transform):
 	print "determining transformation"
 
+        #Rotate the ice domain
 	transform1 = Transform(Input=reader)
 	transform1.Transform = 'Transform'
 	transform1.Transform.Rotate = [0.0,0.0,rotate_angle]
 	trans_data = servermanager.Fetch(transform1)
 	trans_points = vtk_to_numpy(trans_data.GetPoints().GetData())
 
-	#this won't be constant between domains - is that a problem?
+        #y translation to put the ice inflow boundary at y=0.0
+        # assumption here that ice is entirely upstream of fjord...
 	y_translate = -(np.max(trans_points[:,1]) - upstream_extent)
 
-	### Need this somewhere above...
+        #generate a clip through the inflow boundary to compute lateral
+        #extent of domain
 	clip1 = Clip(Input=transform1)
 	clip1.ClipType = 'Plane'
 	clip1.ClipType.Origin = [0.0, -y_translate, 0.0]
@@ -247,13 +264,29 @@ if(determine_transform):
 
 	clip_points = vtk_to_numpy(clipdata.GetPoints().GetData())
 	x_translate = -clip_points[:,0].min()
+
+        x_min = 0.0
 	x_max = clip_points[:,0].max() + x_translate
+
+        if(got_fjordfile):
+
+            fjord_shapely = shaf.translate(fjord_shapely,x_translate, y_translate)
+            fjord_points = np.array(fjord_shapely.exterior.coords.xy).T
+
+            x_min = min(x_min, np.min(fjord_points[:,0]))
+            x_max = max(x_max, np.max(fjord_points[:,0]))
+
+        x_min = x_min - grid_buff
+        x_max = x_max + grid_buff #buffer domain laterally
+
+        y_min = 0.0
+        y_max = upstream_extent + downstream_extent + grid_buff #buffer downstream end of domain
 
 	transform1.Transform.Translate = [x_translate, y_translate, 0.0]
 
 	#determine the shape of the HiDEM grid
-	grid_xrange = [0.0, x_max]
-	grid_yrange = [0.0, upstream_extent + downstream_extent]
+	grid_xrange = [x_min, x_max]
+	grid_yrange = [y_min, y_max]
 
 	xsteps = int(np.ceil((grid_xrange[1] - grid_xrange[0])/grid_res))
 	ysteps = int(np.ceil((grid_yrange[1] - grid_yrange[0])/grid_res))
@@ -304,6 +337,12 @@ else:
 	transform1.Transform = 'Transform'
 	transform1.Transform.Rotate = [0.0,0.0,rotate_angle]
 	transform1.Transform.Translate = [x_translate, y_translate, 0.0]
+
+        if(got_fjordfile):
+            #translate fjord def
+            fjord_shapely = shaf.translate(fjord_shapely,x_translate, y_translate)
+            print 'fjord centroid: ',fjord_shapely.centroid.xy
+
 
 
 #create the plane mesh for sampling
@@ -418,17 +457,6 @@ glac_mask = (baseplane_mask == 1) & (surfplane_mask == 1)
 ##############################
 
 if got_fjordfile:
-    fjord_shapefile = shapefile.Reader(fjord_file)
-    fjord_poly = fjord_shapefile.shapeRecords()[0].shape.__geo_interface__
-
-    fjord_shapely = shape(fjord_poly) #convert to shapely format
-
-    #rotate
-    fjord_shapely = shaf.rotate(fjord_shapely,rotate_angle,origin=(0,0)) 
-    #translate
-    fjord_shapely = shaf.translate(fjord_shapely,x_translate, y_translate)
-
-    print 'fjord centroid: ',fjord_shapely.centroid.xy
 
     #Use a np vectorized function to find points in poly
     def shapely_pip(x, y, poly):
@@ -436,15 +464,16 @@ if got_fjordfile:
     shapely_pipv = np.vectorize(shapely_pip)
     fjord_mask = shapely_pipv(baseplane_points[:,0],baseplane_points[:,1],fjord_shapely)
 
-
-
     #ensure no fjord mask where glac mask:
     fjord_mask[glac_mask] = False
 
+    fjord_mask[baseplane_points[:,1] > upstream_extent + downstream_extent] = False
+
+    #not used
     outside_mask = (~glac_mask) & (~fjord_mask)
 
 else:
-
+    #not used
     outside_mask = ~glac_mask
 
 
@@ -454,7 +483,8 @@ print 'baseplane_z shape: ',baseplane_z.shape
 if gen_mask:
     geommask = np.zeros(baseplane_z.size,dtype=int)
     geommask[glac_mask] = 1
-    geommask[fjord_mask] = 2
+    if got_fjordfile:
+        geommask[fjord_mask] = 2
 
 ## Interpolate the bed from DEM
 gridbedinterp = interp.griddata(bed_dem[:,:-1], bed_dem[:,-1], (baseplane_points[:,0], baseplane_points[:,1]))
