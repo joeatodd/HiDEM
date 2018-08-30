@@ -17,7 +17,6 @@ SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,C
      neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
 
   IMPLICIT NONE
-  INCLUDE 'na90.dat'
 
 REAL(KIND=dp) :: surf(0:,0:),base(0:,0:)
 REAL(KIND=dp),ALLOCATABLE :: melt(:,:)
@@ -62,8 +61,6 @@ SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart,
   !USE INOUT
 
   IMPLICIT NONE
-
-  INCLUDE 'na90.dat'
 
 REAL(KIND=dp) :: surf(0:,0:),base(0:,0:),melt(0:,0:)
 REAL(KIND=dp) :: b,x0(3,4),box,SCL,origin(2)
@@ -1319,6 +1316,7 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
     ngb_ids = 0
     CALL Octree_search(points(i) % x, search_dist, num_ngb, ngb_ids)
 
+    !Debug info
     IF(num_ngb > 50) THEN
       id = point_loc(i)
       X1 = NRXF%A(1,id) + UT%A(id*6 - 5)

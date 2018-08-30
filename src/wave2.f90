@@ -31,7 +31,6 @@
         USE Utils
 
 	IMPLICIT NONE
-        INCLUDE 'na90.dat'
 	REAL(KIND=dp), ALLOCATABLE :: EMM(:),BOYZ(:),BOYY(:),WSY(:),WSX(:)
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
         REAL(KIND=dp), ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:),CT(:)
