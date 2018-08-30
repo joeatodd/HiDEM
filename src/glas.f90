@@ -1421,6 +1421,11 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     DO j=1,num_ngb
       IF(ngb_ids(j) == i) CYCLE
       counter = counter+1
+      IF(counter > 12) THEN 
+        CALL Warn("FindBeams found too many neighbours, ignoring...")
+        EXIT
+      END IF
+
       NCN(i) = NCN(i) + 1
       CN(i,counter) = ngb_ids(j)
       ! PRINT *,i, j, ' ngb_id ',ngb_ids(j)
