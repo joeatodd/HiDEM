@@ -17,6 +17,10 @@ MODULE UTILS
      MODULE PROCEDURE Expand1IntArray, Expand2IntArray
   END INTERFACE ExpandIntarray
 
+  INTERFACE ExpandRealarray
+     MODULE PROCEDURE Expand1RealArray, Expand2RealArray
+  END INTERFACE ExpandRealarray
+
   CONTAINS
 
     SUBROUTINE Expand1IntArray(intarr,newsize_in,fill_in)
@@ -94,6 +98,83 @@ MODULE UTILS
       IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
 
     END SUBROUTINE Expand2IntArray
+
+    SUBROUTINE Expand1RealArray(realarr,newsize_in,fill_in)
+
+      REAL(KIND=dp), ALLOCATABLE :: realarr(:), workarr(:)
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, fill
+
+      IF(.NOT. ALLOCATED(realarr)) THEN
+        PRINT *,myid,' Error: Expand1RealArray received an unallocated array!'
+        STOP
+      END IF
+
+      oldsize = SIZE(realarr)
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
+
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
+      ! ALLOCATE(workarr(oldsize))
+      ! workarr(1:oldsize) = realarr(1:oldsize)
+      ! DEALLOCATE(realarr)
+      ALLOCATE(workarr(newsize))
+      workarr = fill
+      workarr(1:oldsize) = realarr(1:oldsize)
+
+      !FORTRAN 2003 feature...
+      DEALLOCATE(realarr) !Cray compiler bug?
+      CALL MOVE_ALLOC(workarr, realarr)
+
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
+
+    END SUBROUTINE Expand1RealArray
+
+
+    SUBROUTINE Expand2RealArray(realarr,newsize_in,fill_in)
+
+      REAL(KIND=dp), ALLOCATABLE :: realarr(:,:), workarr(:,:)
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, dim1size, fill
+
+      IF(.NOT. ALLOCATED(realarr)) THEN
+        PRINT *,myid,' Error: Expand2RealArray received an unallocated array!'
+        STOP
+      END IF
+
+      oldsize = SIZE(realarr,2)
+
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
+
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
+      dim1size = SIZE(realarr,1)
+
+      ! ALLOCATE(workarr(oldsize))
+      ! workarr(1:oldsize) = intarr(1:oldsize)
+      ! DEALLOCATE(intarr)
+      ALLOCATE(workarr(dim1size,newsize))
+      workarr = fill
+
+      workarr(:,1:oldsize) = realarr(:,1:oldsize)
+
+      !FORTRAN 2003 feature...
+      DEALLOCATE(realarr) !Cray compiler bug?
+      CALL MOVE_ALLOC(workarr, realarr)
+
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
+
+    END SUBROUTINE Expand2RealArray
 
     SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand, arrsize)
       TYPE(NRXF_T), TARGET :: NRXF
@@ -197,15 +278,17 @@ MODULE UTILS
       LOGICAL :: neighparts(0:)
       INTEGER, OPTIONAL :: initsize_in
       !------------------------------
-      INTEGER :: initsize,i,j,neighcount
+      INTEGER :: initsize,i,j,neighcount,nopartitions
 
       neighcount = COUNT(neighparts)
+
+      nopartitions = SIZE(neighparts)
 
       initsize = 100
       IF(PRESENT(initsize_in)) initsize = initsize_in
 
-      ALLOCATE(InvPartInfo(0:ntasks-1))
-      DO i=0,ntasks-1
+      ALLOCATE(InvPartInfo(0:nopartitions-1))
+      DO i=0,nopartitions-1
         InvPartInfo(i) % NID = i
         InvPartInfo(i) % ccount = 0
         InvPartInfo(i) % pcount = 0
@@ -213,7 +296,7 @@ MODULE UTILS
         InvPartInfo(i) % spcount = 0
       END DO
 
-      DO j=0,ntasks-1
+      DO j=0,nopartitions-1
         IF(.NOT. neighparts(j)) CYCLE
         ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
              InvPartInfo(j) % ConnLocs(initsize),&
