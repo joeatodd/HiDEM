@@ -14,7 +14,7 @@ CONTAINS
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,&
-     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
+     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName,melange_data)
 
   IMPLICIT NONE
 
@@ -30,6 +30,7 @@ LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t) :: NRXF
 TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
+TYPE(MelangeDataHolder_t) :: melange_data
 !Open(300,file='mass.dat',STATUS='OLD')
 
  12    FORMAT(2I8,' ',2F14.7)
@@ -46,7 +47,7 @@ melt = melta*0.0_dp
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
 CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
-     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
+     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
 
 CLOSE(400)
 
@@ -56,9 +57,10 @@ END SUBROUTINE FIBG3
 
 
 SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
-     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
+     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
+     melange_data)
 
-  !USE INOUT
+  USE Melange
 
   IMPLICIT NONE
 
@@ -88,6 +90,7 @@ REAL(KIND=dp), POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 TYPE(NRXF_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
 TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
+TYPE(MelangeDataHolder_t) :: melange_data
 
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
@@ -1242,7 +1245,7 @@ END SUBROUTINE ExchangeEFS
 
 !Use octree search to find nodes which are nearby
 !Direct contact is identified by circ
-SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
+SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,search_dist,ND,NDL)
 
   USE Octree
 
@@ -1250,21 +1253,21 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   TYPE(UT_t) :: UT
   INTEGER :: NN,ND
   INTEGER, ALLOCATABLE :: NDL(:,:)
-  REAL(KIND=dp) :: SCL, LNN, BBox(6)
+  REAL(KIND=dp) :: search_dist, LNN, BBox(6)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
   INTEGER i,j,cnt,npoints, num_ngb, totsize
   INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), point_loc(:)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
-  REAL(KIND=dp) :: search_dist,tstrt,tend
+  REAL(KIND=dp) :: tstrt,tend
 
   REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2
   INTEGER :: id
   CALL CPU_Time(tstrt)
 
   eps = 1.0
-  search_dist = 1.87 * SCL
+!  search_dist = 1.87 * SCL
   npoints = COUNT(NRXF%PartInfo(1,:) /= -1)
   totsize = SIZE(NRXF%PartInfo,2)
 
@@ -1361,13 +1364,14 @@ END SUBROUTINE FindNearbyParticles
 
 
 !Use octree search to find nodes which are in contact
-SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
+SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
   
   USE Octree
 
   REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
   REAL(KIND=dp) :: SCL
-  INTEGER :: ip,nbeams
+  REAL(KIND=dp), OPTIONAL :: searchdist_in
+  INTEGER :: ip,nbeams,max_neigh
   INTEGER, ALLOCATABLE :: NCN(:), CN(:,:)
   !-----------------------
   !octree stuff
@@ -1377,9 +1381,21 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
   REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
 
+  IF(PRESENT(searchdist_in)) THEN
+    !If a search distance is given, we can't assume there'll only
+    !be 12 neighbours - go for 30
+    searchdist = searchdist_in
+    max_neigh = 30
+  ELSE 
+    !Default usage - we are looking for particles which share a beam
+    !FCC lattice = 12 neighbours
+    searchdist = SCL * (1.6**0.5)
+    max_neigh = 12
+  END IF
+
   ALLOCATE(points(ip),&
        NCN(ip),&
-       CN(ip,12)) 
+       CN(ip,max_neigh)) 
 
   eps = 1.0
 
@@ -1391,9 +1407,6 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
     oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
   END DO
-
-
-  searchdist = SCL * (1.6**0.5)
 
   !TODO - determine optimal depth - SCL vs bbox length?
   !  mdepth 20, m points 6 was determined for a particular case
@@ -1421,7 +1434,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     DO j=1,num_ngb
       IF(ngb_ids(j) == i) CYCLE
       counter = counter+1
-      IF(counter > 12) THEN 
+      IF(counter > max_neigh) THEN 
         CALL Warn("FindBeams found too many neighbours, ignoring...")
         EXIT
       END IF

@@ -29,6 +29,7 @@
         USE Lattice
         USE Effl
         USE Utils
+        USE Melange
 
 	IMPLICIT NONE
 	REAL(KIND=dp), ALLOCATABLE :: EMM(:),BOYZ(:),BOYY(:),WSY(:),WSX(:)
@@ -77,16 +78,16 @@
              neighparts(:), NANS(:,:),NANPart(:),FXF(:,:), NDL(:,:),PNN(:)
 
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput
+        LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput,gotMelange
         LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine,InDomain
         LOGICAL, ALLOCATABLE :: IsLost(:), IsOutlier(:), PartIsNeighbour(:)
-        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
+        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr,&
+             MelRunName
 
-!        TYPE(EF_t) :: EFS
-        TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
         TYPE(NRXF_t) :: NRXF
         TYPE(InvPartInfo_t), TARGET, ALLOCATABLE :: InvPartInfo(:)
+        TYPE(MelangeDataHolder_t) :: melange_data
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -130,7 +131,8 @@ END IF
         CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, &
              SEEDI, DAMP1, DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, &
-             WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
+             WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack,&
+             gotMelange, MelRunName)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -142,6 +144,11 @@ END IF
      ! OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
      ! OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
      !OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
+   END IF
+
+   IF(gotMelange) THEN
+     melange_data % active = .TRUE.
+     IF(myid==0) CALL LoadMelange(MelRunName, wrkdir, melange_data)
    END IF
 
 ! S = width/thickness of the beams, scaled by SCL
@@ -278,7 +285,7 @@ END IF
         !Go to glas.f90 to make the grid
 	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, &
           CN, CNPart, InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
-          UC,StrictDomain,GeomMasked,RunName)
+          UC,StrictDomain,GeomMasked,RunName,melange_data)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
 
@@ -585,7 +592,7 @@ END IF
           !  Would need to take care of changing particle array locations, probably
           !  easiest to add a member to UT_t
           !Identify possible collisions
-          CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
+          CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL*1.87,ND,NDL)
         END IF
 
         FRX = 0.0
