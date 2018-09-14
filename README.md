@@ -193,6 +193,8 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Translational Damping       | DAMP1 | The damping coefficient for translation   |
 | Rotational Damping       | DAMP2 | The damping coefficient for rotation   |
 | Drag Coefficient        | DRAG  | The drag coefficient   |
+| Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   |
+| Viscous Force        | ViscForce  | The strength of viscous particle interaction |
 | Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   |
 | Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   |
 | Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   |

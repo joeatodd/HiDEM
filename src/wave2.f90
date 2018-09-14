@@ -68,6 +68,7 @@
 	REAL(KIND=dp) :: MAXX,MAXY,MAXZ,MAXUT
 	REAL(KIND=dp) :: V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
 	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
+        REAL(KIND=dp) :: ViscDist,ViscForce
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
@@ -83,7 +84,6 @@
         CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
 
 !        TYPE(EF_t) :: EFS
-        TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
         TYPE(NRXF_t) :: NRXF
         TYPE(InvPartInfo_t), TARGET, ALLOCATABLE :: InvPartInfo(:)
@@ -129,7 +129,8 @@ END IF
 
         CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, &
-             SEEDI, DAMP1, DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, &
+             SEEDI, DAMP1, DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, OUTINT, &
+             RESOUTINT, MAXUT, SCL, &
              WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
 
    IF(myid==0) THEN
@@ -595,7 +596,7 @@ END IF
 
        !circ checks which particles are really in contact and computes the forces
 	CALL FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
-          T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+          T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 

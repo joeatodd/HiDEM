@@ -26,11 +26,12 @@ CONTAINS
 
  SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
+      DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, OUTINT, RESOUTINT, &
+      MAXUT, SCL, WL, STEPS0, GRID, fractime, &
       StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
    REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL(KIND=dp) :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
-   REAL(KIND=dp) :: fractime
+   REAL(KIND=dp) :: fractime,viscforce,viscdist
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
@@ -63,6 +64,8 @@ CONTAINS
    DAMP1 = 1.0E4
    DAMP2 = 1.0E4
    DRAG = 1.0E1
+   viscforce=1.0E4
+   viscdist = 4.0E-2
    OUTINT = 20000
    RESOUTINT = 20000
    MAXUT = 1.0E6
@@ -155,6 +158,10 @@ CONTAINS
        READ(VarValue,*) DAMP1
      CASE("rotational damping")
        READ(VarValue,*) DAMP2
+     CASE("viscous distance")
+       READ(VarValue,*) viscdist
+     CASE("viscous force")
+       READ(VarValue,*) viscforce
      CASE("drag coefficient")
        READ(VarValue,*) DRAG
      CASE("output interval")

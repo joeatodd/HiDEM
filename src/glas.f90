@@ -1443,7 +1443,7 @@ CALL Octree_final()
 END SUBROUTINE FindBeams
 
 SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
-     T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+     T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
 
   USE TypeDefs
   USE Utils
@@ -1454,7 +1454,7 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   REAL(KIND=dp), ALLOCATABLE :: EFC(:)
   REAL(KIND=dp) ::  SX,SY,SZ,SUM,T,WE(:),L0
   REAL(KIND=dp) ::  DDEL,DWE,OWE,DT,ESUM,LNN
-  REAL(KIND=dp) ::  LS,LS2,DEL,SCL
+  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscDist,ViscForce
   INTEGER ierr,FXC,ND
   INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
@@ -1531,21 +1531,21 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
 
       !if almost touching, add forces but don't register interaction
       !NOTE - TODO - is this an attractive force??
-      IF (RC.GT.LNN.AND.RC.LT.LNN+0.04*SCL) THEN
+      IF (RC.GT.LNN.AND.RC.LT.LNN+ViscDist*SCL) THEN
         IF(own(1)) THEN
-          FRX(N1)=FRX(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCX
-          FRY(N1)=FRY(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCY
-          FRZ(N1)=FRZ(N1)+SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+          FRX(N1)=FRX(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCX
+          FRY(N1)=FRY(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCY
+          FRZ(N1)=FRZ(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCZ
         END IF
         IF(own(2)) THEN
-          FRX(N2)=FRX(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCX
-          FRY(N2)=FRY(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCY
-          FRZ(N2)=FRZ(N2)-SCL**2.0*1.0e+04*(LNN-RC)*RCZ
+          FRX(N2)=FRX(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCX
+          FRY(N2)=FRY(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCY
+          FRZ(N2)=FRZ(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCZ
         END IF
         IF(own(2)) THEN
-          WE(N2)=WE(N2)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
+          WE(N2)=WE(N2)+SCL**2.0*0.5*ViscForce*(LNN-RC)**2.0
         ELSE
-          WE(N1)=WE(N1)+SCL**2.0*0.5e+04*(LNN-RC)**2.0
+          WE(N1)=WE(N1)+SCL**2.0*0.5*ViscForce*(LNN-RC)**2.0
         END IF
       ENDIF
 
