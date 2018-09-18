@@ -213,7 +213,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 
 mass3.dat is the input configuration, in format:
 
-x, y, surface, base, bed. friction (Newton seconds per metre)  
+x, y, surface, base, bed, friction, geom_mask (optional)
+
+Friction has units of Newton seconds per metre
 
 x and y must start at zero, must have a (0,0) corner.  
 
