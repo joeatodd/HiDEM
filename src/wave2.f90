@@ -39,10 +39,10 @@
 	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
 	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
-        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst
+        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst,mask
         REAL(KIND=dp), ALLOCATABLE :: PBBox(:,:)
 	INTEGER, ALLOCATABLE :: CCN(:),CCNW(:)
-	INTEGER NANW(3,NOCON),mask
+	INTEGER NANW(3,NOCON)
 	INTEGER REST,RY0,NM2,noprocs, counter
         INTEGER, POINTER :: countptr
 	REAL(KIND=dp) M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
@@ -260,7 +260,7 @@ END IF
         BASE(XK,YK)=B2
         SUF(XK,YK)=S1
         FBED(XK,YK)=FRIC*SCL*SCL*Z1
-        IF(GeomMasked) GEOMMASK(XK,YK)=mask
+        IF(GeomMasked) GEOMMASK(XK,YK)=NINT(mask)
 
 	ENDDO
 	CLOSE(400)
