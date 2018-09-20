@@ -37,9 +37,11 @@ Head of a sample mass3.dat file:
 1.000000000000000000e+02	0.000000000000000000e+00	9.248503686919999609e+02	9.248503686919999609e+02	9.248503686919999609e+02	4.768270480512356758e+07
 ```
 
+See more information in section 'Geometry File' 
+
 Note: To avoid spurious single particles appearing at the edge of the domain, interpolation of 
 particle locations is not permitted where not all 4 supporting points have valid surface and bed
-values. To permit this, set `	    Strict Domain Interpolation = False`.
+values. To permit this, set `	    Strict Domain Interpolation = False` in inp.dat.
 
 ## Important Points ##
 
@@ -161,69 +163,69 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 
 
 ### inp.dat parameters ###
-| Parameter | VarName | Description |
-| --------- | ------- | ----------- |
-| Run Name  | RUNNAME | The name of the simulation (prepended to output filenames) |
-| Work Directory | wrkdir | The subdirectory in which to store working files (directory must exist!) |
-| Results Directory | resdir | The subdirectory in which to store result files (directory must exist!) |
-| Geometry File | geomfile | The name of the file which defines the geometry (see above) |
-| Density | RHO | The density of the material (ice) |
-| Water Density | RHOW | The density of the water in which the ice floats |
-| Gravity | GRAV | Magnitude of gravity (positive!) |
-| Backwall Pressure | PRESS | optional backwall/water pressure (not yet properly implemented!)|
-| Submarine Melt    | MELT  | optional basal melt rate passed to fibg3 for altering domain shape   |
-| UC                | UC    | optional frontal melt rate   |
-| Timestep          | DT    | timestep size   |
-| Width             | S     | beam width (relative to unit particle)   |
-| Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between connected particles   |
-| Size              | LS    | Something to do with the fcc lattice 'box size'   |
-| Domain Inclination | SUB   | Angle of the domain vs gravity vector, not used    |
-| Water Line   | WL    | Sea level for buoyancy calc   |
-| Grounding Line  | GL    | 'grounding line' - not used   |
-| Shear Line   | SLIN  | A distance below the surface where all bonds are broken?   |
-| No Timesteps   | STEPS0| The number of steps   |
-| Max Load     | MLOAD | Maximum load on bond - bonds break beyond this   |
-| Friction Scale    | FRIC  | Scale factor for friction input   |
-| Restart     | REST  | 1 = restart from prev, 0 = new run   |
-| Restart From Run Name    | restname  | Specifies the name of the run from which to restart (defaults to same as 'Run Name')|
-| Scale         | SCL   | Scale factor for particle and beam size   |
-| Grid        | GRID  | Resolution of mass3.dat input grid   |
-| Porosity         | POR   | The proportion of initially broken bonds   |
-| Random Seed       | SEEDI | Seed for random number generator   |
-| Translational Damping       | DAMP1 | The damping coefficient for translation   |
-| Rotational Damping       | DAMP2 | The damping coefficient for rotation   |
-| Drag Coefficient        | DRAG  | The drag coefficient   |
-| Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   |
-| Viscous Force        | ViscForce  | The strength of viscous particle interaction |
-| Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   |
-| Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   |
-| Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   |
-| Fracture After Time | FRACTIME | Fracture is permitted after this time. |
-| Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed |
-| Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) |
-| Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above |
-| CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space! Default false)|
-| Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32). (doubles output filesize..., Default false)|
-| Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' |
-| Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane |
-| Fixed Inflow Margin | FixBack | If true, particles near the inflow margin are not permitted to move in XY plane |
+| Parameter | VarName | Description | Default (SI units) |
+| --------- | ------- | ----------- |---------|
+| Run Name  | RUNNAME | The name of the simulation (prepended to output filenames) |  |
+| Work Directory | wrkdir | The subdirectory in which to store working files (directory must exist!) | . |
+| Results Directory | resdir | The subdirectory in which to store result files (directory must exist!) | . |
+| Geometry File | geomfile | The name of the file which defines the geometry (see above) | False |
+| Density | RHO | The density of the material (ice) | 900 |
+| Water Density | RHOW | The density of the water in which the ice floats | 1030 |
+| Gravity | GRAV | Magnitude of gravity (positive!) | 9.81 |
+| Backwall Pressure | PRESS | optional backwall/water pressure (not yet properly implemented!)| 0 |
+| Submarine Melt    | MELT  | optional basal melt rate passed to fibg3 for altering domain shape   | 0 |
+| UC                | UC    | optional frontal melt rate   | 0 |
+| Timestep          | DT    | timestep size   | 1.0e-4 |
+| Width             | S     | beam width (relative to unit particle)   | 0.7 |
+| Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between connected particles   | 1.0e+9 |
+| Size              | LS    | Something to do with the fcc lattice 'box size'   | 100 |
+| Domain Inclination | SUB   | Angle of the domain vs gravity vector, not used    | 0 |
+| Water Line   | WL    | Sea level for buoyancy calc   | |
+| Grounding Line  | GL    | 'grounding line' - not used   | -100 |
+| Shear Line   | SLIN  | A distance below the surface where all bonds are broken?   | 2000 |
+| No Timesteps   | STEPS0| The number of steps   | |
+| Max Load     | MLOAD | Maximum load on bond - bonds break beyond this   | 0.0002 |
+| Friction Scale    | FRIC  | Scale factor for friction input   | 1 |
+| Restart     | REST  | 1 = restart from prev, 0 = new run   | 0 |
+| Restart From Run Name    | restname  | Specifies the name of the run from which to restart (defaults to same as 'Run Name')| |
+| Scale         | SCL   | Scale factor for particle and beam size   | |
+| Grid        | GRID  | Resolution of mass3.dat input grid   | |
+| Porosity         | POR   | The proportion of initially broken bonds   | 0.1 |
+| Random Seed       | SEEDI | Seed for random number generator   |  11695378 |
+| Translational Damping       | DAMP1 | The damping coefficient for translation   | 1e4 |
+| Rotational Damping       | DAMP2 | The damping coefficient for rotation   | 1e4 |
+| Drag Coefficient        | DRAG  | The drag coefficient   | 1e1 |
+| Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   | 4e-2 |
+| Viscous Force        | ViscForce  | The strength of viscous particle interaction | 1e4 |
+| Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   | 20000 |
+| Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   | 20000 |
+| Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   | 1e6 |
+| Fracture After Time | FRACTIME | Fracture is permitted after this time (in s). | 40 |
+| Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed | 1e8 |
+| Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) | True |
+| Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above | True |
+| CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space) | False |
+| Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32, doubles output filesize) | False | 
+| Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' | False |
+| Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane | False |
+| Fixed Inflow Margin | FixBack | If true, particles near the inflow margin are not permitted to move in XY plane | True |
 
 
-### mass3.dat ####
+### Geometry file ####
 
-mass3.dat is the input configuration, in format:
+The geometry file contains the input configuration, in format:
 
 x, y, surface, base, bed, friction, geom_mask (optional)
 
-Friction has units of Newton seconds per metre
+x and y must be gridded and start at zero, must have a (0,0) corner.  
 
-x and y must start at zero, must have a (0,0) corner.  
+Friction has units of Newton seconds per metre
 
 output transformation matrix which takes from Elmer domain to HiDEM domain.  
 
 make sure the bed is buffered beyond the edge of the ice, and define these regions by setting surf and base equal to bed.  
 
-User may optionally specify a 'mask' column in geometry input file, which tells the model which regions are ice (=1), fjord (=2), bedrock(=0). This is required for imposing lateral boundary conditions (Fixed Lateral Margins).
+User may optionally specify a 'geom_mask' column in geometry input file, which tells the model which regions are ice (=1), fjord (=2), bedrock(=0). This is required for imposing lateral boundary conditions (Fixed Lateral Margins).
 
 ### Internal variables ###
 
@@ -347,3 +349,4 @@ Seems to get rid of UTP prediction, damping
 Domain needs to be orientated in XY because:
 
 Boundary conditions are applied in WSY (, WSX?) components (need to compute normal? Ask 
+
