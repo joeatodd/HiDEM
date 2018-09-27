@@ -150,6 +150,7 @@ DO i=1,nx !x step
         yk = FLOOR((y-origin(2))/grid)
 
         !just beyond edge of geom def
+        IF(xk < 0 .OR. yk < 0) CYCLE
         IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
 
         bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
