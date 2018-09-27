@@ -72,10 +72,11 @@ REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
 REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
-INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
+INTEGER i,j,k,n,ix,K1,k2,l,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
 INTEGER NTOT,neighcount
 INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
      particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
+INTEGER, ALLOCATABLE :: NCN_metis(:),CN_metis(:,:),NCN_Melange(:), CN_Melange(:,:)
 CHARACTER(LEN=256) :: wrkdir,runname
 LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
@@ -128,6 +129,11 @@ ny = CEILING(((gridmaxy - gridminy) * grid) / b)
 !Minimum real coordinate with ice (i.e. location of a corner particle)
 minx = (gridminx * grid) + origin(1)
 miny = (gridminy * grid) + origin(2)
+
+!TODO - This is done on all processes, but needs only
+!be done by 0 and then transmitted. Lots of duplication in 
+!memory here. This, as well as the serial partitioning, restrict
+!the upper limit of simulation size.
 
 !nx (ny) is the number of boxes in the x (y) direction
 ip=0
@@ -200,11 +206,73 @@ IF(PrintTimes) CALL CPU_TIME(T2)
 
 IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
+!If we are adding melange from a previous simulation, the equivalence between
+!proximity and 'bonded particles' breaks down, so we need to separately determine
+!which particles are proximal (for metis partitioning) and which are actually bonded
+!(for the model)
+IF(melange_data % active)  THEN
+
+  IF(myid==0) THEN
+    !Get rid of any particles which overlap w/ the glacier geometry
+    CALL Prune_Melange(melange_data, xo, ip,SCL)
+
+  END IF
+
+  !Seems like root never makes it here...
+  PRINT *,myid,' debug about to exchange NN and expand'
+  PRINT *,myid,' ip, melangeNN, tot: ', ip, melange_data%NN, ip + melange_data%NN
+  !Send melange particles to other partitions (though most are about to delete them?!)
+  CALL MPI_BCast(melange_data%NN,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
+
+  PRINT *,myid,' debug about to fill xo'
+
+  IF(myid==0) THEN
+    !Append melange particles to particle list
+    DO i=1,melange_data%NN
+      xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
+      xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
+      xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
+    END DO
+  END IF
+
+  PRINT *,myid,' debug about to bcast xo: ',melange_data%NN,ip,SIZE(xo,2),&
+       SIZE(xo(:,ip+1:),1),SIZE(xo(:,ip+1:),2)
+  CALL MPI_BCast(xo(:,ip+1:),melange_data%NN*3,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+
+  glac_ip = ip
+  ip = ip + melange_data%NN
+
+  DO i=1,ip
+    IF(ALL(xo(:,i) < 1.0)) PRINT *,myid,' debug xo ',i,' : ',xo(:,i)
+  END DO
+  PRINT *,myid,' debug about to find all beams'
+
+  !Find nearby particles - this is important for partitioning
+  !Because melange (unlike glacier) begins largely broken, connection info for
+  !metis needs *proximity* rather than beams
+  CALL FindBeams(xo,ip,SCL,NCN_metis, CN_metis, nprox_metis, SCL*1.5)
+
+  PRINT *,myid,' debug found all beams'
+
+  !Generate *actual* bond info for melange particles
+  CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+
+ELSE
+
+  ALLOCATE(NCN_Metis(SIZE(NCN_ALL)), CN_Metis(SIZE(CN_all,1),SIZE(CN_All,2)))
+  NCN_Metis = NCN_all
+  CN_Metis = CN_all
+  nprox_metis = nbeams
+  glac_ip = ip
+
+END IF
+
 ALLOCATE(ParticlePart(ip))
 IF(myid==0) THEN
 
   PRINT *,'About to metis'
-  ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nbeams*2))
+  ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nprox_metis*2))
   
   !Put particle connections into CRS format
   xadj = 0
@@ -212,9 +280,9 @@ IF(myid==0) THEN
   counter = 0
   xadj(1) = 1
   DO i=1,ip
-    DO j=1,NCN_All(i)
+    DO j=1,NCN_metis(i)
       counter = counter + 1
-      adjncy(counter) = CN_All(i,j)
+      adjncy(counter) = CN_metis(i,j)
     END DO
     xadj(i+1) = counter+1
   END DO
@@ -283,15 +351,29 @@ DO i=1,ip
     NRXF%PartInfo(1,counter) = myid !belong to our partition
     NRXF%PartInfo(2,counter) = counter !with localID = counter
     
-    NCN(counter) = NCN_All(i)
-    DO j=1,NCN(counter)
-      !CN_All, NCN_All
-      CN(counter,j) = CN_All(i,j)
-      pown = particlepart(CN_All(i,j))
-      CNpart(counter,j) = pown
+    IF(i <= glac_ip) THEN
+      NCN(counter) = NCN_All(i)
+      DO j=1,NCN(counter)
+        !CN_All, NCN_All
+        CN(counter,j) = CN_All(i,j)
+        pown = particlepart(CN_All(i,j))
+        CNpart(counter,j) = pown
 
-      IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
-    END DO
+        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
+      END DO
+    ELSE
+      !Melange bonds
+      ix = i - glac_ip
+      NCN(counter) = NCN_Melange(ix) 
+      DO j=1,NCN(counter)
+        !TODO - need an offset here? melange particles on the end of the ice particles
+        CN(counter,j) = CN_melange(ix,j)
+        pown = particlepart(CN_melange(i,j))
+        CNpart(counter,j) = pown
+
+        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
+      END DO
+    END IF
   END IF
 END DO
 
@@ -445,6 +527,7 @@ IF(DebugMode .AND. .FALSE.) THEN
   PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
 END IF
 
+IF(melange_data%active) DEALLOCATE(NCN_metis, CN_metis)
 !We return:
 ! Our nodes initial locs  - NRXF
 ! Our node global numbers - particles_G

@@ -67,7 +67,7 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
     CALL PointDataInit(mel_data(i)%UTM,mel_data(i)%NRXF)
 
   END DO
-  PRINT *,'Debug, total number of particles in melange sim: ',mel_nn
+  PRINT *,'Debug, total number of particles in melange: ',mel_nn
 
   mel_pstrt(0) = 1
   DO i=1,mel_parts-1
@@ -249,10 +249,16 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
   eps = 1.0
   search_dist = SCL*1.0
 
+  PRINT *,myid,' debug pruning melange - particles: ',melange_data%NN, ' conns: ',&
+       melange_data%NTOT,' ip: ',ip
+
   ALLOCATE(NodeRemove(melange_data%NN),&
        NANRemove(melange_data%NTOT),&
        Points(ip),&
        ngb_ids(100))
+
+  PRINT *,myid,' survived allocation'
+
 
   nodeRemove = .FALSE.
   NANRemove = .FALSE.
@@ -271,9 +277,13 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
   oct_bbox(2,2) = MAXVAL(xo(2,:)) + eps + search_dist
   oct_bbox(2,3) = MAXVAL(xo(3,:)) + eps + search_dist
 
+  PRINT *,myid,' initializing octree'
   CALL Octree_init(max_depth=10, max_num_point=6,bbox=oct_bbox)
 
+  PRINT *,myid,' building octree'
   CALL Octree_build(Points)
+
+  PRINT *,myid,' searching octree'
 
   DO i=1,melange_data%NN
     num_ngb = 0
@@ -287,6 +297,9 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
 
     IF(num_ngb > 0) nodeRemove(i) = .TRUE.
   END DO
+
+  PRINT *,myid,' destroying octree'
+
   CALL Octree_final()
 
   PRINT *,'Debug, removing ',COUNT(nodeRemove),' of ',SIZE(nodeRemove),&
@@ -351,6 +364,8 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
 
   melange_data % NRXF % NN = pruned_NN
   melange_data % NN = pruned_NN
+  melange_data % NTOT = pruned_NTOT
+
   !TODO - what else to update?
 
   DEALLOCATE(melange_data%NRXF%A)
@@ -393,5 +408,35 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
   END DO
   
 END SUBROUTINE Prune_Melange
+
+!Convert the 'NAN' info from previous simulation into 'NCN' and 'CN'
+SUBROUTINE MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+  TYPE(MelangeDataHolder_t) :: melange_data
+  INTEGER, ALLOCATABLE :: NCN_melange(:), CN_melange(:,:)
+  INTEGER :: nbeams_mel, glac_ip
+  !--------------------------
+  INTEGER :: i,NN,N1,N2
+
+  NN = melange_data % NN
+  nbeams_mel = 0
+
+  ALLOCATE(NCN_melange(NN), CN_melange(NN, 12))
+  NCN_melange = 0
+  CN_melange = 0
+
+  !Now generate NCN, CN
+  DO i=1,melange_data % NTOT
+    N1 = melange_data % NANS(1,i)
+    N2 = melange_data % NANS(2,i)
+
+    NCN_melange(N1) = NCN_melange(N1) + 1
+    NCN_melange(N2) = NCN_melange(N2) + 1
+
+    CN_melange(N1,NCN_Melange(N1)) = N2 + glac_ip
+    CN_melange(N2,NCN_Melange(N2)) = N1 + glac_ip
+  END DO
+
+  nbeams_mel = melange_data % NTOT
+END SUBROUTINE MelangeBonds
 
 END MODULE Melange
