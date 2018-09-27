@@ -221,9 +221,9 @@ IF(melange_data % active)  THEN
 
   !Seems like root never makes it here...
   PRINT *,myid,' debug about to exchange NN and expand'
-  PRINT *,myid,' ip, melangeNN, tot: ', ip, melange_data%NN, ip + melange_data%NN
   !Send melange particles to other partitions (though most are about to delete them?!)
   CALL MPI_BCast(melange_data%NN,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  PRINT *,myid,' ip, melangeNN, tot: ', ip, melange_data%NN, ip + melange_data%NN
   IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
 
   PRINT *,myid,' debug about to fill xo'

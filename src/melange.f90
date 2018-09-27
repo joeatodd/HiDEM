@@ -270,12 +270,12 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
     Points(i) % x(3) = xo(3,i)
   END DO
 
-  oct_bbox(1,1) = MINVAL(xo(1,:)) - eps - search_dist
-  oct_bbox(1,2) = MINVAL(xo(2,:)) - eps - search_dist
-  oct_bbox(1,3) = MINVAL(xo(3,:)) - eps - search_dist
-  oct_bbox(2,1) = MAXVAL(xo(1,:)) + eps + search_dist
-  oct_bbox(2,2) = MAXVAL(xo(2,:)) + eps + search_dist
-  oct_bbox(2,3) = MAXVAL(xo(3,:)) + eps + search_dist
+  oct_bbox(1,1) = MINVAL(xo(1,1:ip)) - eps - search_dist
+  oct_bbox(1,2) = MINVAL(xo(2,1:ip)) - eps - search_dist
+  oct_bbox(1,3) = MINVAL(xo(3,1:ip)) - eps - search_dist
+  oct_bbox(2,1) = MAXVAL(xo(1,1:ip)) + eps + search_dist
+  oct_bbox(2,2) = MAXVAL(xo(2,1:ip)) + eps + search_dist
+  oct_bbox(2,3) = MAXVAL(xo(3,1:ip)) + eps + search_dist
 
   PRINT *,myid,' initializing octree'
   CALL Octree_init(max_depth=10, max_num_point=6,bbox=oct_bbox)
