@@ -96,6 +96,8 @@ TYPE(MelangeDataHolder_t) :: melange_data
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
 
+!DebugMode = .TRUE.
+
 ALLOCATE(xo(3,NOMA))
 
 b=SCL*box/REAL(l,8)  ! the size of the unit cell is the box length divided by l
@@ -239,34 +241,38 @@ IF(melange_data % active)  THEN
     END DO
   END IF
 
-  PRINT *,myid,' debug about to bcast xo: ',melange_data%NN,ip,SIZE(xo,2),&
-       SIZE(xo(:,ip+1:),1),SIZE(xo(:,ip+1:),2)
+  !Send the melange particles
   CALL MPI_BCast(xo(:,ip+1:),melange_data%NN*3,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
   glac_ip = ip
   ip = ip + melange_data%NN
 
-  DO i=1,ip
-    IF(ALL(xo(:,i) < 1.0)) PRINT *,myid,' debug xo ',i,' : ',xo(:,i)
-  END DO
-  PRINT *,myid,' debug about to find all beams'
+  IF(myid==0) THEN
+    
+    !Find nearby particles - this is important for partitioning
+    !Because melange (unlike glacier) begins largely broken, connection info for
+    !metis needs *proximity* rather than beams
+    CALL FindNNearest(xo,ip,12,SCL, CN_metis)
 
-  !Find nearby particles - this is important for partitioning
-  !Because melange (unlike glacier) begins largely broken, connection info for
-  !metis needs *proximity* rather than beams
-  CALL FindBeams(xo,ip,SCL,NCN_metis, CN_metis, nprox_metis, SCL*1.5)
+    ALLOCATE(NCN_metis(ip))
+    nprox_metis = 12 * ip
+    NCN_metis = 12
 
-  PRINT *,myid,' debug found all beams'
+    !Generate *actual* bond info for melange particles
+    CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+  END IF
 
-  !Generate *actual* bond info for melange particles
-  CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
-
+  !Send the melange bond info to other partitions
+  CALL MPI_BCast(NCN_melange, melange_data%NN,MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 ELSE
 
-  ALLOCATE(NCN_Metis(SIZE(NCN_ALL)), CN_Metis(SIZE(CN_all,1),SIZE(CN_All,2)))
-  NCN_Metis = NCN_all
-  CN_Metis = CN_all
-  nprox_metis = nbeams
+  IF(myid==0) THEN
+    ALLOCATE(NCN_Metis(SIZE(NCN_ALL)), CN_Metis(SIZE(CN_all,1),SIZE(CN_All,2)))
+    NCN_Metis = NCN_all
+    CN_Metis = CN_all
+    nprox_metis = nbeams
+  END IF
+  
   glac_ip = ip
 
 END IF
