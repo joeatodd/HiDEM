@@ -214,16 +214,18 @@ IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 IF(melange_data % active)  THEN
 
   IF(myid==0) THEN
-    !Get rid of any particles which overlap w/ the glacier geometry
+    !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
     CALL Prune_Melange(melange_data, xo, ip,SCL)
 
   END IF
 
-  !Seems like root never makes it here...
   PRINT *,myid,' debug about to exchange NN and expand'
-  !Send melange particles to other partitions (though most are about to delete them?!)
+
+  !Send count of melange particles to other partitions (though most are about to delete them?!)
   CALL MPI_BCast(melange_data%NN,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
   PRINT *,myid,' ip, melangeNN, tot: ', ip, melange_data%NN, ip + melange_data%NN
+
+  !Expand xo to make room for melange particles
   IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
 
   PRINT *,myid,' debug about to fill xo'
@@ -367,7 +369,7 @@ DO i=1,ip
       ix = i - glac_ip
       NCN(counter) = NCN_Melange(ix) 
       DO j=1,NCN(counter)
-        !TODO - need an offset here? melange particles on the end of the ice particles
+
         CN(counter,j) = CN_melange(ix,j)
         pown = particlepart(CN_melange(i,j))
         CNpart(counter,j) = pown
@@ -1504,7 +1506,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
     Points(i) % x(2) = xo(2,i)
     Points(i) % x(3) = xo(3,i)
   END DO
-  !octree build misses points...
+
   CALL Octree_build(Points)
 
   ALLOCATE(ngb_ids(100))
@@ -1533,11 +1535,105 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
   END DO
 
   IF(DebugMode) PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
-  !SUM(NCN) is too large compared to nbeams
-  !For some reason, testing id(j) > i doesn't produce right number of beams
 CALL Octree_final()
 
 END SUBROUTINE FindBeams
+
+!Use octree search to find nearest N particles to each particle
+SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
+  
+  USE Octree
+
+  REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
+  REAL(KIND=dp) :: SCL
+  INTEGER :: ip,nfind
+  INTEGER, ALLOCATABLE :: CN(:,:)
+  !-----------------------
+  !octree stuff
+  type(point_type), allocatable :: points(:)
+  INTEGER i,j,k, num_ngb,counter
+  INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), NCN(:)
+  REAL(KIND=dp), ALLOCATABLE :: ngb_dists(:)
+  REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
+  REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
+
+  IF(nfind > ip) CALL FatalError("Requested too many nearest particles for particle count!")
+
+  eps = 1.0
+
+  ALLOCATE(points(ip),&
+       NCN(ip),&
+       CN(ip,nfind)) 
+
+  NCN = 0
+  CN = 0
+
+  !Get the octree bounding box
+  DO i=1,3
+    oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
+    oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
+  END DO
+
+  CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
+
+  DO i=1,ip
+    Points(i) % id = i
+    Points(i) % x(1) = xo(1,i)
+    Points(i) % x(2) = xo(2,i)
+    Points(i) % x(3) = xo(3,i)
+  END DO
+
+  CALL Octree_build(Points)
+
+  ALLOCATE(ngb_ids(MAX(1000,10*nfind)), ngb_dists(MAX(1000,10*nfind)))
+
+  !Need to iterate over progressively larger search distances, only
+  !searching for those which don't already have sufficient neighbours
+  !We can begin with those which are connected by beams
+
+  !Start with beams
+  searchdist = SCL * (1.6**0.5)
+
+  DO WHILE(.TRUE.) 
+    DO i=1,ip
+
+      !Already got sufficient neighbours for this node
+      IF(NCN(i) == nfind) CYCLE
+
+      num_ngb = 0
+      ngb_ids = 0
+      ngb_dists = 0.0
+      CALL Octree_search(points(i) % x, searchdist, num_ngb, ngb_ids, ngb_dists=ngb_dists)
+
+      !Didn't find enough this time (including self) - need to cycle anyway 
+      !so don't bother putting neighbours
+      IF(num_ngb <= nfind) CYCLE
+
+      CALL sort_real2(ngb_dists, ngb_ids, num_ngb)
+
+      counter = 0
+      DO j=1,num_ngb
+        IF(ngb_ids(j) == i) CYCLE !should be the first sorted
+        counter = counter+1
+
+        CN(i,counter) = ngb_ids(j)
+        IF(counter == nfind) EXIT
+      END DO
+      NCN(i) = counter
+
+    END DO
+    
+    !quit if we're done
+    IF(ALL(NCN == nfind)) EXIT
+
+    !else double search dist and try again
+    searchdist = searchdist * 2.0
+  END DO
+
+
+CALL Octree_final()
+
+END SUBROUTINE FindNNearest
 
 SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
      T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
