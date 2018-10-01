@@ -148,7 +148,7 @@ END IF
 
    IF(gotMelange) THEN
      melange_data % active = .TRUE.
-     IF(myid==0) CALL LoadMelange(MelRunName, wrkdir, melange_data)
+     CALL LoadMelange(MelRunName, wrkdir, melange_data)
    END IF
 
 ! S = width/thickness of the beams, scaled by SCL

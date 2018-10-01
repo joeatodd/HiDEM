@@ -96,8 +96,6 @@ TYPE(MelangeDataHolder_t) :: melange_data
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
 
-!DebugMode = .TRUE.
-
 ALLOCATE(xo(3,NOMA))
 
 b=SCL*box/REAL(l,8)  ! the size of the unit cell is the box length divided by l
@@ -215,34 +213,22 @@ IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 !(for the model)
 IF(melange_data % active)  THEN
 
-  IF(myid==0) THEN
-    !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
-    CALL Prune_Melange(melange_data, xo, ip,SCL)
-
-  END IF
+  !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
+  CALL Prune_Melange(melange_data, xo, ip,SCL)
 
   PRINT *,myid,' debug about to exchange NN and expand'
-
-  !Send count of melange particles to other partitions (though most are about to delete them?!)
-  CALL MPI_BCast(melange_data%NN,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
-  PRINT *,myid,' ip, melangeNN, tot: ', ip, melange_data%NN, ip + melange_data%NN
 
   !Expand xo to make room for melange particles
   IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
 
   PRINT *,myid,' debug about to fill xo'
 
-  IF(myid==0) THEN
-    !Append melange particles to particle list
-    DO i=1,melange_data%NN
-      xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
-      xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
-      xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
-    END DO
-  END IF
-
-  !Send the melange particles
-  CALL MPI_BCast(xo(:,ip+1:),melange_data%NN*3,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+  !Append melange particles to particle list
+  DO i=1,melange_data%NN
+    xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
+    xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
+    xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
+  END DO
 
   glac_ip = ip
   ip = ip + melange_data%NN
@@ -258,12 +244,11 @@ IF(melange_data % active)  THEN
     nprox_metis = 12 * ip
     NCN_metis = 12
 
-    !Generate *actual* bond info for melange particles
-    CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
   END IF
 
-  !Send the melange bond info to other partitions
-  CALL MPI_BCast(NCN_melange, melange_data%NN,MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+  !Generate *actual* bond info for melange particles
+  CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+
 ELSE
 
   IF(myid==0) THEN
@@ -377,7 +362,7 @@ DO i=1,ip
       DO j=1,NCN(counter)
 
         CN(counter,j) = CN_melange(ix,j)
-        pown = particlepart(CN_melange(i,j))
+        pown = particlepart(CN_melange(ix,j))
         CNpart(counter,j) = pown
 
         IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
@@ -536,7 +521,7 @@ IF(DebugMode .AND. .FALSE.) THEN
   PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
 END IF
 
-IF(melange_data%active) DEALLOCATE(NCN_metis, CN_metis)
+IF(melange_data%active .AND. myid==0) DEALLOCATE(NCN_metis, CN_metis)
 !We return:
 ! Our nodes initial locs  - NRXF
 ! Our node global numbers - particles_G
