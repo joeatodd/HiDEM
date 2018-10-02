@@ -181,6 +181,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Work Directory | wrkdir | The subdirectory in which to store working files (directory must exist!) | . |
 | Results Directory | resdir | The subdirectory in which to store result files (directory must exist!) | . |
 | Geometry File | geomfile | The name of the file which defines the geometry (see above) | False |
+| Melange Run Name  | MelRunName | The name of the simulation from which to read melange. |  |
 | Density | RHO | The density of the material (ice) | 900 |
 | Water Density | RHOW | The density of the water in which the ice floats | 1030 |
 | Gravity | GRAV | Magnitude of gravity (positive!) | 9.81 |
