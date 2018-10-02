@@ -1,7 +1,0 @@
-front_orientation: -0.9008556490535132 -0.43411876205523897 0.0
-upstream_extent: 5000.0
-downstream_extent: 1000.0
-grid_res: 10.0
-front_id: 1
-bed_id: 5
-surf_id: 6
