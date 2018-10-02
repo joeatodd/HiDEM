@@ -52,6 +52,20 @@ MODULE TypeDefs
      REAL(KIND=dp), POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
   END TYPE UT_t
 
+  !Loading melange from a previous sim requires one partition reading *all* partitions info
+  ! for flexiblity. Therefore need an allocatable datastructure to allow holding all that info
+  TYPE MelangeDataHolder_t
+     REAL(KIND=dp), ALLOCATABLE :: EFS(:)
+     REAL(KIND=dp) :: BBox(6)
+     INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:),NDL(:,:)
+     TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
+     TYPE(NRXF_t) :: NRXF
+     TYPE(UT_t) ::  UT, UTM
+     INTEGER :: NTOT,NN,ND
+     LOGICAL, ALLOCATABLE :: IsOutlier(:), IsLost(:),PartIsNeighbour(:)
+     LOGICAL :: Active=.FALSE.
+  END TYPE MelangeDataHolder_t
+
 
   TYPE PointEx_t
      INTEGER :: partid=-1,scount=0,rcount=0

@@ -177,12 +177,13 @@ contains
 
   end subroutine octree_update
 
-  recursive subroutine octree_search(x, distance, num_ngb_point, ngb_ids, node_)
+  RECURSIVE SUBROUTINE octree_search(x, distance, num_ngb_point, ngb_ids, node_, ngb_dists)
 
     real(KIND=dp), intent(in) :: x(3)
     real(KIND=dp), intent(in) :: distance
     integer, intent(inout) :: num_ngb_point
     integer, intent(inout) :: ngb_ids(:)
+    REAL(KIND=dp), INTENT(out), OPTIONAL :: ngb_dists(:)
     type(node_type), intent(in), target, optional :: node_
 
     type(node_type), pointer :: node
@@ -205,7 +206,7 @@ contains
              x(3)+distance >= node%children(i)%bbox(1, 3) .AND. &
              x(3)-distance <= node%children(i)%bbox(2, 3))) THEN
 
-          call octree_search(x, distance, num_ngb_point, ngb_ids, node%children(i))
+          CALL octree_search(x, distance, num_ngb_point, ngb_ids, node%children(i), ngb_dists)
         end if
       end do
     else
@@ -218,6 +219,9 @@ contains
           num_ngb_point = num_ngb_point + 1
           if (num_ngb_point <= size(ngb_ids)) then
             ngb_ids(num_ngb_point) = node%point_ids(i)
+            IF(PRESENT(ngb_dists)) THEN
+              ngb_dists(num_ngb_point) = SQRT(dot_PRODUCT(dx,dx))
+            END IF
           else
             write(6, "('[Error]: octree: The ngb_ids array size is not enough!')")
             PRINT *,'Point is: ',x(:)

@@ -28,16 +28,17 @@ CONTAINS
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
       DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, OUTINT, RESOUTINT, &
       MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
+      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack, gotMelange, MelRunName)
+
    REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL(KIND=dp) :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
    REAL(KIND=dp) :: fractime,viscforce,viscdist
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
-   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
+   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,MelRunName,wrkdir,&
         resdir,restname
    LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
-        FixBack,GeomMasked,doShearLine
+        FixBack,GeomMasked,doShearLine,gotMelange
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -85,6 +86,7 @@ CONTAINS
    GeomMasked = .FALSE.
    DebugMode = .FALSE.
    PrintTimes = .FALSE.
+   gotMelange = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -205,6 +207,9 @@ CONTAINS
        READ(VarValue,*) DebugMode
      CASE("print times")
        READ(VarValue,*) PrintTimes
+     CASE("melange run name")
+       READ(VarValue,*) MelRunName
+       gotMelange = .TRUE.
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -223,6 +228,7 @@ CONTAINS
    IF(.NOT. gotRestName .AND. REST == 1) THEN
      restname = runname
    END IF
+   IF(REST == 1 .AND. gotMelange) CALL FatalError("Can't restart and load melange in same run!")
 
    IF(FixLat .AND. .NOT. GeomMasked) THEN
      CALL FatalError("'Fixed Lateral Margin' requires a geometry file with mask")

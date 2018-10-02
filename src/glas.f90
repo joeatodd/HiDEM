@@ -14,7 +14,7 @@ CONTAINS
 !ntasks - how many cores
 !myid - this partition id
 SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,&
-     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName)
+     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName,melange_data)
 
   IMPLICIT NONE
 
@@ -30,6 +30,7 @@ LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t) :: NRXF
 TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
+TYPE(MelangeDataHolder_t) :: melange_data
 !Open(300,file='mass.dat',STATUS='OLD')
 
  12    FORMAT(2I8,' ',2F14.7)
@@ -46,7 +47,7 @@ melt = melta*0.0_dp
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
 CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
-     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
+     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
 
 CLOSE(400)
 
@@ -56,9 +57,10 @@ END SUBROUTINE FIBG3
 
 
 SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
-     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName)
+     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
+     melange_data)
 
-  !USE INOUT
+  USE Melange
 
   IMPLICIT NONE
 
@@ -70,10 +72,11 @@ REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
 REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
-INTEGER i,j,k,n,K1,k2,l,ip,NN,nb,xk,yk,nx,ny,nbeams,ierr,pown
+INTEGER i,j,k,n,ix,K1,k2,l,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
 INTEGER NTOT,neighcount
 INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
      particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
+INTEGER, ALLOCATABLE :: NCN_metis(:),CN_metis(:,:),NCN_Melange(:), CN_Melange(:,:)
 CHARACTER(LEN=256) :: wrkdir,runname
 LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
@@ -88,6 +91,7 @@ REAL(KIND=dp), POINTER :: tpwgts=>NULL(),ubvec=>NULL()
 TYPE(NRXF_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
 TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
+TYPE(MelangeDataHolder_t) :: melange_data
 
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
@@ -126,6 +130,11 @@ ny = CEILING(((gridmaxy - gridminy) * grid) / b)
 minx = (gridminx * grid) + origin(1)
 miny = (gridminy * grid) + origin(2)
 
+!TODO - This is done on all processes, but needs only
+!be done by 0 and then transmitted. Lots of duplication in 
+!memory here. This, as well as the serial partitioning, restrict
+!the upper limit of simulation size.
+
 !nx (ny) is the number of boxes in the x (y) direction
 ip=0
 DO i=1,nx !x step
@@ -141,6 +150,7 @@ DO i=1,nx !x step
         yk = FLOOR((y-origin(2))/grid)
 
         !just beyond edge of geom def
+        IF(xk < 0 .OR. yk < 0) CYCLE
         IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
 
         bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
@@ -197,11 +207,66 @@ IF(PrintTimes) CALL CPU_TIME(T2)
 
 IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
+!If we are adding melange from a previous simulation, the equivalence between
+!proximity and 'bonded particles' breaks down, so we need to separately determine
+!which particles are proximal (for metis partitioning) and which are actually bonded
+!(for the model)
+IF(melange_data % active)  THEN
+
+  !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
+  CALL Prune_Melange(melange_data, xo, ip,SCL)
+
+  PRINT *,myid,' debug about to exchange NN and expand'
+
+  !Expand xo to make room for melange particles
+  IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
+
+  PRINT *,myid,' debug about to fill xo'
+
+  !Append melange particles to particle list
+  DO i=1,melange_data%NN
+    xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
+    xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
+    xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
+  END DO
+
+  glac_ip = ip
+  ip = ip + melange_data%NN
+
+  IF(myid==0) THEN
+    
+    !Find nearby particles - this is important for partitioning
+    !Because melange (unlike glacier) begins largely broken, connection info for
+    !metis needs *proximity* rather than beams
+    CALL FindNNearest(xo,ip,12,SCL, CN_metis)
+
+    ALLOCATE(NCN_metis(ip))
+    nprox_metis = 12 * ip
+    NCN_metis = 12
+
+  END IF
+
+  !Generate *actual* bond info for melange particles
+  CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+
+ELSE
+
+  IF(myid==0) THEN
+    ALLOCATE(NCN_Metis(SIZE(NCN_ALL)), CN_Metis(SIZE(CN_all,1),SIZE(CN_All,2)))
+    NCN_Metis = NCN_all
+    CN_Metis = CN_all
+    nprox_metis = nbeams
+  END IF
+  
+  glac_ip = ip
+
+END IF
+
 ALLOCATE(ParticlePart(ip))
 IF(myid==0) THEN
 
   PRINT *,'About to metis'
-  ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nbeams*2))
+  ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nprox_metis*2))
   
   !Put particle connections into CRS format
   xadj = 0
@@ -209,9 +274,9 @@ IF(myid==0) THEN
   counter = 0
   xadj(1) = 1
   DO i=1,ip
-    DO j=1,NCN_All(i)
+    DO j=1,NCN_metis(i)
       counter = counter + 1
-      adjncy(counter) = CN_All(i,j)
+      adjncy(counter) = CN_metis(i,j)
     END DO
     xadj(i+1) = counter+1
   END DO
@@ -280,15 +345,29 @@ DO i=1,ip
     NRXF%PartInfo(1,counter) = myid !belong to our partition
     NRXF%PartInfo(2,counter) = counter !with localID = counter
     
-    NCN(counter) = NCN_All(i)
-    DO j=1,NCN(counter)
-      !CN_All, NCN_All
-      CN(counter,j) = CN_All(i,j)
-      pown = particlepart(CN_All(i,j))
-      CNpart(counter,j) = pown
+    IF(i <= glac_ip) THEN
+      NCN(counter) = NCN_All(i)
+      DO j=1,NCN(counter)
+        !CN_All, NCN_All
+        CN(counter,j) = CN_All(i,j)
+        pown = particlepart(CN_All(i,j))
+        CNpart(counter,j) = pown
 
-      IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
-    END DO
+        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
+      END DO
+    ELSE
+      !Melange bonds
+      ix = i - glac_ip
+      NCN(counter) = NCN_Melange(ix) 
+      DO j=1,NCN(counter)
+
+        CN(counter,j) = CN_melange(ix,j)
+        pown = particlepart(CN_melange(ix,j))
+        CNpart(counter,j) = pown
+
+        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
+      END DO
+    END IF
   END IF
 END DO
 
@@ -442,6 +521,7 @@ IF(DebugMode .AND. .FALSE.) THEN
   PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
 END IF
 
+IF(melange_data%active .AND. myid==0) DEALLOCATE(NCN_metis, CN_metis)
 !We return:
 ! Our nodes initial locs  - NRXF
 ! Our node global numbers - particles_G
@@ -1242,7 +1322,7 @@ END SUBROUTINE ExchangeEFS
 
 !Use octree search to find nodes which are nearby
 !Direct contact is identified by circ
-SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
+SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,search_dist,ND,NDL)
 
   USE Octree
 
@@ -1250,21 +1330,21 @@ SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,SCL,LNN,ND,NDL)
   TYPE(UT_t) :: UT
   INTEGER :: NN,ND
   INTEGER, ALLOCATABLE :: NDL(:,:)
-  REAL(KIND=dp) :: SCL, LNN, BBox(6)
+  REAL(KIND=dp) :: search_dist, LNN, BBox(6)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
   INTEGER i,j,cnt,npoints, num_ngb, totsize
   INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), point_loc(:)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps,T1,T2
-  REAL(KIND=dp) :: search_dist,tstrt,tend
+  REAL(KIND=dp) :: tstrt,tend
 
   REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2
   INTEGER :: id
   CALL CPU_Time(tstrt)
 
   eps = 1.0
-  search_dist = 1.87 * SCL
+!  search_dist = 1.87 * SCL
   npoints = COUNT(NRXF%PartInfo(1,:) /= -1)
   totsize = SIZE(NRXF%PartInfo,2)
 
@@ -1361,13 +1441,14 @@ END SUBROUTINE FindNearbyParticles
 
 
 !Use octree search to find nodes which are in contact
-SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
+SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
   
   USE Octree
 
   REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
   REAL(KIND=dp) :: SCL
-  INTEGER :: ip,nbeams
+  REAL(KIND=dp), OPTIONAL :: searchdist_in
+  INTEGER :: ip,nbeams,max_neigh
   INTEGER, ALLOCATABLE :: NCN(:), CN(:,:)
   !-----------------------
   !octree stuff
@@ -1377,9 +1458,21 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
   REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
 
+  IF(PRESENT(searchdist_in)) THEN
+    !If a search distance is given, we can't assume there'll only
+    !be 12 neighbours - go for 30
+    searchdist = searchdist_in
+    max_neigh = 30
+  ELSE 
+    !Default usage - we are looking for particles which share a beam
+    !FCC lattice = 12 neighbours
+    searchdist = SCL * (1.6**0.5)
+    max_neigh = 12
+  END IF
+
   ALLOCATE(points(ip),&
        NCN(ip),&
-       CN(ip,12)) 
+       CN(ip,max_neigh)) 
 
   eps = 1.0
 
@@ -1391,9 +1484,6 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
     oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
   END DO
-
-
-  searchdist = SCL * (1.6**0.5)
 
   !TODO - determine optimal depth - SCL vs bbox length?
   !  mdepth 20, m points 6 was determined for a particular case
@@ -1407,7 +1497,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     Points(i) % x(2) = xo(2,i)
     Points(i) % x(3) = xo(3,i)
   END DO
-  !octree build misses points...
+
   CALL Octree_build(Points)
 
   ALLOCATE(ngb_ids(100))
@@ -1421,7 +1511,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
     DO j=1,num_ngb
       IF(ngb_ids(j) == i) CYCLE
       counter = counter+1
-      IF(counter > 12) THEN 
+      IF(counter > max_neigh) THEN 
         CALL Warn("FindBeams found too many neighbours, ignoring...")
         EXIT
       END IF
@@ -1436,11 +1526,105 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams)
   END DO
 
   IF(DebugMode) PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
-  !SUM(NCN) is too large compared to nbeams
-  !For some reason, testing id(j) > i doesn't produce right number of beams
 CALL Octree_final()
 
 END SUBROUTINE FindBeams
+
+!Use octree search to find nearest N particles to each particle
+SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
+  
+  USE Octree
+
+  REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
+  REAL(KIND=dp) :: SCL
+  INTEGER :: ip,nfind
+  INTEGER, ALLOCATABLE :: CN(:,:)
+  !-----------------------
+  !octree stuff
+  type(point_type), allocatable :: points(:)
+  INTEGER i,j,k, num_ngb,counter
+  INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), NCN(:)
+  REAL(KIND=dp), ALLOCATABLE :: ngb_dists(:)
+  REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
+  REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
+
+  IF(nfind > ip) CALL FatalError("Requested too many nearest particles for particle count!")
+
+  eps = 1.0
+
+  ALLOCATE(points(ip),&
+       NCN(ip),&
+       CN(ip,nfind)) 
+
+  NCN = 0
+  CN = 0
+
+  !Get the octree bounding box
+  DO i=1,3
+    oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
+    oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
+  END DO
+
+  CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
+
+  DO i=1,ip
+    Points(i) % id = i
+    Points(i) % x(1) = xo(1,i)
+    Points(i) % x(2) = xo(2,i)
+    Points(i) % x(3) = xo(3,i)
+  END DO
+
+  CALL Octree_build(Points)
+
+  ALLOCATE(ngb_ids(MAX(1000,10*nfind)), ngb_dists(MAX(1000,10*nfind)))
+
+  !Need to iterate over progressively larger search distances, only
+  !searching for those which don't already have sufficient neighbours
+  !We can begin with those which are connected by beams
+
+  !Start with beams
+  searchdist = SCL * (1.6**0.5)
+
+  DO WHILE(.TRUE.) 
+    DO i=1,ip
+
+      !Already got sufficient neighbours for this node
+      IF(NCN(i) == nfind) CYCLE
+
+      num_ngb = 0
+      ngb_ids = 0
+      ngb_dists = 0.0
+      CALL Octree_search(points(i) % x, searchdist, num_ngb, ngb_ids, ngb_dists=ngb_dists)
+
+      !Didn't find enough this time (including self) - need to cycle anyway 
+      !so don't bother putting neighbours
+      IF(num_ngb <= nfind) CYCLE
+
+      CALL sort_real2(ngb_dists, ngb_ids, num_ngb)
+
+      counter = 0
+      DO j=1,num_ngb
+        IF(ngb_ids(j) == i) CYCLE !should be the first sorted
+        counter = counter+1
+
+        CN(i,counter) = ngb_ids(j)
+        IF(counter == nfind) EXIT
+      END DO
+      NCN(i) = counter
+
+    END DO
+    
+    !quit if we're done
+    IF(ALL(NCN == nfind)) EXIT
+
+    !else double search dist and try again
+    searchdist = searchdist * 2.0
+  END DO
+
+
+CALL Octree_final()
+
+END SUBROUTINE FindNNearest
 
 SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
      T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
