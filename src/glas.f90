@@ -235,6 +235,11 @@ IF(melange_data % active)  THEN
 
   IF(myid==0) THEN
     
+    !TODO - issue here, this doesn't completely solve the partitioning problem
+    ! disconnected groups of >12 particles are lost...
+    ! Really need to detect these disconnected groups and connect them? 
+    ! Or is there a better way?
+
     !Find nearby particles - this is important for partitioning
     !Because melange (unlike glacier) begins largely broken, connection info for
     !metis needs *proximity* rather than beams
@@ -243,6 +248,7 @@ IF(melange_data % active)  THEN
     ALLOCATE(NCN_metis(ip))
     nprox_metis = 12 * ip
     NCN_metis = 12
+    CALL EnsureDualGraph(CN_Metis,NCN_metis)
 
   END IF
 
@@ -1625,6 +1631,38 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
 CALL Octree_final()
 
 END SUBROUTINE FindNNearest
+
+!Checks that connectivity info between particles
+!goes both ways (i.e. a proper dual-graph)
+SUBROUTINE EnsureDualGraph(CN,NCN)
+  INTEGER, ALLOCATABLE :: CN(:,:), NCN(:)
+  !----------------------------------
+  INTEGER, ALLOCATABLE :: work_CN(:,:)
+  INTEGER :: i,j,n,NN,neigh
+
+  NN = SIZE(NCN)
+  n = MAXVAL(NCN)
+
+  ALLOCATE(work_CN(NN,n*2))
+  work_CN = 0
+  work_CN(:,1:n) = CN
+
+  DO i=1,NN
+    DO j=1,NCN(i)
+      neigh = work_CN(i,j)
+      IF(.NOT. ANY(work_CN(neigh,:) == i)) THEN
+        NCN(neigh) = NCN(neigh) + 1
+        work_CN(neigh, NCN(neigh)) = i
+      END IF
+    END DO
+  END DO
+
+  n = MAXVAL(NCN)
+  DEALLOCATE(CN)
+  ALLOCATE(CN(NN,n))
+  CN(:,:) = work_CN(:,1:n)
+
+END SUBROUTINE EnsureDualGraph
 
 SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
      T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
