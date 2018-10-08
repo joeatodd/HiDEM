@@ -379,7 +379,7 @@ END IF
         IF(.NOT. FileExists) CALL FatalError("Running with too many cores!&
              &(some restart files don't exist)")
 
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD',ACTION="read")
         READ(117+myid,*) NN,cstrt,NC,pstrt,NP,NSIZE,NTOT,BCC
         READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
         READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
@@ -406,7 +406,7 @@ END IF
              IsLost(NN))
 
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD',ACTION="read")
 	DO I=1,NTOT
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
       	CT(12*I-8),CT(12*I-7),CT(12*I-6)
@@ -415,7 +415,7 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD',ACTION="read")
 	DO I=1,NN
 	READ(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),&
       	UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
@@ -426,7 +426,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read particle init pos from file if restarting
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_NODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_NODFIL2'//na(myid),STATUS='UNKNOWN',ACTION="read")
 	DO I=1,NN
           READ(117+myid,*) IX,X,Y,Z,M
           NRXF%M(1,IX)=X
@@ -438,7 +438,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read in the partition & id of particles we share from other partitions
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN',ACTION="read")
 	DO I=1,NC!+NP
           READ(117+myid,*) IX,Part,ID
           IF(IX >= NRXF%pstrt .OR. IX < NRXF%cstrt) THEN
@@ -470,7 +470,7 @@ END IF
         END DO
 
         ALLOCATE(EFS(NTOT), NANS(2,NTOT), NANPart(NTOT))
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_FS'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_FS'//na(myid),STATUS='UNKNOWN',ACTION="read")
         DO I=1,NTOT
           READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
           NANS(1,I)=N1

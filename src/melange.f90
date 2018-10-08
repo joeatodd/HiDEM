@@ -50,7 +50,8 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   mel_nn = 0
   DO i=0,mel_parts-1
 
-    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_REST0'//na(i),STATUS='OLD')
+    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_REST0'//na(i),&
+         STATUS='OLD',ACTION='read')
     READ(117+myid,*) pnn(i),cstrt,NC,pstrt,NP,NSIZE,mel_data(i) % NTOT,BCC
     !    READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
     !    READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
@@ -78,7 +79,7 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   DO i=0,mel_parts-1
 
     OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_NODFIL2'//na(i),&
-         STATUS='UNKNOWN',IOSTAT=ierr)
+         STATUS='UNKNOWN',ACTION='read',IOSTAT=ierr)
     IF(ierr /= 0) CALL FatalError("IO error reading melange _NODFIL2")
 
     DO j=1,pnn(i)
@@ -96,7 +97,7 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   DO i=0,mel_parts-1
 
     OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_ONODFIL2'//na(i),&
-         STATUS='UNKNOWN')
+         STATUS='UNKNOWN',ACTION='read')
     DO j=1,mel_data(i)%NRXF % NC!+NP
       READ(117+myid,*) IX,Part,ID
       IF(IX >= mel_data(i)%NRXF%pstrt .OR. IX < mel_data(i)%NRXF%cstrt) THEN
@@ -136,7 +137,8 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
     ALLOCATE(mel_data(i) % EFS(mel_data(i) % NTOT), &
          mel_data(i) % NANS(2,mel_data(i) % NTOT), &
          mel_data(i) % NANPart(mel_data(i) % NTOT))
-    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_FS'//na(i),STATUS='UNKNOWN')
+    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_FS'//na(i),&
+         STATUS='UNKNOWN',ACTION='read')
     DO j=1,mel_data(i) % NTOT
       READ(117+myid,*) N1,N2,P1,X1,X1,X1,X1,X1,X1,E
       mel_data(i) % NANS(1,j)=N1
@@ -151,7 +153,8 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
     ALLOCATE(mel_data(i) % IsOutlier(mel_data(i) % NN), &
          mel_data(i) % IsLost(mel_data(i) % NN))
 
-    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_REST2'//na(i),STATUS='OLD')
+    OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(MelangeRunName)//'_REST2'//na(i),&
+         STATUS='OLD',ACTION='read')
     DO j=1,pnn(i)
       READ(117+myid,*) mel_data(i)%UT%M(6*J-5),mel_data(i)%UT%M(6*J-4),mel_data(i)%UT%M(6*J-3),&
            mel_data(i)%UT%M(6*J-2),mel_data(i)%UT%M(6*J-1),mel_data(i)%UT%M(6*J-0)
