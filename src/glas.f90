@@ -13,7 +13,7 @@ CONTAINS
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,NCN,CN,CNPart,InvPartInfo,&
+SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,InvPartInfo,&
      neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName,melange_data)
 
   IMPLICIT NONE
@@ -24,7 +24,7 @@ Real(KIND=dp) :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
 REAL(KIND=dp) :: box,b,SCL,origin(2)
 INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
-INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),NANS(:,:),NANPart(:)
+INTEGER, ALLOCATABLE :: particles_G(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile,runname
 LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
@@ -46,7 +46,7 @@ melt = melta*0.0_dp
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
-CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo,&
+CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, InvPartInfo,&
      neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
 
 CLOSE(400)
@@ -56,7 +56,7 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, &
+SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, &
      InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
      melange_data)
 

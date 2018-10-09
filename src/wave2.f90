@@ -75,8 +75,8 @@
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,ENFlushInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
-        INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
-             neighparts(:), NANS(:,:),NANPart(:),FXF(:,:), NDL(:,:),PNN(:)
+        INTEGER, ALLOCATABLE :: particles_G(:),neighparts(:), NANS(:,:),NANPart(:),&
+             FXF(:,:), NDL(:,:),PNN(:)
 
         INTEGER, DIMENSION(8) :: datetime
         LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput,gotMelange
@@ -284,8 +284,8 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, &
-          CN, CNPart, InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
+	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G, &
+          InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
           UC,StrictDomain,GeomMasked,RunName,melange_data)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
