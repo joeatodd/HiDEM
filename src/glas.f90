@@ -74,12 +74,11 @@ REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
 INTEGER i,j,k,n,ix,K1,k2,l,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
 INTEGER NTOT,neighcount
-INTEGER, ALLOCATABLE :: NCN_All(:), CN_All(:,:),NCN(:),CN(:,:),CNPart(:,:),&
-     particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
-INTEGER, ALLOCATABLE :: NCN_metis(:),CN_metis(:,:),NCN_Melange(:), CN_Melange(:,:)
+INTEGER, ALLOCATABLE ::  particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,runname
 LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
+TYPE(Conn_t), ALLOCATABLE :: CN(:),CN_All(:),CN_metis(:),CN_Melange(:)
 
 !metis stuff
 INTEGER :: objval,counter
@@ -202,7 +201,7 @@ IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
 IF(DebugMode) PRINT *,myid,' Finding connections...'
 
 IF(PrintTimes) CALL CPU_TIME(T1)
-CALL FindBeams(xo, ip, SCL, NCN_All, CN_All, nbeams)
+CALL FindBeams(xo, ip, SCL, CN_All, nbeams)
 IF(PrintTimes) CALL CPU_TIME(T2)
 
 IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
@@ -244,23 +243,26 @@ IF(melange_data % active)  THEN
     !Because melange (unlike glacier) begins largely broken, connection info for
     !metis needs *proximity* rather than beams
     CALL FindNNearest(xo,ip,12,SCL, CN_metis)
-
-    ALLOCATE(NCN_metis(ip))
     nprox_metis = 12 * ip
-    NCN_metis = 12
-    CALL EnsureDualGraph(CN_Metis,NCN_metis)
+
+    CALL EnsureDualGraph(CN_Metis)
+    CALL ConnectRegions(xo, CN_metis, SCL)
 
   END IF
 
   !Generate *actual* bond info for melange particles
-  CALL MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+  CALL MelangeBonds(melange_data, glac_ip, CN_melange, nbeams_mel)
 
 ELSE
 
   IF(myid==0) THEN
-    ALLOCATE(NCN_Metis(SIZE(NCN_ALL)), CN_Metis(SIZE(CN_all,1),SIZE(CN_All,2)))
-    NCN_Metis = NCN_all
-    CN_Metis = CN_all
+
+    ALLOCATE(CN_Metis(ip))
+    DO i=1,ip
+      ALLOCATE(CN_metis(i) % Conn(CN_ALL(i) % NCN))
+      CN_metis(i) % NCN = CN_all(i) % NCN
+      CN_metis(i) % Conn = CN_all(i) % Conn
+    END DO
     nprox_metis = nbeams
   END IF
   
@@ -280,9 +282,9 @@ IF(myid==0) THEN
   counter = 0
   xadj(1) = 1
   DO i=1,ip
-    DO j=1,NCN_metis(i)
+    DO j=1,CN_metis(i) % NCN
       counter = counter + 1
-      adjncy(counter) = CN_metis(i,j)
+      adjncy(counter) = CN_metis(i) % Conn(j)
     END DO
     xadj(i+1) = counter+1
   END DO
@@ -311,16 +313,26 @@ IF(DebugMode) PRINT *,myid,' debug size particlepart: ',SIZE(particlepart), ip
 CALL MPI_BCast(particlepart,ip,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
 
 NN = COUNT(particlepart == myid)
-ALLOCATE(particles_G(NN),NCN(NN),&
-     CN(NN,12),CNpart(NN,12),&
-     neighparts(0:ntasks-1),SharedNode(NN),&
-     counters(ntasks),particles_L(ip))
+
+ALLOCATE(particles_G(NN),&
+     CN(NN),&
+     neighparts(0:ntasks-1),&
+     SharedNode(NN),&
+     counters(ntasks),&
+     particles_L(ip))
 
 particles_G = 0
 neighparts = .FALSE. !partitions we share a connection with
 SharedNode = .FALSE.
 counters = 0
 particles_L = 0
+
+DO i=1,NN
+  ALLOCATE(CN(i) % Conn(12), CN(i) % Part(12))
+  CN(i) % NCN = 0
+  CN(i) % Conn = 0
+  CN(i) % Part = -1 ! <=?
+END DO
 
 !Construct all local nodenums:
 !note - same results on every partition
@@ -332,9 +344,9 @@ IF(counters(myid+1) /= NN) CALL FatalError("Programming error in determining loc
 
 
 !Construct local arrays of: 
-! - node connections (CN) <= global NN!
-! - number of connections (NCN)
-! - other node partitions (CNpart)
+! - node connections (CN % Conn) <= global NN!
+! - number of connections (CN % NCN)
+! - other node partitions (CN % Part)
 ! - all partitions we share connections with (neighparts)
 
 !Allocate the structure holding the point data
@@ -352,24 +364,24 @@ DO i=1,ip
     NRXF%PartInfo(2,counter) = counter !with localID = counter
     
     IF(i <= glac_ip) THEN
-      NCN(counter) = NCN_All(i)
-      DO j=1,NCN(counter)
+      CN(counter) % NCN = CN_All(i) % NCN
+      DO j=1,CN(counter) % NCN
         !CN_All, NCN_All
-        CN(counter,j) = CN_All(i,j)
-        pown = particlepart(CN_All(i,j))
-        CNpart(counter,j) = pown
+        CN(counter) % Conn(j) = CN_All(i) % Conn(j)
+        pown = particlepart(CN_All(i) % Conn(j))
+        CN(counter) % Part(j) = pown
 
         IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
       END DO
     ELSE
       !Melange bonds
       ix = i - glac_ip
-      NCN(counter) = NCN_Melange(ix) 
-      DO j=1,NCN(counter)
+      CN(counter) % NCN = CN_Melange(ix) % NCN
+      DO j=1,CN(counter) % NCN
 
-        CN(counter,j) = CN_melange(ix,j)
-        pown = particlepart(CN_melange(ix,j))
-        CNpart(counter,j) = pown
+        CN(counter) % Conn(j) = CN_melange(ix) % Conn(j)
+        pown = particlepart(CN_melange(ix)%Conn(j))
+        CN(counter) % Part(j) = pown
 
         IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
       END DO
@@ -382,10 +394,10 @@ neighcount = COUNT(neighparts)
 IF(DebugMode) PRINT *,'DEBUG ',myid,' SUM PARTICLES_L ',SUM(particles_L),' min, max: ',&
      MINVAL(particles_L),MAXVAL(particles_L)
 IF(DebugMode) PRINT *,'DEBUG ',myid,' counted ',counter,' nodes, NN: ',NN
-IF(DebugMode) PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(NCN),MAXVAL(NCN)
+IF(DebugMode) PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(CN%NCN),MAXVAL(CN%NCN)
 
 DO i=1,NN
-  IF(ANY(CNPart(i,1:NCN(i)) /= myid)) SharedNode(i) = .TRUE.
+  IF(ANY(CN(i)%Part(1:CN(i)%NCN) /= myid)) SharedNode(i) = .TRUE.
 END DO
 
 IF(DebugMode) PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
@@ -403,14 +415,14 @@ DO k=1,2
   END IF
 
   DO i=1,NN
-    DO j=1,NCN(i)
+    DO j=1,CN(i)%NCN
       !Count each beam only once - except across boundaries, both need to count
-      IF(particles_L(CN(i,j)) > i .OR. CNPart(i,j) /= myid) THEN
+      IF(particles_L(CN(i)%Conn(j)) > i .OR. CN(i)%Part(j) /= myid) THEN
         counter = counter + 1
         IF(k==2) THEN
-          NANS(1,counter) = particles_L(CN(i,j)) !Note - folows convention N1 = other part
+          NANS(1,counter) = particles_L(CN(i)%Conn(j)) !Note - folows convention N1 = other part
           NANS(2,counter) = i  !NANS = their/ourNN, ourNN, otherPart (usually myid though!)
-          NANpart(counter) = CNPart(i,j)
+          NANpart(counter) = CN(i) % Part(j)
         END IF
       END IF
     END DO
@@ -483,7 +495,7 @@ END DO
 ! CLOSE (117+myid)
 
 !TODO - keep these?
-DEALLOCATE(NCN_All, CN_All)
+DEALLOCATE(CN_All)
 
 CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
@@ -527,7 +539,7 @@ IF(DebugMode .AND. .FALSE.) THEN
   PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
 END IF
 
-IF(melange_data%active .AND. myid==0) DEALLOCATE(NCN_metis, CN_metis)
+IF(melange_data%active .AND. myid==0) DEALLOCATE(CN_metis)
 !We return:
 ! Our nodes initial locs  - NRXF
 ! Our node global numbers - particles_G
@@ -1447,7 +1459,7 @@ END SUBROUTINE FindNearbyParticles
 
 
 !Use octree search to find nodes which are in contact
-SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
+SUBROUTINE FindBeams(xo, ip, SCL, CN, nbeams, searchdist_in)
   
   USE Octree
 
@@ -1455,7 +1467,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
   REAL(KIND=dp) :: SCL
   REAL(KIND=dp), OPTIONAL :: searchdist_in
   INTEGER :: ip,nbeams,max_neigh
-  INTEGER, ALLOCATABLE :: NCN(:), CN(:,:)
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
@@ -1477,14 +1489,18 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
   END IF
 
   ALLOCATE(points(ip),&
-       NCN(ip),&
-       CN(ip,max_neigh)) 
+       CN(ip))
+
+  DO i=1,ip
+    ALLOCATE(CN(i) % Conn(max_neigh))
+    CN(i) % NCN = 0
+    CN(i) % Conn = 0
+    CN(i) % ID = i
+  END DO
 
   eps = 1.0
 
   nbeams = 0
-  CN = 0
-  NCN = 0
 
   DO i=1,3
     oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
@@ -1522,8 +1538,8 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
         EXIT
       END IF
 
-      NCN(i) = NCN(i) + 1
-      CN(i,counter) = ngb_ids(j)
+      CN(i) % NCN = CN(i) % NCN + 1
+      CN(i) % Conn(counter) = ngb_ids(j)
       ! PRINT *,i, j, ' ngb_id ',ngb_ids(j)
       IF(ngb_ids(j) > i) nbeams = nbeams+1
     END DO
@@ -1531,7 +1547,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, NCN, CN, nbeams, searchdist_in)
          PRINT *,myid,' node ',i,' nobeams: ',num_ngb
   END DO
 
-  IF(DebugMode) PRINT *,myid,' sum(ncn) ',SUM(ncn),' nbeams*2 ',nbeams*2
+  IF(DebugMode) PRINT *,myid,' sum(ncn) ',SUM(CN%NCN),' nbeams*2 ',nbeams*2
 CALL Octree_final()
 
 END SUBROUTINE FindBeams
@@ -1544,12 +1560,12 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
   REAL(KIND=dp), ALLOCATABLE :: xo(:,:)
   REAL(KIND=dp) :: SCL
   INTEGER :: ip,nfind
-  INTEGER, ALLOCATABLE :: CN(:,:)
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
   !-----------------------
   !octree stuff
   type(point_type), allocatable :: points(:)
   INTEGER i,j,k, num_ngb,counter
-  INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:), NCN(:)
+  INTEGER, ALLOCATABLE :: seed(:), ngb_ids(:)
   REAL(KIND=dp), ALLOCATABLE :: ngb_dists(:)
   REAL(KIND=dp) :: x(3), dx(3),oct_bbox(2,3),eps
   REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
@@ -1559,11 +1575,14 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
   eps = 1.0
 
   ALLOCATE(points(ip),&
-       NCN(ip),&
-       CN(ip,nfind)) 
+       CN(ip))
 
-  NCN = 0
-  CN = 0
+  DO i=1,ip
+    ALLOCATE(CN(i) % Conn(nfind))
+    CN(i) % NCN = 0
+    CN(i) % Conn = 0
+    CN(i) % ID = i
+  END DO
 
   !Get the octree bounding box
   DO i=1,3
@@ -1595,7 +1614,7 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
     DO i=1,ip
 
       !Already got sufficient neighbours for this node
-      IF(NCN(i) == nfind) CYCLE
+      IF(CN(i) % NCN == nfind) CYCLE
 
       num_ngb = 0
       ngb_ids = 0
@@ -1613,15 +1632,15 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
         IF(ngb_ids(j) == i) CYCLE !should be the first sorted
         counter = counter+1
 
-        CN(i,counter) = ngb_ids(j)
+        CN(i) % Conn(counter) = ngb_ids(j)
         IF(counter == nfind) EXIT
       END DO
-      NCN(i) = counter
+      CN(i) % NCN = counter
 
     END DO
     
     !quit if we're done
-    IF(ALL(NCN == nfind)) EXIT
+    IF(ALL(CN%NCN == nfind)) EXIT
 
     !else double search dist and try again
     searchdist = searchdist * 2.0
@@ -1632,35 +1651,232 @@ CALL Octree_final()
 
 END SUBROUTINE FindNNearest
 
+!Use octree search to find connections between separate clusters of particles
+SUBROUTINE FindClusterConns(xo, CN, Cluster, nfind, SCL)
+  
+  USE Octree
+
+  REAL(KIND=dp) :: xo(:,:)
+  REAL(KIND=dp) :: SCL
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
+  INTEGER :: Cluster(:)
+  INTEGER :: nfind
+  !-----------------------
+  !octree stuff
+  type(point_type), allocatable :: points(:)
+  INTEGER i,j,k,l,ip,num_ngb,counter,np,id, NClust, conn_seek,N1,N2
+  INTEGER, ALLOCATABLE :: ngb_ids(:), mins(:), min_conns(:,:,:), &
+       ClusterMap(:)
+  REAL(KIND=dp), ALLOCATABLE :: ngb_dists(:)
+  REAL(KIND=dp) :: oct_bbox(2,3),eps
+  REAL(KIND=dp) :: dist, max_dist, min_dist, searchdist
+  LOGICAL, ALLOCATABLE :: ClusterActive(:)
+  TYPE(Conn_t), ALLOCATABLE :: ClustCN(:)
+
+  eps = 1.0
+  conn_seek = 5
+  ip = SIZE(Cluster)
+  IF(nfind > ip) CALL FatalError("Requested too many nearest particles for particle count!")
+
+  ALLOCATE(points(ip))
+
+  NClust = MAXVAL(Cluster)
+
+  !Initialize and build the octree
+  !----------------------------
+
+  !Get the octree bounding box
+  DO i=1,3
+    oct_bbox(1,i) = MINVAL(xo(i,1:ip)) - eps !buffer bbox to ensure all points contained
+    oct_bbox(2,i) = MAXVAL(xo(i,1:ip)) + eps
+  END DO
+
+  CALL Octree_init(max_depth=10,max_num_point=6,bbox=oct_bbox)
+
+  DO i=1,ip
+    Points(i) % id = i
+    Points(i) % tag = Cluster(i)
+    Points(i) % x(1) = xo(1,i)
+    Points(i) % x(2) = xo(2,i)
+    Points(i) % x(3) = xo(3,i)
+  END DO
+
+  CALL Octree_build(Points)
+
+  ALLOCATE(ngb_ids(MAX(1000,10*nfind)), ngb_dists(MAX(1000,10*nfind)), ClusterActive(NClust))
+  ClusterActive = .TRUE.
+
+
+  !Find connections and redefine clusters iteratively until only 1 left
+  !--------------------------
+  DO WHILE(.TRUE.) 
+    np = COUNT(Cluster /= 1)
+
+    DO i=1,NClust
+      IF(.NOT. ANY(Cluster == i)) ClusterActive(i) = .FALSE.
+    END DO
+
+    ALLOCATE(ClustCN(np))
+
+    counter = 0
+    DO i=1,ip
+      !Set the tag for each point for the octree search
+      Points(i) % tag = Cluster(i)
+
+      IF(Cluster(i) == 1) CYCLE
+      counter = counter + 1
+      ClustCN(counter) % ID = i
+      ClustCN(counter)%NCN = 0
+      ALLOCATE(ClustCN(counter) % Conn(nfind),&
+           ClustCN(counter) % Dists(nfind))
+    END DO
+
+    !Need to iterate over progressively larger search distances, only
+    !searching for those which don't already have sufficient neighbours
+    !Start with 5 * SCL
+    searchdist = SCL * 5.0
+
+    DO WHILE(.TRUE.) 
+      DO i=1,np
+
+        id = ClustCN(i) % ID
+
+        !Already got sufficient neighbours for this node
+        IF(ClustCN(i) % NCN == nfind) CYCLE
+
+        num_ngb = 0
+        ngb_ids = 0
+        ngb_dists = 0.0
+        CALL Octree_search(points(id) % x, searchdist, num_ngb, ngb_ids, ngb_dists=ngb_dists, &
+             tag=Cluster(id), same_tag=.FALSE.)
+
+        !Didn't find enough this time (including self) - need to cycle anyway 
+        !so don't bother putting neighbours
+        IF(num_ngb <= nfind) CYCLE
+
+        CALL sort_real2(ngb_dists, ngb_ids, num_ngb)
+
+        counter = 0
+        DO j=1,num_ngb
+          IF(ngb_ids(j) == id) CYCLE !should be the first sorted
+          counter = counter+1
+
+          ClustCN(i) % Conn(counter) = ngb_ids(j)
+          ClustCN(i) % Dists(counter) = ngb_dists(j)
+          IF(counter == nfind) EXIT
+        END DO
+        ClustCN(i) % NCN = counter
+
+      END DO
+
+      !quit if we're done
+      IF(ALL(ClustCN%NCN == nfind)) EXIT
+
+      !else double search dist and try again
+      searchdist = searchdist * 2.0
+      IF(DebugMode) PRINT *,myid,' octree searching dist: ',searchdist
+    END DO
+
+    !For each cluster, find the N closest connections to another cluster
+    ALLOCATE(mins(conn_seek), min_conns(NClust,conn_seek,2))
+    min_conns = 0
+
+    DO i=2,NClust !don't do cluster 1 (glacier)
+      IF(.NOT. ClusterActive(i)) CYCLE
+      mins = HUGE(mins)
+      DO j=1,np
+        IF(Cluster(ClustCN(j) % ID) /= i) CYCLE
+        DO k=1,ClustCN(j) % NCN
+          !Cycle stored mins comparing, store if reqd
+          !Need another array to hold the IDs
+          DO l=1,conn_seek
+            IF(ClustCN(j) % Dists(k) < mins(l)) THEN
+              mins(l) = ClustCN(j) % Dists(k)
+              min_conns(i,l,1) = ClustCN(j) % ID
+              min_conns(i,l,2) = ClustCN(j) % Conn(k)
+              EXIT
+            END IF
+          END DO
+        END DO
+      END DO
+      IF(DebugMode)  PRINT *,'Cluster ',i,' min dists: ',mins
+
+      DO j=1,conn_seek
+        IF(DebugMode)  PRINT *,'Cluster ',i,' conn ',j,' : ',min_conns(i,j,:), Cluster(min_conns(i,j,:))
+      END DO
+    END DO
+
+    !Add connections to CN, NCN
+    DO i=2, NClust
+      IF(.NOT. ClusterActive(i)) CYCLE
+
+      DO j=1,conn_seek
+        N1 = min_conns(i,j,1)
+        N2 = min_conns(i,j,2)
+
+        IF(.NOT. ANY(CN(N1) % Conn == N2)) THEN
+          CN(N1) % NCN = CN(N1) % NCN + 1
+          IF(CN(N1) % NCN > SIZE(CN(N1) % Conn)) CALL ExpandIntArray(CN(N1) % Conn)
+          CN(N1) % Conn(CN(N1) % NCN) = N2
+        END IF
+
+        IF(.NOT. ANY(CN(N2) % Conn == N1)) THEN
+          CN(N2) % NCN = CN(N2) % NCN + 1
+          IF(CN(N2) % NCN > SIZE(CN(N2) % Conn)) CALL ExpandIntArray(CN(N2) % Conn)
+          CN(N2) % Conn(CN(N2) % NCN) = N1
+        END IF
+
+      END DO
+    END DO
+
+    !Update clusters
+    ALLOCATE(ClusterMap(NClust))
+    DO i=1,NClust
+      ClusterMap(i) = i
+    END DO
+
+    !Cycle smallest to largest cluster, joining
+    DO i=NClust,2,-1
+      IF(.NOT. ClusterActive(i)) CYCLE
+      DO j=1,conn_seek
+        ClusterMap(i) = MIN(ClusterMap(Cluster(min_conns(i,j,2))),ClusterMap(i))
+      END DO
+    END DO
+
+    DO i=1,ip
+      Cluster(i) = ClusterMap(Cluster(i))
+    END DO
+
+    DEALLOCATE(ClustCN, mins, min_conns, ClusterMap)
+
+    IF(ALL(Cluster == 1)) EXIT
+  END DO
+
+  CALL Octree_final()
+
+END SUBROUTINE FindClusterConns
+
+
 !Checks that connectivity info between particles
 !goes both ways (i.e. a proper dual-graph)
-SUBROUTINE EnsureDualGraph(CN,NCN)
-  INTEGER, ALLOCATABLE :: CN(:,:), NCN(:)
+SUBROUTINE EnsureDualGraph(CN)
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
   !----------------------------------
-  INTEGER, ALLOCATABLE :: work_CN(:,:)
   INTEGER :: i,j,n,NN,neigh
 
-  NN = SIZE(NCN)
-  n = MAXVAL(NCN)
-
-  ALLOCATE(work_CN(NN,n*2))
-  work_CN = 0
-  work_CN(:,1:n) = CN
+  NN = SIZE(CN)
+  n = MAXVAL(CN%NCN)
 
   DO i=1,NN
-    DO j=1,NCN(i)
-      neigh = work_CN(i,j)
-      IF(.NOT. ANY(work_CN(neigh,:) == i)) THEN
-        NCN(neigh) = NCN(neigh) + 1
-        work_CN(neigh, NCN(neigh)) = i
+    DO j=1,CN(i)%NCN
+      neigh = CN(i) % Conn(j)
+      IF(.NOT. ANY(CN(neigh) % Conn == i)) THEN
+        CN(neigh) % NCN = CN(neigh) % NCN + 1
+        IF(CN(neigh) % NCN > SIZE(CN(neigh) % Conn)) CALL ExpandIntArray(CN(neigh) % Conn)
+        CN(neigh) % Conn(CN(neigh) % NCN) = i
       END IF
     END DO
   END DO
-
-  n = MAXVAL(NCN)
-  DEALLOCATE(CN)
-  ALLOCATE(CN(NN,n))
-  CN(:,:) = work_CN(:,1:n)
 
 END SUBROUTINE EnsureDualGraph
 
@@ -1808,5 +2024,99 @@ FUNCTION PInBBox(i,NRXF, UT, BBox, Buff) RESULT(InBB)
        Y > (BBox(3)-Buffer) .AND. Y < (BBox(4)+Buffer) .AND. &
        Z > (BBox(5)-Buffer) .AND. Z < (BBox(6)+Buffer))
 END FUNCTION PInBBox
+
+SUBROUTINE ConnectRegions(xo, CN, SCL) 
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
+  REAL(KIND=dp) :: xo(:,:)
+  REAL(KIND=dp) :: SCL
+
+  !--------------------------
+  INTEGER, ALLOCATABLE :: Cluster(:)
+  INTEGER :: NN
+
+  !Identify disconnected regions
+  Cluster = GetClusters(CN)
+
+  IF(ALL(Cluster == 1)) RETURN
+
+  !Connect clusters with new bonds
+  CALL FindClusterConns(xo, CN, Cluster, 5, SCL)
+
+END SUBROUTINE ConnectRegions
+
+!Function takes neighbourhood info in CN/NCN format
+!and finds clusters of connected particles.
+FUNCTION GetClusters(CN) RESULT(Cluster)
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
+  !--------------------------
+  INTEGER, ALLOCATABLE :: Cluster(:),WorkArr(:),ClusterSizes(:),&
+       ClusterIDs(:),ClusterMap(:)
+  INTEGER :: i,NTOT,N1,N2,NClust, Starticle,NN
+
+  NN = SIZE(CN)
+
+  ALLOCATE(Cluster(NN))
+  Cluster = 0
+  Cluster(1) = 1
+  NClust = 1
+  Starticle = 1
+
+  DO WHILE(.TRUE.)
+
+    !Recursively mark all connected particles
+    CALL MarkNeighbours(Cluster, Starticle, CN)
+
+    !If any unmarked, start a new cluster
+    IF(ANY(Cluster == 0)) THEN
+      NClust = NClust + 1
+      !Find a particle to mark w/ new cluster
+      Starticle = MINLOC(Cluster,1)
+      Cluster(Starticle) = NClust
+    ELSE
+      !All marked, exit the loop
+      EXIT
+    END IF
+
+  END DO
+
+  !Reorder clusters by size (largest = 1 - i.e. the largely intact glacier)
+  ALLOCATE(ClusterSizes(NClust),ClusterIDs(NClust),ClusterMap(NClust))
+  DO i=1,NClust
+    ClusterSizes(i) = COUNT(Cluster==i)
+    ClusterIDs(i) = i
+  END DO
+
+  CALL sort_int2(ClusterSizes,ClusterIDs,NClust)
+  
+  DO i=1,NClust
+    ClusterMap(ClusterIDs(NClust-i+1)) = i
+  END DO
+
+  DO i=1,NN
+    Cluster(i) = ClusterMap(Cluster(i))
+  END DO
+
+  CONTAINS
+
+  RECURSIVE SUBROUTINE MarkNeighbours(Cluster, Starticle, CN)
+    TYPE(Conn_t), ALLOCATABLE :: CN(:)
+    INTEGER :: Cluster(:), Starticle
+    !-----------------------
+    INTEGER :: i
+
+    DO i = 1,CN(Starticle) % NCN
+      IF(Cluster(CN(Starticle) % Conn(i)) == NClust) CYCLE !already found
+
+      IF(Cluster(CN(Starticle) % Conn(i)) /= 0) THEN
+        CALL FatalError("GetClusters: Incomplete Dual Graph!")
+      END IF
+
+      Cluster(CN(Starticle) % Conn(i)) = NClust
+      CALL MarkNeighbours(Cluster, CN(Starticle) % Conn(i), CN)
+    END DO
+
+  END SUBROUTINE MarkNeighbours
+
+END FUNCTION GetClusters
 
 END MODULE Lattice

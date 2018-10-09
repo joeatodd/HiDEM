@@ -413,9 +413,9 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
 END SUBROUTINE Prune_Melange
 
 !Convert the 'NAN' info from previous simulation into 'NCN' and 'CN'
-SUBROUTINE MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_mel)
+SUBROUTINE MelangeBonds(melange_data, glac_ip, CN, nbeams_mel)
+  TYPE(Conn_t), ALLOCATABLE :: CN(:)
   TYPE(MelangeDataHolder_t) :: melange_data
-  INTEGER, ALLOCATABLE :: NCN_melange(:), CN_melange(:,:)
   INTEGER :: nbeams_mel, glac_ip
   !--------------------------
   INTEGER :: i,NN,N1,N2
@@ -423,20 +423,24 @@ SUBROUTINE MelangeBonds(melange_data, glac_ip, NCN_melange, CN_melange, nbeams_m
   NN = melange_data % NN
   nbeams_mel = 0
 
-  ALLOCATE(NCN_melange(NN), CN_melange(NN, 12))
-  NCN_melange = 0
-  CN_melange = 0
+  ALLOCATE(CN(NN))
+  DO i=1,NN
+    ALLOCATE(CN(i) % Conn(12))
+    CN(i) % NCN = 0
+    CN(i) % Conn = 0
+    CN(i) % ID = i
+  END DO
 
   !Now generate NCN, CN
   DO i=1,melange_data % NTOT
     N1 = melange_data % NANS(1,i)
     N2 = melange_data % NANS(2,i)
 
-    NCN_melange(N1) = NCN_melange(N1) + 1
-    NCN_melange(N2) = NCN_melange(N2) + 1
+    CN(N1) % NCN = CN(N1) % NCN + 1
+    CN(N2) % NCN = CN(N2) % NCN + 1
 
-    CN_melange(N1,NCN_Melange(N1)) = N2 + glac_ip
-    CN_melange(N2,NCN_Melange(N2)) = N1 + glac_ip
+    CN(N1) % Conn(CN(N1) % NCN) = N2 + glac_ip
+    CN(N2) % Conn(CN(N2) % NCN) = N1 + glac_ip
   END DO
 
   nbeams_mel = melange_data % NTOT

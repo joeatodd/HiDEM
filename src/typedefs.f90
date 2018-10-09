@@ -72,4 +72,12 @@ MODULE TypeDefs
      INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
      REAL(KIND=dp), ALLOCATABLE :: S(:),R(:)
   END TYPE PointEx_t
+
+  !Memory-flexible alternative for CN/NCN
+  TYPE Conn_t
+     INTEGER, ALLOCATABLE :: Conn(:), Part(:)
+     INTEGER :: NCN, ID
+     REAL(KIND=dp), ALLOCATABLE :: Dists(:)
+  END TYPE Conn_t
+
 END MODULE TypeDefs
