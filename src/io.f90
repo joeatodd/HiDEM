@@ -26,13 +26,13 @@ CONTAINS
 
  SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, OUTINT, RESOUTINT, &
+      DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, BedDampFactor, OUTINT, RESOUTINT, &
       MAXUT, SCL, WL, STEPS0, GRID, fractime, &
       StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack, gotMelange, MelRunName)
 
    REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
    REAL(KIND=dp) :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
-   REAL(KIND=dp) :: fractime,viscforce,viscdist
+   REAL(KIND=dp) :: fractime,viscforce,viscdist, BedDampFactor
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
    CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,MelRunName,wrkdir,&
@@ -74,6 +74,7 @@ CONTAINS
    RHO = 900.0
    RHOW = 1030.0
    BedIntConst = 1.0E8
+   BedDampFactor = 1.0
    BedZOnly = .TRUE.
    wrkdir = './'
    resdir = './'
@@ -189,6 +190,8 @@ CONTAINS
        READ(VarValue,*) resdir
      CASE("bed stiffness constant")
        READ(VarValue,*) BedIntConst
+     CASE("bed damping factor")
+       READ(VarValue,*) BedDampFactor
      CASE("bed z only")
        READ(VarValue,*) BedZOnly
      CASE("fracture after time")
@@ -270,6 +273,7 @@ CONTAINS
      WRITE(*,'(A,ES12.5)') "Rotational Damping = ",DAMP2
      WRITE(*,'(A,ES12.5)') "Drag Coefficient = ",DRAG
      WRITE(*,'(A,ES12.5)') "Bed Stiffness Constant = ",BedIntConst
+     WRITE(*,'(A,ES12.5)') "Bed Damping Factor = ",BedDampFactor
      WRITE(*,'(A,L)') "Bed Z Only = ",BedZOnly
      WRITE(*,'(A,I0)') "Output Interval = ",OUTINT
      WRITE(*,'(A,I0)') "Restart Output Interval = ",RESOUTINT

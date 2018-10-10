@@ -38,9 +38,9 @@
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
 	REAL(KIND=dp) :: grid_bbox(4),origin(2)
 	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
-	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC
+	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC,BI
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
-        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst,mask
+        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst,mask,BedDampConst,BedDampFactor
         REAL(KIND=dp), ALLOCATABLE :: PBBox(:,:)
 	INTEGER, ALLOCATABLE :: CCN(:),CCNW(:)
 	INTEGER NANW(3,NOCON)
@@ -131,9 +131,9 @@ END IF
 
         CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, &
-             SEEDI, DAMP1, DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, OUTINT, &
-             RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,&
-             GeomMasked,FixLat,FixBack,gotMelange, MelRunName)
+             SEEDI, DAMP1, DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, BedDampFactor, &
+             OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec, &
+             CSVOutput,GeomMasked,FixLat,FixBack,gotMelange, MelRunName)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -806,18 +806,37 @@ END IF
           DIZ = 1.0
         END IF
 
-!Bed interaction
-!Bed Normal
-! FR* - forces on particles
-! DIX - components of bed normal
-        IF (Z.LT.ZB+SCL/2.0) THEN
+        !Bed interaction
+        !Bed Normal
+        ! FR* - forces on particles
+        ! DIX,Y,Z - components of bed normal
+
+        IF (Z .LT. ZB + (SCL/2.0)/DIZ ) THEN
+
+          !Critically damped when BedDampFactor=1.0 (default)
+          BedDampConst = -2.0 * SQRT(MFIL(i) * BedIntConst) * BedDampFactor
+
+          !X,Y,Z velocity
+          DX = (UT%M(6*i-5) - UTM%M(6*i-5))/DT
+          DY = (UT%M(6*i-4) - UTM%M(6*i-4))/DT
+          DZ = (UT%M(6*i-3) - UTM%M(6*i-3))/DT
+
+          !TODO - add damping to energy calcs
           IF(BedZOnly) THEN
-            FRZ(I)=FRZ(I)+BedIntConst*(ZB+SCL/2.0-Z)
+            BI = BedIntConst*(ZB+SCL/2.0-Z)
+            FRZ(I)=FRZ(I)+BI+BedDampConst*DZ
             GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
           ELSE
-            FRX(I)=FRX(I)+DIX*BedIntConst*(ZB+SCL/2.0-Z)
-            FRY(I)=FRY(I)+DIY*BedIntConst*(ZB+SCL/2.0-Z)
-            FRZ(I)=FRZ(I)+DIZ*BedIntConst*(ZB+SCL/2.0-Z)
+            !BI is BedIntConst * the overlap between particle 
+            !        and bed accounting for non-horizontality
+            BI = BedIntConst * ((ZB + (SCL/2.0)/DIZ - Z) * DIZ)
+
+            !Velocity normal to the surface
+            Vel = DIX*DX + DIY*DY + DIZ*DZ
+
+            FRX(I)=FRX(I)+DIX*(BI + BedDampConst*Vel)
+            FRY(I)=FRY(I)+DIY*(BI + BedDampConst*Vel)
+            FRZ(I)=FRZ(I)+DIZ*(BI + BedDampConst*Vel)
             GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
           END IF
 	ENDIF

@@ -215,6 +215,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   | 1e6 |
 | Fracture After Time | FRACTIME | Fracture is permitted after this time (in s). | 40 |
 | Bed Stiffness Constant | BedIntConst | The stiffness constant of the bed | 1e8 |
+| Bed Damping Factor | BedDampFactor | Alters the damping of bed interaction (1.0 = critically damped) | 1.0 |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) | True |
 | Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above | True |
 | CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space) | False |
