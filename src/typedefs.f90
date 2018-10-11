@@ -25,7 +25,7 @@ MODULE TypeDefs
      REAL(KIND=dp), ALLOCATABLE :: A(:,:)
      REAL(KIND=dp), POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
      INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
-     INTEGER, ALLOCATABLE :: PartInfo(:,:)
+     INTEGER, ALLOCATABLE :: PartInfo(:,:), GID(:)
   END TYPE NRXF_t
 
   !Type to hold information on particles shared between partitions
@@ -69,7 +69,7 @@ MODULE TypeDefs
 
   TYPE PointEx_t
      INTEGER :: partid=-1,scount=0,rcount=0
-     INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
+     INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:),SendGIDs(:), RecvGIDs(:)
      REAL(KIND=dp), ALLOCATABLE :: S(:),R(:)
   END TYPE PointEx_t
 

@@ -362,7 +362,8 @@ DO i=1,ip
     NRXF%M(:,counter) = xo(:,i) !our points
     NRXF%PartInfo(1,counter) = myid !belong to our partition
     NRXF%PartInfo(2,counter) = counter !with localID = counter
-    
+    NRXF%GID(counter) == i
+
     IF(i <= glac_ip) THEN
       CN(counter) % NCN = CN_All(i) % NCN
       DO j=1,CN(counter) % NCN
@@ -421,8 +422,8 @@ DO k=1,2
         counter = counter + 1
         IF(k==2) THEN
           NANS(1,counter) = particles_L(CN(i)%Conn(j)) !Note - folows convention N1 = other part
-          NANS(2,counter) = i  !NANS = their/ourNN, ourNN, otherPart (usually myid though!)
-          NANpart(counter) = CN(i) % Part(j)
+          NANS(2,counter) = i  !NANS = their/ourNN, ourNN
+          NANpart(counter) = CN(i) % Part(j) !NANPart is the otherPart
         END IF
       END IF
     END DO
@@ -457,7 +458,6 @@ DO n=0,ntasks-1
     IF(counter > SIZE(NRXF%PartInfo,2)) CALL ResizePointData(NRXF,1.5_8, do_C=.TRUE.,do_P=.FALSE.)
     NRXF%PartInfo(1,counter) = InvPartInfo(n) % NID
     NRXF%PartInfo(2,counter) = NANS(1,i)
-
     NRXF%NC = NRXF%NC + 1
   END DO
 END DO
@@ -681,6 +681,8 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
     PointEx(i) % partid = neigh
     ALLOCATE(PointEx(i) % SendIDs(sendcount),&
          PointEx(i) % RecvIDs(getcount),&
+         PointEx(i) % SendGIDs(sendcount),&
+         PointEx(i) % RecvGIDs(getcount),&
          PointEx(i) % S(3*sendcount),&
          PointEx(i) % R(3*getcount))
 
@@ -754,6 +756,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
         NRXF%A(1,loc) = PointEx(i) % R(j*3 - 2)
         NRXF%A(2,loc) = PointEx(i) % R(j*3 - 1)
         NRXF%A(3,loc) = PointEx(i) % R(j*3 - 0)
+        NRXF%GID(loc) = PointEx(i) % GID(j)
         !IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
       END DO
     END DO

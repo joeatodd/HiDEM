@@ -207,7 +207,7 @@ MODULE UTILS
       NRXF%NC = 0
       NRXF%NP = 0
 
-      ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot))
+      ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot),NRXF%GID(n_tot))
 
       NRXF%PartInfo(:,:) = -1 !-1 = no point
 
@@ -348,7 +348,7 @@ MODULE UTILS
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
       REAL(KIND=dp), ALLOCATABLE :: work_arr(:,:),work_arr1(:)
-      INTEGER, ALLOCATABLE :: work_int(:,:)
+      INTEGER, ALLOCATABLE :: work_int(:,:),work_gid(:)
       INTEGER :: a_oldsize,m_oldsize,c_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,c_newsize,p_newsize
       INTEGER :: cstrt_new, pstrt_new,cstrt_old, pstrt_old
@@ -437,9 +437,10 @@ MODULE UTILS
         PRINT *,'ResizePointDataNRXF: Programming error, negative sizes!'
       END IF
 
-      ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
+      ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize), work_gid(a_newsize))
       work_arr = 0.0
       work_int = -1
+      work_gid = 0
 
       work_arr(:,1:m_oldsize) = NRXF%A(:,1:m_oldsize)
       work_arr(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
@@ -449,10 +450,16 @@ MODULE UTILS
       work_int(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
       work_int(:,pstrt_new : pstrt_new+p_oldsize-1) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
 
+      work_gid(1:m_oldsize) = NRXF%GID(1:m_oldsize)
+      work_gid(cstrt_new : cstrt_new+c_oldsize-1) = NRXF%GID(NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
+      work_gid(pstrt_new : pstrt_new+p_oldsize-1) = NRXF%GID(NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
+
       DEALLOCATE(NRXF%A) !Cray compiler bug?
       CALL MOVE_ALLOC(work_arr, NRXF%A)
       DEALLOCATE(NRXF%PartInfo) !Cray compiler bug?
       CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
+      DEALLOCATE(NRXF%GID)
+      CALL MOVE_ALLOC(work_gid, NRXF%GID)
 
       cstrt_old = NRXF%cstrt
       pstrt_old = NRXF%pstrt
