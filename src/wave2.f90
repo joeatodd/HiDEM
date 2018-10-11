@@ -60,7 +60,7 @@
         INTEGER DST,ZNOD,J,XY,O
 	INTEGER P,BCC,XIND,YIND,gridratio,nx,ny
 	REAL(KIND=dp) :: KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
-	REAL(KIND=dp) :: WENS,GSUMS,DPES,BCES
+	REAL(KIND=dp) :: WENS,GSUMS,DPES,BCES,BDE,BDES
 	REAL(KIND=dp) :: XE,DEX,DEY,RDE,MML,XI,ZI,YI
 	REAL(KIND=dp) :: Z,AVE,ROUGH,FG,SCA,MGH,MGH0,DPE
 	REAL(KIND=dp) :: KX(12,12),KY(12,12),KZ(12,12),K(12,12)
@@ -182,6 +182,7 @@ END IF
 	DPE=0.0
 	DMPEN=0.0	
 	PSUM=0.0
+	BDE=0.0
 	END IF
 
 !inclination of the domain - not really used
@@ -825,19 +826,22 @@ END IF
           IF(BedZOnly) THEN
             BI = BedIntConst*(ZB+SCL/2.0-Z)
             FRZ(I)=FRZ(I)+BI+BedDampConst*DZ
-            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+
+            GSUM=GSUM+0.5*BedIntConst*(ZB+SCL/2.0-Z)**2
+            BDE=BDE + 0.5*BedDampConst*DZ**2
           ELSE
             !BI is BedIntConst * the overlap between particle 
             !        and bed accounting for non-horizontality
             BI = BedIntConst * ((ZB + (SCL/2.0)/DIZ - Z) * DIZ)
-
             !Velocity normal to the surface
             Vel = DIX*DX + DIY*DY + DIZ*DZ
 
             FRX(I)=FRX(I)+DIX*(BI + BedDampConst*Vel)
             FRY(I)=FRY(I)+DIY*(BI + BedDampConst*Vel)
             FRZ(I)=FRZ(I)+DIZ*(BI + BedDampConst*Vel)
-            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+
+            GSUM=GSUM+BedIntConst*0.5*(ZB+SCL/2.0-Z)**2
+            BDE=BDE + 0.5*BedDampConst*Vel**2
           END IF
 	ENDIF
 
@@ -988,15 +992,16 @@ END IF
         CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to drag/basal friction
         CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)  !strain energy from particle collision
         CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !strain energy from bed interaction
+        CALL MPI_ALLREDUCE(BDE,BDES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !damped energy from bed interaction
         CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to stiffness/collision damping
         CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to broken bonds
         CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr) !broken bond count
         CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy from backwall pressure (not used)
  	IF (myid.EQ.0) WRITE(612,*) T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
-      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0
+      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0-BDES
 
  	IF (myid.EQ.0) WRITE(610,10) T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0
- 	IF (myid.EQ.0) WRITE(611,10) T,DPES,DMPENS,PSUMS,GSUMS
+ 	IF (myid.EQ.0) WRITE(611,10) T,DPES,DMPENS,PSUMS,GSUMS,BDES
  	IF (myid.EQ.0) WRITE(613,19) T,KINS2,BCES,BCCS
 	END IF
 
