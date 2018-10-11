@@ -1267,6 +1267,18 @@ CONTAINS
 
  SUBROUTINE WriteRestart()
         INTEGER :: counter
+        LOGICAL :: FirstTime=.TRUE.
+        SAVE :: FirstTime
+
+        !Write out my particles to nodfil - once only
+        IF(FirstTime) THEN
+          FirstTime = .FALSE.
+22        FORMAT(I8,' ',4F14.7,2I8)
+          OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
+          DO i=1,NN
+            WRITE(510+myid,22) i,NRXF%A(:,i),1.0
+          END DO
+        END IF
 
    ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')
