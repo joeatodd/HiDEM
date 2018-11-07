@@ -477,7 +477,6 @@ DO k=1,2
   END DO
 END DO
 
-PRINT *,myid,' debug count nanpart me: ',COUNT(NANPart == myid), COUNT(NANPart /= myid)
 DEALLOCATE(RConnStream)
 
 neighcount = COUNT(neighparts)
