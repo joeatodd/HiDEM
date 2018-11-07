@@ -75,7 +75,7 @@
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,ENFlushInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
-        INTEGER, ALLOCATABLE :: particles_G(:),neighparts(:), NANS(:,:),NANPart(:),&
+        INTEGER, ALLOCATABLE :: neighparts(:), NANS(:,:),NANPart(:),&
              FXF(:,:), NDL(:,:),PNN(:)
 
         INTEGER, DIMENSION(8) :: datetime
@@ -149,7 +149,7 @@ END IF
 
    IF(gotMelange) THEN
      melange_data % active = .TRUE.
-     CALL LoadMelange(MelRunName, wrkdir, melange_data)
+     IF(myid==0) CALL LoadMelange(MelRunName, wrkdir, melange_data)
    END IF
 
 ! S = width/thickness of the beams, scaled by SCL
@@ -285,7 +285,7 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G, &
+	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart, &
           InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
           UC,StrictDomain,GeomMasked,RunName,melange_data)
  
@@ -920,9 +920,16 @@ END IF
 
           !Freeze if near back plane
           IF(FixBack) THEN
-            IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
-              UTP(6*I-5)=UT%M(6*I-5)
-              UTP(6*I-4)=UT%M(6*I-4)
+            IF(GeomMasked) THEN
+              IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
+                UTP(6*I-5)=UT%M(6*I-5)
+                UTP(6*I-4)=UT%M(6*I-4)
+              END IF
+            ELSE 
+              IF(YIND <= 2*gridratio) THEN
+                UTP(6*I-5)=UT%M(6*I-5)
+                UTP(6*I-4)=UT%M(6*I-4)
+              END IF
             END IF
           END IF
 

@@ -13,7 +13,7 @@ CONTAINS
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,particles_G,InvPartInfo,&
+SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
      neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName,melange_data)
 
   IMPLICIT NONE
@@ -24,7 +24,7 @@ Real(KIND=dp) :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
 REAL(KIND=dp) :: box,b,SCL,origin(2)
 INTEGER :: l,NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
-INTEGER, ALLOCATABLE :: particles_G(:),NANS(:,:),NANPart(:)
+INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:)
 CHARACTER(LEN=256) :: wrkdir,geomfile,runname
 LOGICAL :: StrictDomain,GeomMasked
 !TYPE(NTOT_t) :: NTOT
@@ -46,7 +46,7 @@ melt = melta*0.0_dp
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
 box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
-CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, InvPartInfo,&
+CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
      neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
 
 CLOSE(400)
@@ -56,7 +56,7 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart,particles_G, &
+SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart, &
      InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
      melange_data)
 
@@ -73,12 +73,13 @@ REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
 INTEGER i,j,k,n,ix,K1,k2,l,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
-INTEGER NTOT,neighcount
-INTEGER, ALLOCATABLE ::  particles_G(:),particles_L(:),NANS(:,:),NANPart(:)
+INTEGER NTOT,stats(4), local, part, neighcount
+INTEGER, ALLOCATABLE ::  particles_L(:),NANS(:,:),NANPart(:),PartNN(:),&
+     SendGIDs(:),ConnStream(:),RConnStream(:)
 CHARACTER(LEN=256) :: wrkdir,runname
 LOGICAL :: StrictDomain
-LOGICAL, ALLOCATABLE :: SharedNode(:),neighparts(:)
-TYPE(Conn_t), ALLOCATABLE :: CN(:),CN_All(:),CN_metis(:),CN_Melange(:)
+LOGICAL, ALLOCATABLE :: neighparts(:)
+TYPE(Conn_t), ALLOCATABLE :: CN(:),CN_Glac(:),CN_metis(:),CN_Melange(:)
 
 !metis stuff
 INTEGER :: objval,counter
@@ -95,149 +96,138 @@ TYPE(MelangeDataHolder_t) :: melange_data
 11    FORMAT(2I8,' ',2F14.7)
 13    FORMAT(4F14.7)
 
-ALLOCATE(xo(3,NOMA))
-
 b=SCL*box/REAL(l,8)  ! the size of the unit cell is the box length divided by l
 x0(:,:)=b/2.0d0; x0(:,1)=0.0d0; x0(3,2)=0.0d0; x0(2,3)=0.0d0; x0(1,4)=0.0d0 
 
-!Use bed and surf to determine the extent of the domain
-!This is not perfect, just checks that there is SCL dist between surf and bed+melt
+IF(myid==0) THEN
+  !Use bed and surf to determine the extent of the domain
+  !This is not perfect, just checks that there is SCL dist between surf and bed+melt
+  ALLOCATE(xo(3,NOMA))
 
-!Find the ice extent in raster coordinates
-gridminx = HUGE(gridminx); gridminy = HUGE(gridminy)
-gridmaxx = -HUGE(gridmaxx); gridmaxy = -HUGE(gridmaxy)
-DO i=LBOUND(surf,1), UBOUND(surf,1)
+  !Find the ice extent in raster coordinates
+  gridminx = HUGE(gridminx); gridminy = HUGE(gridminy)
+  gridmaxx = -HUGE(gridmaxx); gridmaxy = -HUGE(gridmaxy)
+  DO i=LBOUND(surf,1), UBOUND(surf,1)
 
-  DO j=LBOUND(surf,2), UBOUND(surf,2)
-    IF(.NOT. surf(i,j) > (base(i,j) + melt(i,j))) CYCLE
-    !more CYCLE?
-    if (i < gridminx) gridminx = i
-    if (i > gridmaxx) gridmaxx = i
-    if (j < gridminy) gridminy = j
-    if (j > gridmaxy) gridmaxy = j
+    DO j=LBOUND(surf,2), UBOUND(surf,2)
+      IF(.NOT. surf(i,j) > (base(i,j) + melt(i,j))) CYCLE
+      !more CYCLE?
+      if (i < gridminx) gridminx = i
+      if (i > gridmaxx) gridmaxx = i
+      if (j < gridminy) gridminy = j
+      if (j > gridmaxy) gridmaxy = j
+    END DO
+
   END DO
+  gridminx = gridminx - 1; gridminy = gridminy - 1
+  gridmaxx = gridmaxx + 1; gridmaxy = gridmaxy + 1
 
-END DO
-gridminx = gridminx - 1; gridminy = gridminy - 1
-gridmaxx = gridmaxx + 1; gridmaxy = gridmaxy + 1
+  !How many boxes (~1.5 SCL) in the x (nx) and y (ny) direction
+  nx = CEILING(((gridmaxx - gridminx) * grid) / b)
+  ny = CEILING(((gridmaxy - gridminy) * grid) / b)
 
-!How many boxes (~1.5 SCL) in the x (nx) and y (ny) direction
-nx = CEILING(((gridmaxx - gridminx) * grid) / b)
-ny = CEILING(((gridmaxy - gridminy) * grid) / b)
+  !Minimum real coordinate with ice (i.e. location of a corner particle)
+  minx = (gridminx * grid) + origin(1)
+  miny = (gridminy * grid) + origin(2)
 
-!Minimum real coordinate with ice (i.e. location of a corner particle)
-minx = (gridminx * grid) + origin(1)
-miny = (gridminy * grid) + origin(2)
+  !nx (ny) is the number of boxes in the x (y) direction
+  ip=0
+  DO i=1,nx !x step
+    DO j=1,ny !y step
+      DO k=-2,l !vertical layer
+        DO k1=1,4
 
-!TODO - This is done on all processes, but needs only
-!be done by 0 and then transmitted. Lots of duplication in 
-!memory here. This, as well as the serial partitioning, restrict
-!the upper limit of simulation size.
+          x=(x0(1,k1) + minx + REAL(i-1)*b)
+          y=(x0(2,k1) + miny + REAL(j-1)*b)
+          z=x0(3,k1) + REAL(k-1)*b
 
-!nx (ny) is the number of boxes in the x (y) direction
-ip=0
-DO i=1,nx !x step
-  DO j=1,ny !y step
-    DO k=-2,l !vertical layer
-      DO k1=1,4
+          xk = FLOOR((x-origin(1))/grid)
+          yk = FLOOR((y-origin(2))/grid)
 
-        x=(x0(1,k1) + minx + REAL(i-1)*b)
-        y=(x0(2,k1) + miny + REAL(j-1)*b)
-        z=x0(3,k1) + REAL(k-1)*b
+          !just beyond edge of geom def
+          IF(xk < 0 .OR. yk < 0) CYCLE
+          IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
 
-        xk = FLOOR((x-origin(1))/grid)
-        yk = FLOOR((y-origin(2))/grid)
+          bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
+          sint = InterpRast(X,Y,surf,grid,origin,INTERP_MISS_FILL,0.0_dp) ! i.e. no particle here
+          mint = InterpRast(X,Y,melt,grid,origin,INTERP_MISS_FILL,0.0_dp)
 
-        !just beyond edge of geom def
-        IF(xk < 0 .OR. yk < 0) CYCLE
-        IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
+          !             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
+          !             If (base(xk,yk).ne.0.0.and.base(xk,yk+1).ne.0.0.and.base(xk+1,yk).ne.0.0&
+          ! .AND.base(xk+1,yk+1).NE.0.0) THEN
 
-        bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
-        sint = InterpRast(X,Y,surf,grid,origin,INTERP_MISS_FILL,0.0_dp) ! i.e. no particle here
-        mint = InterpRast(X,Y,melt,grid,origin,INTERP_MISS_FILL,0.0_dp)
+          !TODO - unhardcode this
+          ! If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.&
+          ! (ABS(z-wl).LT.4.0*SCL.AND.bint.LT.wl))) THEN
+          IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
 
-        !             write(1510+myid,13) 40.0*x,40.0*y,bint,sint
-        !             If (base(xk,yk).ne.0.0.and.base(xk,yk+1).ne.0.0.and.base(xk+1,yk).ne.0.0&
-        ! .AND.base(xk+1,yk+1).NE.0.0) THEN
+            ! undercut shape functions
+            ! lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
+            ! UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
+            ! If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
+            ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
+            ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
 
-        !TODO - unhardcode this
-        ! If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.&
-        ! (ABS(z-wl).LT.4.0*SCL.AND.bint.LT.wl))) THEN
-        IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
+            ip=ip+1
+            !More space if req'd - TODO, pass this size back (in place of NOMA)
+            IF(ip > SIZE(xo,2)) THEN
+              ALLOCATE(work_arr(3,ip-1))
+              work_arr = xo
+              DEALLOCATE(xo)
+              ALLOCATE(xo(3,ip*2))
+              xo(:,1:ip-1) = work_arr(:,1:ip-1)
+              DEALLOCATE(work_arr)
+              !CALL FatalError("NOMA not large enough (too many points)")
+              IF(DebugMode) CALL Warn("Doubling size of xo")
+            END IF
 
-          ! undercut shape functions
-          ! lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
-          ! UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
-          ! If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
-          ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
-          ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
-
-          ip=ip+1
-          !More space if req'd - TODO, pass this size back (in place of NOMA)
-          IF(ip > SIZE(xo,2)) THEN
-            ALLOCATE(work_arr(3,ip-1))
-            work_arr = xo
-            DEALLOCATE(xo)
-            ALLOCATE(xo(3,ip*2))
-            xo(:,1:ip-1) = work_arr(:,1:ip-1)
-            DEALLOCATE(work_arr)
-            !CALL FatalError("NOMA not large enough (too many points)")
-            IF(DebugMode) CALL Warn("Doubling size of xo")
+            xo(1,ip) = x
+            xo(2,ip) = y
+            xo(3,ip) = z
+            ! EndIF
+            ! EndIF
           END IF
-
-          xo(1,ip) = x
-          xo(2,ip) = y
-          xo(3,ip) = z
-          ! EndIF
-          ! EndIF
-        END IF
-        !EndIF
+          !EndIF
+        END DO
       END DO
     END DO
   END DO
-END DO
 
-IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
-IF(DebugMode) PRINT *,myid,' Finding connections...'
+  IF(DebugMode) PRINT *,myid,' Done generating particles: ',ip
+  IF(DebugMode) PRINT *,myid,' Finding connections...'
 
-IF(PrintTimes) CALL CPU_TIME(T1)
-CALL FindBeams(xo, ip, SCL, CN_All, nbeams)
-IF(PrintTimes) CALL CPU_TIME(T2)
+  IF(PrintTimes) CALL CPU_TIME(T1)
+  CALL FindBeams(xo, ip, SCL, CN_Glac, nbeams)
+  IF(PrintTimes) CALL CPU_TIME(T2)
 
-IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
+  IF(PrintTimes) PRINT *,myid,' Done finding connections: ',T2-T1,' secs'
 
-!If we are adding melange from a previous simulation, the equivalence between
-!proximity and 'bonded particles' breaks down, so we need to separately determine
-!which particles are proximal (for metis partitioning) and which are actually bonded
-!(for the model)
-IF(melange_data % active)  THEN
+  
+  !If we are adding melange from a previous simulation, the equivalence between
+  !proximity and 'bonded particles' breaks down, so we need to separately determine
+  !which particles are proximal (for metis partitioning) and which are actually bonded
+  !(for the model)
+  IF(melange_data % active)  THEN
 
-  !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
-  CALL Prune_Melange(melange_data, xo, ip,SCL)
+    !Get rid of any melange_data particles which overlap w/ the glacier geometry (xo(1:ip))
+    CALL Prune_Melange(melange_data, xo, ip,SCL)
 
-  PRINT *,myid,' debug about to exchange NN and expand'
+    PRINT *,myid,' debug about to exchange NN and expand'
 
-  !Expand xo to make room for melange particles
-  IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
+    !Expand xo to make room for melange particles
+    IF(ip+melange_data%NN > SIZE(xo,2)) CALL ExpandRealArray(xo,ip+melange_data%NN)
 
-  PRINT *,myid,' debug about to fill xo'
+    PRINT *,myid,' debug about to fill xo'
 
-  !Append melange particles to particle list
-  DO i=1,melange_data%NN
-    xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
-    xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
-    xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
-  END DO
+    !Append melange particles to particle list
+    DO i=1,melange_data%NN
+      xo(1,ip+i) = melange_data%NRXF%M(1,i) + melange_data%UT%M(6*i-5)
+      xo(2,ip+i) = melange_data%NRXF%M(2,i) + melange_data%UT%M(6*i-4)
+      xo(3,ip+i) = melange_data%NRXF%M(3,i) + melange_data%UT%M(6*i-3)
+    END DO
 
-  glac_ip = ip
-  ip = ip + melange_data%NN
-
-  IF(myid==0) THEN
-    
-    !TODO - issue here, this doesn't completely solve the partitioning problem
-    ! disconnected groups of >12 particles are lost...
-    ! Really need to detect these disconnected groups and connect them? 
-    ! Or is there a better way?
+    glac_ip = ip
+    ip = ip + melange_data%NN
 
     !Find nearby particles - this is important for partitioning
     !Because melange (unlike glacier) begins largely broken, connection info for
@@ -245,33 +235,31 @@ IF(melange_data % active)  THEN
     CALL FindNNearest(xo,ip,12,SCL, CN_metis)
     nprox_metis = 12 * ip
 
+    !Ensure every bond goes both ways
     CALL EnsureDualGraph(CN_Metis)
+
+    !Detect disconnected groups of particles & connect them
     CALL ConnectRegions(xo, CN_metis, SCL)
 
-  END IF
+    !Generate *actual* bond info for melange particles
+    CALL MelangeBonds(melange_data, glac_ip, CN_melange, nbeams_mel)
 
-  !Generate *actual* bond info for melange particles
-  CALL MelangeBonds(melange_data, glac_ip, CN_melange, nbeams_mel)
-
-ELSE
-
-  IF(myid==0) THEN
+  ELSE
 
     ALLOCATE(CN_Metis(ip))
     DO i=1,ip
-      ALLOCATE(CN_metis(i) % Conn(CN_ALL(i) % NCN))
-      CN_metis(i) % NCN = CN_all(i) % NCN
-      CN_metis(i) % Conn = CN_all(i) % Conn
+      ALLOCATE(CN_metis(i) % Conn(CN_Glac(i) % NCN))
+      CN_metis(i) % NCN = CN_Glac(i) % NCN
+      CN_metis(i) % Conn = CN_Glac(i) % Conn
     END DO
     nprox_metis = nbeams
+
+    glac_ip = ip
+
   END IF
-  
-  glac_ip = ip
 
-END IF
 
-ALLOCATE(ParticlePart(ip))
-IF(myid==0) THEN
+  ALLOCATE(ParticlePart(ip),PartNN(ntasks))
 
   PRINT *,'About to metis'
   ALLOCATE(metis_options(40),xadj(ip+1),adjncy(nprox_metis*2))
@@ -289,6 +277,13 @@ IF(myid==0) THEN
     xadj(i+1) = counter+1
   END DO
 
+  !Manually deallocate these here to reduce RAM high water mark
+  DO i=1,ip
+    DEALLOCATE(CN_metis(i) % Conn)
+  END DO
+  DEALLOCATE(CN_metis)
+
+
   !TODO - ensure compatibility (REAL and INT size)
   CALL METIS_SetDefaultOptions(metis_options)
   metis_options(18) = 1 !fortran array numbering
@@ -299,6 +294,21 @@ IF(myid==0) THEN
 
   particlepart = particlepart - 1 !mpi partitions are zero indexed
 
+  DO i=1,ntasks
+    PartNN(i) = COUNT(particlepart == i-1)
+  END DO
+
+  !Construct all local nodenums:
+  ALLOCATE(counters(ntasks),&
+       particles_L(ip))
+  counters = 0
+  particles_L = 0
+
+  DO i=1,ip
+    counters(particlepart(i)+1) = counters(particlepart(i)+1) + 1
+    particles_L(i) = counters(particlepart(i)+1)
+  END DO
+
   IF(DebugMode) THEN
     PRINT *,'obvjal: ',objval
     PRINT *,'particlepart: ',MINVAL(particlepart), MAXVAL(particlepart), &
@@ -306,102 +316,130 @@ IF(myid==0) THEN
     PRINT *,'--- METIS SUCCESS ---'
   END IF
   DEALLOCATE(xadj,adjncy)
+
 END IF
 
-IF(DebugMode) PRINT *,myid,' debug size particlepart: ',SIZE(particlepart), ip
+CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-CALL MPI_BCast(particlepart,ip,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+!Root sends particle & connection info to other processes:
 
-NN = COUNT(particlepart == myid)
+!Send total particle count
+CALL MPI_BCast(ip,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
 
-ALLOCATE(particles_G(NN),&
-     CN(NN),&
-     neighparts(0:ntasks-1),&
-     SharedNode(NN),&
-     counters(ntasks),&
-     particles_L(ip))
-
-particles_G = 0
-neighparts = .FALSE. !partitions we share a connection with
-SharedNode = .FALSE.
-counters = 0
-particles_L = 0
-
-DO i=1,NN
-  ALLOCATE(CN(i) % Conn(12), CN(i) % Part(12))
-  CN(i) % NCN = 0
-  CN(i) % Conn = 0
-  CN(i) % Part = -1 ! <=?
-END DO
-
-!Construct all local nodenums:
-!note - same results on every partition
-DO i=1,ip
-  counters(particlepart(i)+1) = counters(particlepart(i)+1) + 1
-  particles_L(i) = counters(particlepart(i)+1)
-END DO
-IF(counters(myid+1) /= NN) CALL FatalError("Programming error in determining local NN")
-
-
-!Construct local arrays of: 
-! - node connections (CN % Conn) <= global NN!
-! - number of connections (CN % NCN)
-! - other node partitions (CN % Part)
-! - all partitions we share connections with (neighparts)
+!Send partition particle count
+CALL MPI_Scatter(PartNN,1,MPI_INTEGER,NN,1, MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
 
 !Allocate the structure holding the point data
 CALL PointDataInit(NRXF, NN, part_expand)
+ALLOCATE(work_arr(NN,3),&
+     neighparts(0:ntasks-1))
 
-counter = 0
-DO i=1,ip
-  IF(particlepart(i)==myid) THEN
-    counter = counter + 1
+neighparts = .FALSE.
 
-    particles_G(counter) = i
+!Send/recv partition particle coords (xo) and GIDs
+stats = MPI_REQUEST_NULL
+CALL MPI_IRECV(NRXF%GID(1:NN),NN,MPI_INTEGER,0,121,MPI_COMM_WORLD,stats(1),ierr)
+CALL MPI_IRECV(work_arr(1:NN,1),NN,MPI_DOUBLE_PRECISION,0,122,MPI_COMM_WORLD,stats(2),ierr)
+CALL MPI_IRECV(work_arr(1:NN,2),NN,MPI_DOUBLE_PRECISION,0,123,MPI_COMM_WORLD,stats(3),ierr)
+CALL MPI_IRECV(work_arr(1:NN,3),NN,MPI_DOUBLE_PRECISION,0,124,MPI_COMM_WORLD,stats(4),ierr)
 
-    NRXF%M(:,counter) = xo(:,i) !our points
-    NRXF%PartInfo(1,counter) = myid !belong to our partition
-    NRXF%PartInfo(2,counter) = counter !with localID = counter
-    NRXF%GID(counter) == i
+CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
-    IF(i <= glac_ip) THEN
-      CN(counter) % NCN = CN_All(i) % NCN
-      DO j=1,CN(counter) % NCN
-        !CN_All, NCN_All
-        CN(counter) % Conn(j) = CN_All(i) % Conn(j)
-        pown = particlepart(CN_All(i) % Conn(j))
-        CN(counter) % Part(j) = pown
+!Cycle partitions sending particles
+IF(myid==0) THEN
+  
+  ALLOCATE(SendGIDs(MAXVAL(PartNN)))
 
-        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
-      END DO
-    ELSE
-      !Melange bonds
-      ix = i - glac_ip
-      CN(counter) % NCN = CN_Melange(ix) % NCN
-      DO j=1,CN(counter) % NCN
+  DO i=1,ntasks
 
-        CN(counter) % Conn(j) = CN_melange(ix) % Conn(j)
-        pown = particlepart(CN_melange(ix)%Conn(j))
-        CN(counter) % Part(j) = pown
+    counter = 0
+    SendGIDs = 0
+    DO j=1,ip
+      IF(ParticlePart(j) == i-1) THEN
+        counter = counter + 1
+        IF(counter > PartNN(i)) CALL FatalError("Programming error, sending too many points")
+        SendGIDs(counter) = j
+      END IF
+    END DO
 
-        IF(pown /= myid) neighparts(pown) = .TRUE. !partition is a neighbour
-      END DO
-    END IF
-  END IF
-END DO
+    CALL MPI_SEND(SendGIDs(1:PartNN(i)),PartNN(i),MPI_INTEGER, i-1,121,MPI_COMM_WORLD, ierr)
+    CALL MPI_SEND(xo(1,SendGIDs(1:PartNN(i))),PartNN(i),MPI_DOUBLE_PRECISION, i-1,122,&
+         MPI_COMM_WORLD, ierr)
+    CALL MPI_SEND(xo(2,SendGIDs(1:PartNN(i))),PartNN(i),MPI_DOUBLE_PRECISION, i-1,123,&
+         MPI_COMM_WORLD, ierr)
+    CALL MPI_SEND(xo(3,SendGIDs(1:PartNN(i))),PartNN(i),MPI_DOUBLE_PRECISION, i-1,124,&
+         MPI_COMM_WORLD, ierr)
+  END DO
+END IF
 
-neighcount = COUNT(neighparts)
+CALL MPI_Waitall(4, stats, MPI_STATUSES_IGNORE, ierr)
 
-IF(DebugMode) PRINT *,'DEBUG ',myid,' SUM PARTICLES_L ',SUM(particles_L),' min, max: ',&
-     MINVAL(particles_L),MAXVAL(particles_L)
-IF(DebugMode) PRINT *,'DEBUG ',myid,' counted ',counter,' nodes, NN: ',NN
-IF(DebugMode) PRINT *,'DEBUG ',myid,' min max ncn: ',MINVAL(CN%NCN),MAXVAL(CN%NCN)
+NRXF%A(1,1:NN) = work_arr(1:NN,1)
+NRXF%A(2,1:NN) = work_arr(1:NN,2)
+NRXF%A(3,1:NN) = work_arr(1:NN,3)
 
+NRXF%PartInfo(1,1:NN) = myid
 DO i=1,NN
-  IF(ANY(CN(i)%Part(1:CN(i)%NCN) /= myid)) SharedNode(i) = .TRUE.
+  NRXF%PartInfo(2,i) = i
 END DO
 
-IF(DebugMode) PRINT *,myid,' shares ',COUNT(SharedNode),' of ',NN,' nodes.'
+DEALLOCATE(work_arr)
+
+CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
+
+!Cycle partitions sending connection info - send local id and partition for other particle.
+
+!Set up the non-blocking recv
+ALLOCATE(RConnStream(NN*12*2))
+stats = MPI_REQUEST_NULL
+CALL MPI_IRECV(RConnStream, NN*12*2, MPI_INTEGER, 0, 125, MPI_COMM_WORLD, stats(1), ierr)
+
+IF(myid==0) THEN
+
+  !Need at least to send a list of local ID & partition (and probably GID too, why not?)
+  !Fill ConnStream with neighbouring particle localID, GlobalID and Partition
+  DO i=1,ntasks
+
+    ALLOCATE(ConnStream(PartNN(i)*12*2))
+    ConnStream = 0
+    counter = 0
+
+    DO j=1,ip
+
+      IF(ParticlePart(j) /= i-1) CYCLE
+      counter = counter + 1
+
+      IF(j <= glac_ip) THEN
+        DO k=1,CN_Glac(j) % NCN
+          ConnStream((counter-1)*12*2 + ((k-1) * 2) + 1) = &
+               particles_L(CN_Glac(j) % Conn(k))  !local
+          ConnStream((counter-1)*12*2 + ((k-1) * 2) + 2) = &
+               ParticlePart(CN_Glac(j) % Conn(k)) !part
+        END DO
+      ELSE
+        ix = j - glac_ip
+        DO k=1,CN_Melange(ix) % NCN
+          ConnStream((counter-1)*12*2 + ((k-1) * 2) + 1) = &
+               particles_L(CN_Melange(ix) % Conn(k))  !local
+          ConnStream((counter-1)*12*2 + ((k-1) * 2) + 2) = &
+               ParticlePart(CN_Melange(ix) % Conn(k)) !part
+        END DO
+      END IF
+
+    END DO
+
+    CALL MPI_SEND(ConnStream, PartNN(i)*2*12, MPI_INTEGER, i-1, 125, MPI_COMM_WORLD, ierr)
+    DEALLOCATE(ConnStream)
+
+  END DO
+
+  DEALLOCATE(CN_Glac,ParticlePart)
+END IF
+
+CALL MPI_Waitall(1, stats, MPI_STATUSES_IGNORE, ierr)
+
+IF(SIZE(RConnStream) /= 12*2*NN) CALL FatalError("Programming Error: RConnStream wrong size!")
 
 !Construct an array of all connections:
 !(this differs from CN, which is the per-node connection info
@@ -416,19 +454,33 @@ DO k=1,2
   END IF
 
   DO i=1,NN
-    DO j=1,CN(i)%NCN
+    DO j=1,12
+
+      !Array location of this neighbour
+      n = ((i-1) * 12 * 2) + ((j-1) * 2) + 1
+      local = RConnStream(n)
+      part = RConnStream(n+1)
+
+      IF(local == 0) EXIT
+      IF(part /= myid) neighparts(part) = .TRUE.
+
       !Count each beam only once - except across boundaries, both need to count
-      IF(particles_L(CN(i)%Conn(j)) > i .OR. CN(i)%Part(j) /= myid) THEN
+      IF(local > i .OR. part /= myid) THEN
         counter = counter + 1
         IF(k==2) THEN
-          NANS(1,counter) = particles_L(CN(i)%Conn(j)) !Note - folows convention N1 = other part
+          NANS(1,counter) = local !Note - folows convention N1 = other part
           NANS(2,counter) = i  !NANS = their/ourNN, ourNN
-          NANpart(counter) = CN(i) % Part(j) !NANPart is the otherPart
+          NANpart(counter) = part !NANPart is the otherPart
         END IF
       END IF
     END DO
   END DO
 END DO
+
+PRINT *,myid,' debug count nanpart me: ',COUNT(NANPart == myid), COUNT(NANPart /= myid)
+DEALLOCATE(RConnStream)
+
+neighcount = COUNT(neighparts)
 
 !Construct lookup arrays in NRXF for across partition beams
 !Note this fills the %PartInfo but doesn't actually fill the points
@@ -494,8 +546,7 @@ END DO
 ! END DO
 ! CLOSE (117+myid)
 
-!TODO - keep these?
-DEALLOCATE(CN_All)
+
 
 CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
@@ -539,7 +590,6 @@ IF(DebugMode .AND. .FALSE.) THEN
   PRINT *,myid,' max NRXF rc: ',rc_max, rc_min
 END IF
 
-IF(melange_data%active .AND. myid==0) DEALLOCATE(CN_metis)
 !We return:
 ! Our nodes initial locs  - NRXF
 ! Our node global numbers - particles_G
@@ -756,7 +806,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
         NRXF%A(1,loc) = PointEx(i) % R(j*3 - 2)
         NRXF%A(2,loc) = PointEx(i) % R(j*3 - 1)
         NRXF%A(3,loc) = PointEx(i) % R(j*3 - 0)
-        NRXF%GID(loc) = PointEx(i) % GID(j)
+        NRXF%GID(loc) = PointEx(i) % RecvGIDs(j) !TODO!!!!
         !IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
       END DO
     END DO
@@ -848,7 +898,7 @@ SUBROUTINE ExchangeProxPoints(NRXF, UT, UTM, NN, SCL, PBBox, InvPartInfo, PartIs
   TYPE(InvPartInfo_t) :: InvPartInfo(0:)
   !--------------------
   REAL(KIND=dp) :: T1, T2, tstrt,tend
-  INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,rmcnt,neigh,neighcount,&
+  INTEGER :: i,j,k,id,new_id,put_loc,put_loc_init,cnt,cnt2,rmcnt,neigh,&
        getcount,rmcount,loc,stat(MPI_STATUS_SIZE),ierr
   INTEGER, ALLOCATABLE :: WorkInt(:),stats(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:),NRXFPointEx(:)
