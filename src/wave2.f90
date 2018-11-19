@@ -36,7 +36,7 @@
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
         REAL(KIND=dp), ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:),CT(:)
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
-	REAL(KIND=dp) :: grid_bbox(4),origin(2)
+	REAL(KIND=dp) :: grid_bbox(4),origin(2),vdp_drag,vdp_fric,prop_vdp
 	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
 	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC,BI
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
@@ -775,13 +775,30 @@ END IF
           ZB = BED(XK,YK)
         END IF
 
-        IF (ABS(ZB-Z).LT.SCL*2.0) THEN
+        IF (ABS(ZB-Z).LT.SCL*1.5) THEN
           IF(InDomain) THEN
             CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),VDP(i))
           ELSE
             VDP(i) = FBED(XK,YK)
           END IF
 !         IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+
+        !Linearly decrease basal friction over 1.5 to 3.0*SCL from base
+        ELSE IF(ABS(ZB-Z).LT.SCL*3.0) THEN
+
+          IF(InDomain) THEN
+            CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),vdp_fric)
+          ELSE
+            vdp_fric = FBED(XK,YK)
+          END IF
+          IF (Z.LT.WL) THEN
+          vdp_drag=SCL*SCL*DRAG
+          ELSE
+          vdp_drag=SCL*SCL*DRAG
+          ENDIF
+
+          prop_vdp = ((3.0*SCL - ABS(ZB-Z)) / (1.5*SCL))
+          VDP(i) = prop_vdp * vdp_fric + (1-prop_vdp) * vdp_drag
         ELSE
           IF (Z.LT.WL) THEN
           VDP(I)=SCL*SCL*DRAG
