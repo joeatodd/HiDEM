@@ -760,15 +760,11 @@ END IF
             XK=0
           ELSE IF(XK>=UBOUND(BED,1)) THEN
             XK = UBOUND(BED,1)
-          ELSE
-            CALL FatalError("Programming Error: Missing interp doesn't make sense")
           END IF
           IF(YK<0) THEN
             YK=0
           ELSE IF(YK>=UBOUND(BED,2)) THEN
             YK = UBOUND(BED,2)
-          ELSE
-            CALL FatalError("Programming Error: Missing interp doesn't make sense")
           END IF
         END IF
 
@@ -1285,6 +1281,7 @@ CONTAINS
           DO i=1,NN
             WRITE(510+myid,22) i,NRXF%A(:,i),1.0
           END DO
+          CLOSE(510+myid)
         END IF
 
    ! Write out the restart files
