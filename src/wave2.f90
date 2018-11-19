@@ -72,7 +72,7 @@
         REAL(KIND=dp) :: ViscDist,ViscForce
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
-        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
+        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount,xmin,xmax,ymin,ymax
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,ENFlushInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
         INTEGER, ALLOCATABLE :: neighparts(:), NANS(:,:),NANPart(:),&
@@ -916,8 +916,13 @@ END IF
 
           !Freeze if near back plane
           IF(FixBack) THEN
-            IF(GeomMasked) THEN
-              IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
+            IF(GeomMasked) THEN 
+              !geommask goes from 0:nx-1, 0:ny-1 
+              !ensure within bounds
+              xmin = MIN(MAX(XIND,0),nx-1)
+              ymin = MIN(MAX(YIND-(2*gridratio),0),ny-1)
+              ymax = MIN(MAX(YIND,0),ny-1)
+              IF(ANY(GEOMMASK(xmin,ymin:ymax)==0) .OR. ymin == 0) THEN
                 UTP(6*I-5)=UT%M(6*I-5)
                 UTP(6*I-4)=UT%M(6*I-4)
               END IF
@@ -931,7 +936,12 @@ END IF
 
           !Freeze if near edge of glacier
           IF(FixLat) THEN
-            IF(ANY(GEOMMASK(XIND-(2*gridratio):XIND+(2*gridratio),YIND)==0)) THEN
+            !geommask goes from 0:nx-1, 0:ny-1
+            ymin = MIN(MAX(YIND,0),ny-1)
+            xmin = MIN(MAX(XIND-(2*gridratio),0),nx-1)
+            xmax = MIN(MAX(XIND+(2*gridratio),0),nx-1)
+
+            IF(ANY(GEOMMASK(xmin:xmax,ymin)==0)) THEN
               UTP(6*I-5)=UT%M(6*I-5)
               UTP(6*I-4)=UT%M(6*I-4)
             END IF
