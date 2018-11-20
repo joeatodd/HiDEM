@@ -207,7 +207,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Random Seed       | SEEDI | Seed for random number generator   |  11695378 |
 | Translational Damping       | DAMP1 | The damping coefficient for translation   | 1e4 |
 | Rotational Damping       | DAMP2 | The damping coefficient for rotation   | 1e4 |
-| Drag Coefficient        | DRAG  | The drag coefficient   | 1e1 |
+| Air Drag Coefficient        | DRAG_AIR  | The drag coefficient in air   | 1e1 |
+| Water Drag Coefficient        | DRAG_WATER  | The drag coefficient in water   | 1e1 |
+| Drag Coefficient        | DRAG_WATER, DRAG_AIR  | The drag coefficient in both air & water (alternative to previous 2)  | 1e1 |
 | Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   | 4e-2 |
 | Viscous Force        | ViscForce  | The strength of viscous particle interaction | 1e4 |
 | Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   | 20000 |

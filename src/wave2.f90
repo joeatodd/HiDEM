@@ -36,7 +36,7 @@
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
         REAL(KIND=dp), ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:),CT(:)
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
-	REAL(KIND=dp) :: grid_bbox(4),origin(2),vdp_drag,vdp_fric,prop_vdp
+	REAL(KIND=dp) :: grid_bbox(4),origin(2),vdp_drag,vdp_fric,prop_vdp,prop_wl
 	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
 	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC,BI
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
@@ -68,7 +68,7 @@
 	REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
 	REAL(KIND=dp) :: MAXX,MAXY,MAXZ,MYMAXX,MYMAXY,MYMAXZ,MAXUT
 	REAL(KIND=dp) :: V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
-	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
+	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG_AIR,DRAG_WATER
         REAL(KIND=dp) :: ViscDist,ViscForce
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
@@ -131,9 +131,9 @@ END IF
 
         CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, &
-             SEEDI, DAMP1, DAMP2, DRAG, ViscDist, ViscForce, BedIntConst, BedZOnly, BedDampFactor, &
-             OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec, &
-             CSVOutput,GeomMasked,FixLat,FixBack,gotMelange, MelRunName)
+             SEEDI, DAMP1, DAMP2, DRAG_AIR, DRAG_WATER, ViscDist, ViscForce, BedIntConst, BedZOnly, &
+             BedDampFactor,OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, fractime,StrictDomain,&
+             DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack,gotMelange, MelRunName)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -540,10 +540,13 @@ END IF
         IF (ABS(ZB-Z).LT.SCL*2.0) THEN
           VDP(I) = InterpRast(X,Y,FBED,GRID,origin,INTERP_MISS_NEAREST)
         ELSE
-          IF (Z.LT.WL) THEN
-          VDP(I)=SCL*SCL*DRAG
+          IF (Z.LT. WL-0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_AIR
           ELSE
-          VDP(I)=SCL*SCL*DRAG
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            VDP(I) = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
           ENDIF
         ENDIF
 	END DO
@@ -791,19 +794,26 @@ END IF
           ELSE
             vdp_fric = FBED(XK,YK)
           END IF
-          IF (Z.LT.WL) THEN
-          vdp_drag=SCL*SCL*DRAG
-          ELSE
-          vdp_drag=SCL*SCL*DRAG
-          ENDIF
 
+          IF (Z.LT. WL-0.5*SCL) THEN
+            vdp_drag=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            vdp_drag=SCL*SCL*DRAG_AIR
+          ELSE
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            vdp_drag = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
+          ENDIF
           prop_vdp = ((3.0*SCL - ABS(ZB-Z)) / (1.5*SCL))
           VDP(i) = prop_vdp * vdp_fric + (1-prop_vdp) * vdp_drag
+
         ELSE
-          IF (Z.LT.WL) THEN
-          VDP(I)=SCL*SCL*DRAG
+          IF (Z.LT. WL-0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_AIR
           ELSE
-          VDP(I)=SCL*SCL*DRAG
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            VDP(I) = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
           ENDIF
         ENDIF
 
