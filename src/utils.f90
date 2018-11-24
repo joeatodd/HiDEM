@@ -735,10 +735,16 @@ MODULE UTILS
 
         IF(Lost(i)) THEN
           PRINT *, myid, " Lost a particle : ",I
-
           !Set as outlier
           Outlier(i) = .TRUE.
+        END IF
 
+      END DO
+
+      !Freeze particles - need to do this each time
+      !so they don't drift.
+      DO i=1,NN
+        IF(Lost(i)) THEN
           !Put it in the freezer
           UTP(6*I-5) = freezer(1) - NRXF%M(1,I)
           UTP(6*I-4) = freezer(2) - NRXF%M(2,I)
@@ -748,7 +754,6 @@ MODULE UTILS
           UTP(6*I-0) = UT%M(6*I-0)
         END IF
       END DO
-
 
       minx = HUGE(minx)
       miny = HUGE(miny)
