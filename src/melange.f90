@@ -198,7 +198,6 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   DO i=0,mel_parts-1
     DO j=1,mel_data(i) % NTOT
       IF(mel_data(i) % NANPart(j) > i) CYCLE
-      IF(mel_data(i) % EFS(j) <= 0.0) CYCLE
       NTOT = NTOT + 1
     END DO
   END DO
@@ -214,14 +213,13 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
 
       P1 = mel_data(i) % NANPart(j)
       IF(P1 > i) CYCLE
-      IF(mel_data(i) % EFS(j) <= 0.0) CYCLE
 
       counter = counter + 1
 
       N1 = mel_data(i) % NANS(1,j)
       N2 = mel_data(i) % NANS(2,j)
-      melange_data % NANS(1,counter) = mel_pstrt(P1) + N1 - 1
-      melange_data % NANS(2,counter) = mel_pstrt(i) + N2 - 1
+      melange_data % NANS(1,counter) = mel_pstrt(P1) + mel_data(i)%NRXF%PartInfo(2,N1) - 1 
+      melange_data % NANS(2,counter) = mel_pstrt(i) + mel_data(i)%NRXF%PartInfo(2,N2) - 1
       melange_data % EFS(counter) = mel_data(i) % EFS(j)
     END DO
   END DO
