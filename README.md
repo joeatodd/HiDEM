@@ -1,6 +1,6 @@
 # The Helsinki Discrete Element Model (HiDEM) #
 
-Author: Jan Åström, Maintainer: Joe Todd
+Developers: Jan Åström & Joe Todd
 
 This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
 
