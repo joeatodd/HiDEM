@@ -398,7 +398,7 @@ CALL MPI_IRECV(RConnStream, NN*12*2, MPI_INTEGER, 0, 125, MPI_COMM_WORLD, stats(
 IF(myid==0) THEN
 
   !Need at least to send a list of local ID & partition (and probably GID too, why not?)
-  !Fill ConnStream with neighbouring particle localID, GlobalID and Partition
+  !Fill ConnStream with neighbouring particle localID and Partition
   DO i=1,ntasks
 
     ALLOCATE(ConnStream(PartNN(i)*12*2))
@@ -451,6 +451,7 @@ DO k=1,2
     ALLOCATE(NANS(2,counter),NANPart(counter))
     NTOT = counter
     counter = 0
+    NANPart = -1
   END IF
 
   DO i=1,NN
@@ -1653,7 +1654,7 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
 
   CALL Octree_build(Points)
 
-  ALLOCATE(ngb_ids(MAX(1000,10*nfind)), ngb_dists(MAX(1000,10*nfind)))
+  ALLOCATE(ngb_ids(MAX(10000,10*nfind)), ngb_dists(MAX(10000,10*nfind)))
 
   !Need to iterate over progressively larger search distances, only
   !searching for those which don't already have sufficient neighbours
@@ -1695,7 +1696,7 @@ SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
     IF(ALL(CN%NCN == nfind)) EXIT
 
     !else double search dist and try again
-    searchdist = searchdist * 2.0
+    searchdist = searchdist * 1.1
   END DO
 
 
