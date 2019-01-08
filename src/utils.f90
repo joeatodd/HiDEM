@@ -1111,6 +1111,7 @@ MODULE UTILS
       !--------------------
       REAL(KIND=dp) :: I1,I2,zval
       INTEGER :: XK,YK
+      LOGICAL :: ValidX, ValidY
 
       XK = FLOOR((x - origin(1))/grid)
       YK = FLOOR((y - origin(2))/grid)
@@ -1129,21 +1130,25 @@ MODULE UTILS
           RETURN
 
         CASE(INTERP_MISS_NEAREST)
+          ValidX = .FALSE.
+          ValidY = .FALSE.
 
           IF(XK<0) THEN
             XK=0
           ELSE IF(XK>=UBOUND(RAST,1)) THEN
             XK = UBOUND(RAST,1)
           ELSE
-            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+            ValidX = .TRUE.
           END IF
           IF(YK<0) THEN
             YK=0
           ELSE IF(YK>=UBOUND(RAST,2)) THEN
             YK = UBOUND(RAST,2)
           ELSE
-            CALL FatalError("Programming Error: Missing interp doesn't make sense")
+            ValidY = .TRUE.
           END IF
+          IF(ValidX .AND. ValidY) &
+               CALL FatalError("Programming Error: Missing interp doesn't make sense")
 
           zval = RAST(XK,YK)
           RETURN
