@@ -1,3 +1,9 @@
+! *************************************************************************
+! * The subroutine Initializefcc is based on a legacy code that used to be 
+! * freely distributed on the internet. It has been modified to fit HiDEM. 
+! * We are not aware who created the original version.
+! *************************************************************************
+
 MODULE Lattice
 
 USE INOUT
