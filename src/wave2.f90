@@ -72,7 +72,7 @@
 	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
-        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount
+        INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount,xmin,xmax,ymin,ymax
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,ENFlushInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
         INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
@@ -839,9 +839,21 @@ END IF
 
           !Freeze if near back plane
           IF(FixBack) THEN
-            IF(ANY(GEOMMASK(XIND,YIND-(2*gridratio):YIND+(2*gridratio))==0)) THEN
-              UTP(6*I-5)=UT%M(6*I-5)
-              UTP(6*I-4)=UT%M(6*I-4)
+            IF(GeomMasked) THEN 
+              !geommask goes from 0:nx-1, 0:ny-1 
+              !ensure within bounds
+              xmin = MIN(MAX(XIND,0),2000)
+              ymin = MIN(MAX(YIND-(2*gridratio),0),2000)
+              ymax = MIN(MAX(YIND,0),2000)
+              IF(ANY(GEOMMASK(xmin,ymin:ymax)==0) .OR. ymin == 0) THEN
+                UTP(6*I-5)=UT%M(6*I-5)
+                UTP(6*I-4)=UT%M(6*I-4)
+              END IF
+            ELSE 
+              IF(YIND <= 2*gridratio) THEN
+                UTP(6*I-5)=UT%M(6*I-5)
+                UTP(6*I-4)=UT%M(6*I-4)
+              END IF
             END IF
           END IF
 
