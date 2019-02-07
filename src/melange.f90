@@ -170,6 +170,9 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   CALL PointDataInit(melange_data%NRXF, mel_nn, arrsize=mel_nn)
   CALL PointDataInit(melange_data%UT,melange_data%NRXF)
   CALL PointDataInit(melange_data%UTM,melange_data%NRXF)
+  ALLOCATE(melange_data % IsLost(mel_nn),&
+       melange_data % IsOutlier(mel_nn))
+
   melange_data % NN = mel_nn
 
   counter = 0
@@ -189,6 +192,9 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
       melange_data%UTM%M(6*counter-2) = mel_data(i)%UTM%M(6*j-2)
       melange_data%UTM%M(6*counter-1) = mel_data(i)%UTM%M(6*j-1)
       melange_data%UTM%M(6*counter-0) = mel_data(i)%UTM%M(6*j-0)
+
+      melange_data % IsLost(counter) = mel_data(i) % IsLost(j)
+      melange_data % IsOutlier(counter) = mel_data(i) % IsOutlier(j)
     END DO
   END DO
 
@@ -227,7 +233,7 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
 
 END SUBROUTINE LoadMelange
 
-!Get rid of the melange particles which overlap w/ ice particles
+!Get rid of the melange particles which overlap w/ ice particles, or which are lost
 SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
 
   USE Octree
@@ -297,6 +303,11 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
     CALL Octree_search(x, search_dist, num_ngb, ngb_ids)
 
     IF(num_ngb > 0) nodeRemove(i) = .TRUE.
+  END DO
+
+  !Remove the lost particles (IsLost)
+  DO i=1,melange_data%NN
+    IF(melange_data % IsLost(i)) nodeRemove(i) = .TRUE.
   END DO
 
   PRINT *,myid,' destroying octree'
