@@ -1,6 +1,6 @@
 # The Helsinki Discrete Element Model (HiDEM) #
 
-Author: Jan Åström, Maintainer: Joe Todd
+Developers: Jan Åström & Joe Todd
 
 This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
 
@@ -12,7 +12,9 @@ See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://
 
 ## Compilation ##
 
-Configuration, compilation and installation is handled by Cmake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
+Configuration, compilation and installation is handled by CMake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
+
+By default, compilation produces a single binary 'HiDEM' in the top level of the 'build' directory.
 
 If you generate your own toolchain/compilation scripts for different systems, please get in touch or make a pull request!
 
@@ -269,7 +271,7 @@ User may optionally specify a 'geom_mask' column in geometry input file, which t
 
 ## Output - JYR and STR files ##
 
-By default the model produces particle information in .vtu format (readable in Paraview - use HiDEM_load.py macro) and bond strain information in binary format (readable by the python script rh.py). For CSV output, use the 'CSV Output' option in the inp.dat (beware this produces much larger files which make visualisation time consuming).
+By default the model produces particle information in .vtu format (readable in Paraview (v5.5) - use HiDEM_load.py macro) and bond strain information in binary format (readable by the python script rh.py). For CSV output, use the 'CSV Output' option in the inp.dat (beware this produces much larger files which make visualisation time consuming).
 
 JYR files list the position of all particles in x,y,z, every 2 seconds.  
 Read this in paraview quite easily.  
