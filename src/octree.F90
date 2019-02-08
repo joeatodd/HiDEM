@@ -45,7 +45,7 @@ MODULE octree
 
   ! Points should be indexed by their id.
   type point_type
-    integer id
+    INTEGER id,tag
     real(KIND=dp) :: x(3)
   end type point_type
 
@@ -177,23 +177,41 @@ contains
 
   end subroutine octree_update
 
-  recursive subroutine octree_search(x, distance, num_ngb_point, ngb_ids, node_)
+  RECURSIVE SUBROUTINE octree_search(x, distance, num_ngb_point, ngb_ids, node_, &
+       ngb_dists, tag, same_tag)
 
     real(KIND=dp), intent(in) :: x(3)
     real(KIND=dp), intent(in) :: distance
     integer, intent(inout) :: num_ngb_point
     integer, intent(inout) :: ngb_ids(:)
+    INTEGER, INTENT(IN), OPTIONAL :: tag
+    REAL(KIND=dp), INTENT(out), OPTIONAL :: ngb_dists(:)
+    LOGICAL, INTENT(IN), OPTIONAL :: same_tag
     type(node_type), intent(in), target, optional :: node_
-
+    !------------------------------------------
     type(node_type), pointer :: node
     real(KIND=dp) d2, dx(3)
     integer i
+    LOGICAL :: have_tag, seek_same, tags_match
 
     if (present(node_)) then
       node => node_
     else
       node => tree%root_node
     end if
+
+    !Optionally specify an integer tag which specifies either which
+    !particles to search, or which to exclude
+    IF(PRESENT(tag)) THEN
+      have_tag = .TRUE.
+      IF(.NOT. PRESENT(same_tag)) THEN
+        seek_same = .TRUE.
+      ELSE
+        seek_same = same_tag
+      END IF
+    ELSE
+      have_tag = .FALSE.
+    END IF
 
     if (associated(node%children)) then
       ! We are at branch node.
@@ -205,7 +223,8 @@ contains
              x(3)+distance >= node%children(i)%bbox(1, 3) .AND. &
              x(3)-distance <= node%children(i)%bbox(2, 3))) THEN
 
-          call octree_search(x, distance, num_ngb_point, ngb_ids, node%children(i))
+          CALL octree_search(x, distance, num_ngb_point, ngb_ids, node%children(i), ngb_dists, &
+               tag, same_tag)
         end if
       end do
     else
@@ -213,11 +232,21 @@ contains
       ! We are at leaf node.
       d2 = distance * distance
       do i = 1, node%num_point
+
+        !Check the point tag if requested
+        IF(have_tag) THEN
+          tags_match = tag == tree%points(node%point_ids(i)) % tag
+          IF(tags_match .NEQV. seek_same) CYCLE
+        END IF
+
         dx(:) = x(:) - tree%points(node%point_ids(i))%x(:)
         if (dot_product(dx, dx) < d2) then
           num_ngb_point = num_ngb_point + 1
           if (num_ngb_point <= size(ngb_ids)) then
             ngb_ids(num_ngb_point) = node%point_ids(i)
+            IF(PRESENT(ngb_dists)) THEN
+              ngb_dists(num_ngb_point) = SQRT(dot_PRODUCT(dx,dx))
+            END IF
           else
             write(6, "('[Error]: octree: The ngb_ids array size is not enough!')")
             PRINT *,'Point is: ',x(:)

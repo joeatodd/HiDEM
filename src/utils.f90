@@ -1,6 +1,7 @@
 MODULE UTILS
 
   USE TypeDefs
+  USE INOUT
 
   IMPLICIT NONE
 
@@ -15,6 +16,10 @@ MODULE UTILS
   INTERFACE ExpandIntarray
      MODULE PROCEDURE Expand1IntArray, Expand2IntArray
   END INTERFACE ExpandIntarray
+
+  INTERFACE ExpandRealarray
+     MODULE PROCEDURE Expand1RealArray, Expand2RealArray
+  END INTERFACE ExpandRealarray
 
   CONTAINS
 
@@ -94,6 +99,83 @@ MODULE UTILS
 
     END SUBROUTINE Expand2IntArray
 
+    SUBROUTINE Expand1RealArray(realarr,newsize_in,fill_in)
+
+      REAL(KIND=dp), ALLOCATABLE :: realarr(:), workarr(:)
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, fill
+
+      IF(.NOT. ALLOCATED(realarr)) THEN
+        PRINT *,myid,' Error: Expand1RealArray received an unallocated array!'
+        STOP
+      END IF
+
+      oldsize = SIZE(realarr)
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
+
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
+      ! ALLOCATE(workarr(oldsize))
+      ! workarr(1:oldsize) = realarr(1:oldsize)
+      ! DEALLOCATE(realarr)
+      ALLOCATE(workarr(newsize))
+      workarr = fill
+      workarr(1:oldsize) = realarr(1:oldsize)
+
+      !FORTRAN 2003 feature...
+      DEALLOCATE(realarr) !Cray compiler bug?
+      CALL MOVE_ALLOC(workarr, realarr)
+
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
+
+    END SUBROUTINE Expand1RealArray
+
+
+    SUBROUTINE Expand2RealArray(realarr,newsize_in,fill_in)
+
+      REAL(KIND=dp), ALLOCATABLE :: realarr(:,:), workarr(:,:)
+      INTEGER, OPTIONAL :: newsize_in,fill_in
+      INTEGER :: newsize, oldsize, dim1size, fill
+
+      IF(.NOT. ALLOCATED(realarr)) THEN
+        PRINT *,myid,' Error: Expand2RealArray received an unallocated array!'
+        STOP
+      END IF
+
+      oldsize = SIZE(realarr,2)
+
+      IF(PRESENT(newsize_in)) THEN
+        newsize = newsize_in
+      ELSE
+        newsize =  oldsize * 2
+      END IF
+
+      fill = 0
+      IF(PRESENT(fill_in)) fill = fill_in
+
+      dim1size = SIZE(realarr,1)
+
+      ! ALLOCATE(workarr(oldsize))
+      ! workarr(1:oldsize) = intarr(1:oldsize)
+      ! DEALLOCATE(intarr)
+      ALLOCATE(workarr(dim1size,newsize))
+      workarr = fill
+
+      workarr(:,1:oldsize) = realarr(:,1:oldsize)
+
+      !FORTRAN 2003 feature...
+      DEALLOCATE(realarr) !Cray compiler bug?
+      CALL MOVE_ALLOC(workarr, realarr)
+
+      IF(DebugMode) PRINT *,'DEBUG: Done move alloc'
+
+    END SUBROUTINE Expand2RealArray
+
     SUBROUTINE PointDataInitNRXF(NRXF, n, partexpand, arrsize)
       TYPE(NRXF_T), TARGET :: NRXF
       INTEGER :: n,n_tot
@@ -125,7 +207,7 @@ MODULE UTILS
       NRXF%NC = 0
       NRXF%NP = 0
 
-      ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot))
+      ALLOCATE(NRXF%A(3,n_tot),NRXF%PartInfo(2,n_tot),NRXF%GID(n_tot))
 
       NRXF%PartInfo(:,:) = -1 !-1 = no point
 
@@ -196,15 +278,17 @@ MODULE UTILS
       LOGICAL :: neighparts(0:)
       INTEGER, OPTIONAL :: initsize_in
       !------------------------------
-      INTEGER :: initsize,i,j,neighcount
+      INTEGER :: initsize,i,j,neighcount,nopartitions
 
       neighcount = COUNT(neighparts)
+
+      nopartitions = SIZE(neighparts)
 
       initsize = 100
       IF(PRESENT(initsize_in)) initsize = initsize_in
 
-      ALLOCATE(InvPartInfo(0:ntasks-1))
-      DO i=0,ntasks-1
+      ALLOCATE(InvPartInfo(0:nopartitions-1))
+      DO i=0,nopartitions-1
         InvPartInfo(i) % NID = i
         InvPartInfo(i) % ccount = 0
         InvPartInfo(i) % pcount = 0
@@ -212,7 +296,7 @@ MODULE UTILS
         InvPartInfo(i) % spcount = 0
       END DO
 
-      DO j=0,ntasks-1
+      DO j=0,nopartitions-1
         IF(.NOT. neighparts(j)) CYCLE
         ALLOCATE(InvPartInfo(j) % ConnIDs(initsize),&
              InvPartInfo(j) % ConnLocs(initsize),&
@@ -264,7 +348,7 @@ MODULE UTILS
       LOGICAL, OPTIONAL :: do_M, do_C, do_P
       !---------------------
       REAL(KIND=dp), ALLOCATABLE :: work_arr(:,:),work_arr1(:)
-      INTEGER, ALLOCATABLE :: work_int(:,:)
+      INTEGER, ALLOCATABLE :: work_int(:,:),work_gid(:)
       INTEGER :: a_oldsize,m_oldsize,c_oldsize,p_oldsize
       INTEGER :: a_newsize,m_newsize,c_newsize,p_newsize
       INTEGER :: cstrt_new, pstrt_new,cstrt_old, pstrt_old
@@ -353,9 +437,10 @@ MODULE UTILS
         PRINT *,'ResizePointDataNRXF: Programming error, negative sizes!'
       END IF
 
-      ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize))
+      ALLOCATE(work_arr(3,a_newsize),work_int(2,a_newsize), work_gid(a_newsize))
       work_arr = 0.0
       work_int = -1
+      work_gid = 0
 
       work_arr(:,1:m_oldsize) = NRXF%A(:,1:m_oldsize)
       work_arr(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF % A(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
@@ -365,10 +450,16 @@ MODULE UTILS
       work_int(:,cstrt_new : cstrt_new+c_oldsize-1) = NRXF%PartInfo(:,NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
       work_int(:,pstrt_new : pstrt_new+p_oldsize-1) = NRXF%PartInfo(:,NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
 
+      work_gid(1:m_oldsize) = NRXF%GID(1:m_oldsize)
+      work_gid(cstrt_new : cstrt_new+c_oldsize-1) = NRXF%GID(NRXF%cstrt:NRXF%cstrt+c_oldsize-1)
+      work_gid(pstrt_new : pstrt_new+p_oldsize-1) = NRXF%GID(NRXF%pstrt:NRXF%pstrt+p_oldsize-1)
+
       DEALLOCATE(NRXF%A) !Cray compiler bug?
       CALL MOVE_ALLOC(work_arr, NRXF%A)
       DEALLOCATE(NRXF%PartInfo) !Cray compiler bug?
       CALL MOVE_ALLOC(work_int, NRXF%PartInfo)
+      DEALLOCATE(NRXF%GID)
+      CALL MOVE_ALLOC(work_gid, NRXF%GID)
 
       cstrt_old = NRXF%cstrt
       pstrt_old = NRXF%pstrt
@@ -579,17 +670,17 @@ MODULE UTILS
     !Checks particle position and velocity for anything suspicious
     !Freezes particles which are outside the domain, determines outliers 
     !for the purpose of BBox calculation
-    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,Lost,Outlier)
+    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,DT,MAXUT,Lost,Outlier)
 
       INTEGER ::  NN, NTOT
       INTEGER :: NANS(:,:)
       REAL(KIND=dp), ALLOCATABLE :: EFS(:),UTP(:)
-      REAL(KIND=dp) :: DT,GRID,MAXUT
+      REAL(KIND=dp) :: DT,grid_bbox(4),MAXUT
       TYPE(UT_t) :: UT
       TYPE(NRXF_t) :: NRXF
       LOGICAL, ALLOCATABLE :: Lost(:), Outlier(:)
       !-----------------------------------
-      INTEGER :: i,j,XIND,YIND,ierr
+      INTEGER :: i,j,ierr
       REAL(KIND=dp) :: BBox(6),bbox_vol,bbox_vols(ntasks),med_vol,max_gap(3),gap(3)
       REAL(KIND=dp) :: outlier_gap_prop, outlier_arr_prop, freezer(3)
       REAL(KIND=dp) :: X,Y,Z,dx,dy,dz,disp, disp_limit
@@ -625,16 +716,18 @@ MODULE UTILS
 
           disp = SQRT(dx**2.0 + dy**2.0 + dz**2.0)
           IF(disp > disp_limit) THEN
-            PRINT *,myid,' debug, particle breaking the speed limit!'
+            IF(DebugMode) PRINT *,myid,' debug, particle breaking the speed limit!'
             too_fast(i) = .TRUE.
           END IF
         END IF
 
         !Check location
         !TODO - check vertical coordinate too
-        XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
-        YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
-        IF(XIND > 2000 .OR. XIND < -100 .OR. YIND > 2000 .OR. YIND < -100) Lost(i) = .TRUE.
+        x = NRXF%M(1,I) + UTP(6*I-5)
+        y = NRXF%M(2,I) + UTP(6*I-4)
+        IF(x < grid_bbox(1) .OR. x > grid_bbox(2) .OR. y < grid_bbox(3) .OR. y > grid_bbox(4)) THEN
+          Lost(i) = .TRUE.
+        END IF
 
         !Check total displacement
         IF(ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
@@ -642,10 +735,16 @@ MODULE UTILS
 
         IF(Lost(i)) THEN
           PRINT *, myid, " Lost a particle : ",I
-
           !Set as outlier
           Outlier(i) = .TRUE.
+        END IF
 
+      END DO
+
+      !Freeze particles - need to do this each time
+      !so they don't drift.
+      DO i=1,NN
+        IF(Lost(i)) THEN
           !Put it in the freezer
           UTP(6*I-5) = freezer(1) - NRXF%M(1,I)
           UTP(6*I-4) = freezer(2) - NRXF%M(2,I)
@@ -655,7 +754,6 @@ MODULE UTILS
           UTP(6*I-0) = UT%M(6*I-0)
         END IF
       END DO
-
 
       minx = HUGE(minx)
       miny = HUGE(miny)
@@ -1005,4 +1103,97 @@ MODULE UTILS
       RETURN
     END SUBROUTINE sort_real2_r
 
+    FUNCTION InterpRast(x,y,RAST,grid,origin,miss_strategy,fill_val) RESULT(zval)
+      REAL(KIND=dp) :: x,y,grid,origin(2)
+      REAL(KIND=dp) :: RAST(0:,0:)
+      INTEGER :: miss_strategy
+      REAL(KIND=dp), OPTIONAL :: fill_val
+      !--------------------
+      REAL(KIND=dp) :: I1,I2,zval
+      INTEGER :: XK,YK
+      LOGICAL :: ValidX, ValidY
+
+      XK = FLOOR((x - origin(1))/grid)
+      YK = FLOOR((y - origin(2))/grid)
+      I1=(x-origin(1))/grid - XK
+      I2=(y-origin(2))/grid - YK
+
+      IF(ValidRasterIndex(xk,yk,RAST)) THEN
+        CALL BIPINT(I1,I2,RAST(XK,YK),RAST(XK,YK+1),RAST(XK+1,YK),RAST(XK+1,YK+1),zval)
+      ELSE
+        SELECT CASE(miss_strategy)
+        CASE(INTERP_MISS_FILL)
+
+          IF(.NOT. PRESENT(fill_val)) CALL FatalError("Programming error: &
+               &requested fill missing interp but no fill value specified!")
+          zval = fill_val
+          RETURN
+
+        CASE(INTERP_MISS_NEAREST)
+          ValidX = .FALSE.
+          ValidY = .FALSE.
+
+          IF(XK<0) THEN
+            XK=0
+          ELSE IF(XK>=UBOUND(RAST,1)) THEN
+            XK = UBOUND(RAST,1)
+          ELSE
+            ValidX = .TRUE.
+          END IF
+          IF(YK<0) THEN
+            YK=0
+          ELSE IF(YK>=UBOUND(RAST,2)) THEN
+            YK = UBOUND(RAST,2)
+          ELSE
+            ValidY = .TRUE.
+          END IF
+          IF(ValidX .AND. ValidY) &
+               CALL FatalError("Programming Error: Missing interp doesn't make sense")
+
+          zval = RAST(XK,YK)
+          RETURN
+
+        CASE (INTERP_MISS_ERR)
+          PRINT *,myid,' Debug, missing value xy: ',x,y
+          CALL FatalError("Unexpected missing value in raster interpolation.")
+        CASE DEFAULT
+          CALL FatalError("Programming Error: Missing Interp Strategy not understood.")
+        END SELECT
+      END IF
+    END FUNCTION InterpRast
+
+    !-----------------------------------------------------
+    Subroutine BIPINT(x,y,f11,f12,f21,f22,fint)
+      Implicit none
+      Real(KIND=dp) :: x,y,f11,f12,f21,f22,fint
+      fint=f11*(1.0-x)*(1.0-y)+f21*x*(1.0-y)+f12*(1.0-x)*y+f22*x*y
+    End Subroutine BIPINT
+
+    !-----------------------------------------------------
+    Subroutine BIPINTN(x,y,f11,f12,f21,f22,dix,diy,diz,grid)
+      Implicit none
+      Real(KIND=dp) :: x,y,f11,f12,f21,f22,dix,diy,diz,grid
+      REAL(KIND=dp) norm
+      dix=(-f11*(1.0-y)+f21*(1.0-y)-f12*y+f22*y)/grid
+      diy=(-f11*(1.0-x)-f21*x+f12*(1.0-x)+f22*x)/grid
+      diz=1.0
+      norm=SQRT(dix**2.0+diy**2.0+1.0)
+      dix=-dix/norm
+      diy=-diy/norm
+      diz=diz/norm
+      !if (dix.gt.0.2) dix=0.2
+      !if (diy.gt.0.2) diy=0.2
+      !if (dix.lt.-0.2) dix=-0.2
+      !if (diy.lt.-0.2) diy=-0.2
+    End Subroutine BIPINTN
+
+
+    FUNCTION ValidRasterIndex(i,j,rast) RESULT(valid)
+      INTEGER :: i,j
+      REAL(KIND=dp) :: rast(0:,0:)
+      LOGICAL :: valid
+
+      !'<' rather than '<=' because we also require that i+1 and j+1 are valid
+      valid = (i >= 0) .AND. (i < UBOUND(rast,1)) .AND. (j >= 0) .AND. (j < UBOUND(rast,2))
+    END FUNCTION ValidRasterIndex
 END MODULE UTILS

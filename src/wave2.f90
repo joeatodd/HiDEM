@@ -29,22 +29,21 @@
         USE Lattice
         USE Effl
         USE Utils
+        USE Melange
 
 	IMPLICIT NONE
-        INCLUDE 'na90.dat'
 	REAL(KIND=dp), ALLOCATABLE :: EMM(:),BOYZ(:),BOYY(:),WSY(:),WSX(:)
 	REAL(KIND=dp), ALLOCATABLE :: MFIL(:),EFC(:),EFS(:),VDP(:)
         REAL(KIND=dp), ALLOCATABLE :: FRX(:),FRY(:),FRZ(:),WE(:),CT(:)
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
-	REAL(KIND=dp) :: BED(-100:2000,-100:2000)
-	REAL(KIND=dp) :: SUF(-100:2000,-100:2000)
-	REAL(KIND=dp) :: FBED(-100:2000,-100:2000)
-	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC
+	REAL(KIND=dp) :: grid_bbox(4),origin(2),vdp_drag,vdp_fric,prop_vdp,prop_wl
+	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
+	REAL(KIND=dp) :: DIX,DIY,DIZ,FRIC,UC,BI
 	REAL(KIND=dp) :: ENM0,ENMS0,POR,GRID,BBox(6)
-        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst
+        REAL(KIND=dp) :: RHO,RHOW,GRAV, BedIntConst,mask,BedDampConst,BedDampFactor
         REAL(KIND=dp), ALLOCATABLE :: PBBox(:,:)
 	INTEGER, ALLOCATABLE :: CCN(:),CCNW(:)
-	INTEGER NANW(3,NOCON),mask,GEOMMASK(-100:2000,-100:2000)
+	INTEGER NANW(3,NOCON)
 	INTEGER REST,RY0,NM2,noprocs, counter
         INTEGER, POINTER :: countptr
 	REAL(KIND=dp) M,MN,JS,DT,T,X,Y,E,GSUM,GSUM0
@@ -59,36 +58,37 @@
 	INTEGER NNO,NS,SI,NNT,BCCS
 	INTEGER YNOD,LS,KK,STEPS0
         INTEGER DST,ZNOD,J,XY,O
-	INTEGER P,BCC,XIND,YIND,gridratio
+	INTEGER P,BCC,XIND,YIND,gridratio,nx,ny
 	REAL(KIND=dp) :: KINS,KINS2,ENMS,MGHS,DMPENS,PSUMS
-	REAL(KIND=dp) :: WENS,GSUMS,DPES,BCES
+	REAL(KIND=dp) :: WENS,GSUMS,DPES,BCES,BDE,BDES
 	REAL(KIND=dp) :: XE,DEX,DEY,RDE,MML,XI,ZI,YI
 	REAL(KIND=dp) :: Z,AVE,ROUGH,FG,SCA,MGH,MGH0,DPE
 	REAL(KIND=dp) :: KX(12,12),KY(12,12),KZ(12,12),K(12,12)
 	REAL(KIND=dp) :: DDX,DDY,DDZ,DX,DY,DZ,DL,DTX,DTY,DTZ
 	REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,DXL,DYL,DZL,DDL,RLS
-	REAL(KIND=dp) :: MAXX,MAXY,MAXZ,MAXUT
+	REAL(KIND=dp) :: MAXX,MAXY,MAXZ,MYMAXX,MYMAXY,MYMAXZ,MAXUT
 	REAL(KIND=dp) :: V1,V2,V3,MAXV,EF0,GL,WL,SLIN,PI,SUB
-	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG
+	REAL(KIND=dp) :: SSB,CSB,SQB,LNN,SCL,DAMP1,DAMP2,DRAG_AIR,DRAG_WATER
+        REAL(KIND=dp) :: ViscDist,ViscForce
         REAL(KIND=dp) :: fractime
 	REAL, ALLOCATABLE :: RAN(:)
         INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),maxid,neighcount,xmin,xmax,ymin,ymax
         INTEGER rc,ntasks_init,ierr,SEED,SEEDI,ENOutInt,ENFlushInt,OUTINT,RESOUTINT,&
              NTOT,FXC,ND
-        INTEGER, ALLOCATABLE :: NCN(:),CN(:,:),CNPart(:,:), particles_G(:),&
-             neighparts(:), NANS(:,:),NANPart(:),FXF(:,:), NDL(:,:),PNN(:)
+        INTEGER, ALLOCATABLE :: neighparts(:), NANS(:,:),NANPart(:),&
+             FXF(:,:), NDL(:,:),PNN(:)
 
         INTEGER, DIMENSION(8) :: datetime
-        LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput
-        LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine
+        LOGICAL :: BedZOnly,FileExists,StrictDomain,DoublePrec,CSVOutput,gotMelange
+        LOGICAL :: GeomMasked,FixLat,FixBack,doShearLine,aboveShearLine,InDomain
         LOGICAL, ALLOCATABLE :: IsLost(:), IsOutlier(:), PartIsNeighbour(:)
-        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr
+        CHARACTER(LEN=256) INFILE, geomfile, runname, wrkdir, resdir,restname,outstr,&
+             MelRunName
 
-!        TYPE(EF_t) :: EFS
-        TYPE(NEI_t) :: NeighbourID
         TYPE(UT_t) :: UT, UTM
         TYPE(NRXF_t) :: NRXF
         TYPE(InvPartInfo_t), TARGET, ALLOCATABLE :: InvPartInfo(:)
+        TYPE(MelangeDataHolder_t) :: melange_data
 
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
@@ -131,8 +131,9 @@ END IF
 
         CALL ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
              RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, &
-             SEEDI, DAMP1, DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, &
-             WL, STEPS0,GRID, fractime,StrictDomain,DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack)
+             SEEDI, DAMP1, DAMP2, DRAG_AIR, DRAG_WATER, ViscDist, ViscForce, BedIntConst, BedZOnly, &
+             BedDampFactor,OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0,GRID, fractime,StrictDomain,&
+             DoublePrec,CSVOutput,GeomMasked,FixLat,FixBack,gotMelange, MelRunName)
 
    IF(myid==0) THEN
      OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
@@ -144,6 +145,11 @@ END IF
      ! OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
      ! OPEN(UNIT=800+myid,FILE=TRIM(wrkdir)//'/tbed'//na(myid),STATUS='UNKNOWN')
      !OPEN(UNIT=1700+myid,FILE='bccs'//na(myid),STATUS='UNKNOWN')
+   END IF
+
+   IF(gotMelange) THEN
+     melange_data % active = .TRUE.
+     IF(myid==0) CALL LoadMelange(MelRunName, wrkdir, melange_data)
    END IF
 
 ! S = width/thickness of the beams, scaled by SCL
@@ -176,6 +182,7 @@ END IF
 	DPE=0.0
 	DMPEN=0.0	
 	PSUM=0.0
+	BDE=0.0
 	END IF
 
 !inclination of the domain - not really used
@@ -195,19 +202,54 @@ END IF
 
 !============= Read in the geometry from DEM ==============
 
-        !Set bed -1000.0 everywhere
-        DO I=-100,2000
-        DO J=-100,2000
-        BED(I,J)=-1000.0
-        ENDDO
-        ENDDO
+        !Read the geometry and friction
+        !into the grids BED, SUF, and FBED
+        
+        grid_bbox(1) = HUGE(grid_bbox(1))
+        grid_bbox(2) = -HUGE(grid_bbox(1))
+        grid_bbox(3) = HUGE(grid_bbox(1))
+        grid_bbox(4) = -HUGE(grid_bbox(1))
 
+        OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
+        READ(400,*) NM2
+
+        !determine range of x,y raster
+        DO I=1,NM2
+        IF(GeomMasked) THEN
+          READ(400,*) X,Y,S1,B2,B1,Z1,mask
+        ELSE
+          READ(400,*) X,Y,S1,B2,B1,Z1
+        END IF
+        grid_bbox(1) = MIN(grid_bbox(1),x)
+        grid_bbox(2) = MAX(grid_bbox(2),x)
+        grid_bbox(3) = MIN(grid_bbox(3),y)
+        grid_bbox(4) = MAX(grid_bbox(4),y)
+        END DO
+
+        nx = NINT((grid_bbox(2)-grid_bbox(1))/grid) + 1
+        ny = NINT((grid_bbox(4)-grid_bbox(3))/grid) + 1
+
+        origin(1) = grid_bbox(1)
+        origin(2) = grid_bbox(3)
+
+        IF(DebugMode) PRINT *,myid,' debug rast: nx: ',nx,' ny: ',ny,' minmaxx: ',&
+             grid_bbox(1),grid_bbox(2),' minmaxy: ',grid_bbox(3),grid_bbox(4)
+
+        !Allocate & initialise raster arrays
+        ALLOCATE(BED(0:nx-1,0:ny-1),&
+             SUF(0:nx-1,0:ny-1),&
+             FBED(0:nx-1,0:ny-1),&
+             GEOMMASK(0:nx-1,0:ny-1),&
+             BASE(0:nx-1,0:ny-1))
+
+        BED = -1000.0
+        BASE = -1000.0
+        SUF = -1000.0
+        FBED = 0.0
         !Geometry mask: 1=glacier, 2=fjord, 0=bedrock/outside domain
         GEOMMASK = 0
 
-        !Read the geometry and friction
-        !into the grids BED, SUF, and FBED
-        OPEN(UNIT=400,file=TRIM(geomfile),STATUS='UNKNOWN')
+        REWIND(400)
         READ(400,*) NM2
 	DO I=1,NM2
         IF(GeomMasked) THEN
@@ -217,32 +259,16 @@ END IF
         END IF
 !        X=X-2000.0
 !        Y=Y-7000.0
-        XK=INT(X/GRID)
-        YK=INT(Y/GRID)
-        IF (XK.GE.-100.AND.YK.GE.-100) BED(XK,YK)=B1
-        IF (XK.GE.-100.AND.YK.GE.-100) SUF(XK,YK)=S1
-        IF (XK.GE.-100.AND.YK.GE.-100) FBED(XK,YK)=FRIC*SCL*SCL*Z1
-        IF (XK.GE.-100.AND.YK.GE.-100.AND.GeomMasked) GEOMMASK(XK,YK)=mask
+        XK=NINT((X-origin(1))/GRID)
+        YK=NINT((Y-origin(2))/GRID)
+        IF(XK < 0 .OR. YK < 0 .OR. XK > nx-1 .OR. YK > ny-1) &
+             CALL FatalError("Programming Error: Bad grid spec")
 
-        !Previously had commented from here
-        !------------
-        IF (YK.EQ.0.AND.XK.GE.-100) THEN
-        DO J=0,20
-        BED(XK,-J)=B1
-        SUF(XK,-J)=S1
-        FBED(XK,-J)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
-
-        IF (XK.EQ.0.AND.YK.GE.-100) THEN
-        DO J=0,20
-        BED(-J,YK)=B1
-        SUF(-J,YK)=S1
-        FBED(-J,YK)=FRIC*SCL*SCL*Z1
-        ENDDO
-        ENDIF
-        !To here
-        !------------
+        BED(XK,YK)=B1
+        BASE(XK,YK)=B2
+        SUF(XK,YK)=S1
+        FBED(XK,YK)=FRIC*SCL*SCL*Z1
+        IF(GeomMasked) GEOMMASK(XK,YK)=NINT(mask)
 
 	ENDDO
 	CLOSE(400)
@@ -259,10 +285,19 @@ END IF
 !     Write out translation and rotation matrices to REST?
 
         !Go to glas.f90 to make the grid
-	CALL FIBG3(NN,NTOT,NANS,NRXF,NANPart,particles_G, NCN, CN, CNPart, InvPartInfo, &
-        neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,UC,StrictDomain,GeomMasked,RunName)
+	CALL FIBG3(BASE,SUF,origin,NN,NTOT,NANS,NRXF,NANPart, &
+          InvPartInfo, neighcount, LS, wrkdir,geomfile,SCL,GRID,MELT,WL,&
+          UC,StrictDomain,GeomMasked,RunName,melange_data)
  
         IF(DebugMode) PRINT *,myid,' made it out of FIBG3 alive!'
+        MYMAXZ = MAXVAL(NRXF%M(3,:))
+        MYMAXY = MAXVAL(NRXF%M(2,:))
+        MYMAXX = MAXVAL(NRXF%M(1,:))
+        CALL MPI_ALLREDUCE(MYMAXX,MAXX,1,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(MYMAXY,MAXY,1,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierr)
+        CALL MPI_ALLREDUCE(MYMAXZ,MAXZ,1,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierr)
+
+        IF(myid == 0 .AND. DebugMode) PRINT *,"Max coords: ",MAXX,MAXY,MAXZ
 
         !Allocate point data structures & pointers
         CALL PointDataInit(UT,NRXF)
@@ -320,11 +355,7 @@ END IF
             Y1 = NRXF%A(2,N1)
             Z1 = NRXF%A(3,N1)
 
-            I1=X1/GRID-INT(X1/GRID)
-            I2=Y1/GRID-INT(Y1/GRID)
-            CALL BIPINT(I1,I2,SUF(INT(X1/GRID),INT(Y1/GRID)),SUF(INT(X1/GRID),INT(Y1/GRID)+1),&
-                 SUF(INT(X1/GRID)+1,INT(Y1/GRID)),SUF(INT(X1/GRID)+1,INT(Y1/GRID)+1),ZS)
-
+            Zs = InterpRast(x1,y1,SUF,GRID,origin,INTERP_MISS_ERR)
             aboveShearLine = ABS(Z1-ZS).LT.SLIN
           END IF
 
@@ -349,7 +380,7 @@ END IF
         IF(.NOT. FileExists) CALL FatalError("Running with too many cores!&
              &(some restart files don't exist)")
 
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST0'//na(myid),STATUS='OLD',ACTION="read")
         READ(117+myid,*) NN,cstrt,NC,pstrt,NP,NSIZE,NTOT,BCC
         READ(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM0
         READ(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY0
@@ -376,7 +407,7 @@ END IF
              IsLost(NN))
 
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST1'//na(myid),STATUS='OLD',ACTION="read")
 	DO I=1,NTOT
 	READ(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),&
       	CT(12*I-8),CT(12*I-7),CT(12*I-6)
@@ -385,7 +416,7 @@ END IF
 	END DO
 	CLOSE (117+myid)
 
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_REST2'//na(myid),STATUS='OLD',ACTION="read")
 	DO I=1,NN
 	READ(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),&
       	UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
@@ -396,7 +427,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read particle init pos from file if restarting
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_NODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_NODFIL2'//na(myid),STATUS='UNKNOWN',ACTION="read")
 	DO I=1,NN
           READ(117+myid,*) IX,X,Y,Z,M
           NRXF%M(1,IX)=X
@@ -408,7 +439,7 @@ END IF
 	CLOSE (117+myid)
 
         !Read in the partition & id of particles we share from other partitions
-	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN')
+	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_ONODFIL2'//na(myid),STATUS='UNKNOWN',ACTION="read")
 	DO I=1,NC!+NP
           READ(117+myid,*) IX,Part,ID
           IF(IX >= NRXF%pstrt .OR. IX < NRXF%cstrt) THEN
@@ -440,7 +471,7 @@ END IF
         END DO
 
         ALLOCATE(EFS(NTOT), NANS(2,NTOT), NANPart(NTOT))
-        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_FS'//na(myid),STATUS='UNKNOWN')
+        OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(restname)//'_FS'//na(myid),STATUS='UNKNOWN',ACTION="read")
         DO I=1,NTOT
           READ(117+myid,*) N1,N2,P1,X1,Y1,Z1,X2,Y2,Z2,E
           NANS(1,I)=N1
@@ -503,20 +534,19 @@ END IF
 	X=NRXF%M(1,I)+UT%M(6*I-5)
         Y=NRXF%M(2,I)+UT%M(6*I-4)
         Z=NRXF%M(3,I)+UT%M(6*I-3)
-        I1=X/GRID-INT(X/GRID)
-	I2=Y/GRID-INT(Y/GRID)
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-             BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
+        
+        Zb = InterpRast(X,Y,BED,GRID,origin,INTERP_MISS_NEAREST)
         
         IF (ABS(ZB-Z).LT.SCL*2.0) THEN
-        CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID),INT(Y/GRID)+1),&
-        FBED(INT(X/GRID)+1,INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
-!        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+          VDP(I) = InterpRast(X,Y,FBED,GRID,origin,INTERP_MISS_NEAREST)
         ELSE
-          IF (Z.LT.WL) THEN
-          VDP(I)=SCL*SCL*DRAG
+          IF (Z.LT. WL-0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_AIR
           ELSE
-          VDP(I)=SCL*SCL*DRAG
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            VDP(I) = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
           ENDIF
         ENDIF
 	END DO
@@ -575,7 +605,7 @@ END IF
           !  Would need to take care of changing particle array locations, probably
           !  easiest to add a member to UT_t
           !Identify possible collisions
-          CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL,LNN,ND,NDL)
+          CALL FindNearbyParticles(NRXF,UT,NN,BBox,SCL*1.87,ND,NDL)
         END IF
 
         FRX = 0.0
@@ -585,7 +615,7 @@ END IF
 
        !circ checks which particles are really in contact and computes the forces
 	CALL FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ,&
-          T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
+          T,RY,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -719,24 +749,71 @@ END IF
 
 	WSX(I)=0.0
 
-	I1=X/GRID-INT(X/GRID)
-	I2=Y/GRID-INT(Y/GRID)
+        !Compute vars for repeat bilinear interpolation
+        XK = FLOOR((x - origin(1))/grid)
+        YK = FLOOR((y - origin(2))/grid)
+        I1 = (x-origin(1))/grid - XK
+        I2 = (y-origin(2))/grid - YK
+
+        !If outside domain, find nearest valid point
+        !NOTE: any point outside domain should be marked 'lost' by CheckSolution...
+        InDomain = ValidRasterIndex(xk,yk,BED)
+        IF(.NOT. InDomain) THEN
+          IF(XK<0) THEN
+            XK=0
+          ELSE IF(XK>=UBOUND(BED,1)) THEN
+            XK = UBOUND(BED,1)
+          END IF
+          IF(YK<0) THEN
+            YK=0
+          ELSE IF(YK>=UBOUND(BED,2)) THEN
+            YK = UBOUND(BED,2)
+          END IF
+        END IF
 
        !Update the drag calculation
-        CALL BIPINT(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-        BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),ZB)
-        CALL BIPINT(I1,I2,SUF(INT(X/GRID),INT(Y/GRID)),SUF(INT(X/GRID),INT(Y/GRID)+1),&
-        SUF(INT(X/GRID)+1,INT(Y/GRID)),SUF(INT(X/GRID)+1,INT(Y/GRID)+1),ZS)
-
-        IF (ABS(ZB-Z).LT.SCL*2.0) THEN
-        CALL BIPINT(I1,I2,FBED(INT(X/GRID),INT(Y/GRID)),FBED(INT(X/GRID),INT(Y/GRID)+1),&
-        FBED(INT(X/GRID)+1,INT(Y/GRID)),FBED(INT(X/GRID)+1,INT(Y/GRID)+1),VDP(I))
-!        IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+        IF(InDomain) THEN
+          CALL BIPINT(I1,I2,BED(XK,YK),BED(XK,YK+1),BED(XK+1,YK),BED(XK+1,YK+1),ZB)
         ELSE
-          IF (Z.LT.WL) THEN
-          VDP(I)=SCL*SCL*DRAG
+          ZB = BED(XK,YK)
+        END IF
+
+        IF (ABS(ZB-Z).LT.SCL*1.5) THEN
+          IF(InDomain) THEN
+            CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),VDP(i))
           ELSE
-          VDP(I)=SCL*SCL*DRAG
+            VDP(i) = FBED(XK,YK)
+          END IF
+!         IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
+
+        !Linearly decrease basal friction over 1.5 to 3.0*SCL from base
+        ELSE IF(ABS(ZB-Z).LT.SCL*3.0) THEN
+
+          IF(InDomain) THEN
+            CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),vdp_fric)
+          ELSE
+            vdp_fric = FBED(XK,YK)
+          END IF
+
+          IF (Z.LT. WL-0.5*SCL) THEN
+            vdp_drag=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            vdp_drag=SCL*SCL*DRAG_AIR
+          ELSE
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            vdp_drag = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
+          ENDIF
+          prop_vdp = ((3.0*SCL - ABS(ZB-Z)) / (1.5*SCL))
+          VDP(i) = prop_vdp * vdp_fric + (1-prop_vdp) * vdp_drag
+
+        ELSE
+          IF (Z.LT. WL-0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            VDP(I)=SCL*SCL*DRAG_AIR
+          ELSE
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            VDP(I) = SCL*SCL*  ((prop_wl * DRAG_AIR) + ((1-prop_wl) * DRAG_WATER))
           ENDIF
         ENDIF
 
@@ -745,22 +822,49 @@ END IF
           TTCUM(7) = TTCUM(7) + (TT(7) - TT(6))
         END IF
 
-        CALL BIPINTN(I1,I2,BED(INT(X/GRID),INT(Y/GRID)),BED(INT(X/GRID),INT(Y/GRID)+1),&
-        BED(INT(X/GRID)+1,INT(Y/GRID)),BED(INT(X/GRID)+1,INT(Y/GRID)+1),DIX,DIY,DIZ,GRID)
+        IF(InDomain) THEN
+          CALL BIPINTN(I1,I2,BED(XK,YK),BED(XK,YK+1),BED(XK+1,YK),BED(XK+1,YK+1),DIX,DIY,DIZ,GRID)
+        ELSE
+          DIX = 0.0
+          DIY = 0.0
+          DIZ = 1.0
+        END IF
 
-!Bed interaction
-!Bed Normal
-! FR* - forces on particles
-! DIX - components of bed normal
-        IF (Z.LT.ZB+SCL/2.0) THEN
+        !Bed interaction
+        !Bed Normal
+        ! FR* - forces on particles
+        ! DIX,Y,Z - components of bed normal
+
+        IF (Z .LT. ZB + (SCL/2.0)/DIZ ) THEN
+
+          !Critically damped when BedDampFactor=1.0 (default)
+          BedDampConst = -2.0 * SQRT(MFIL(i) * BedIntConst) * BedDampFactor
+
+          !X,Y,Z velocity
+          DX = (UT%M(6*i-5) - UTM%M(6*i-5))/DT
+          DY = (UT%M(6*i-4) - UTM%M(6*i-4))/DT
+          DZ = (UT%M(6*i-3) - UTM%M(6*i-3))/DT
+
+          !TODO - add damping to energy calcs
           IF(BedZOnly) THEN
-            FRZ(I)=FRZ(I)+BedIntConst*(ZB+SCL/2.0-Z)
-            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+            BI = BedIntConst*(ZB+SCL/2.0-Z)
+            FRZ(I)=FRZ(I)+BI+BedDampConst*DZ
+
+            GSUM=GSUM+0.5*BedIntConst*(ZB+SCL/2.0-Z)**2
+            BDE=BDE + 0.5*BedDampConst*DZ**2
           ELSE
-            FRX(I)=FRX(I)+DIX*BedIntConst*(ZB+SCL/2.0-Z)
-            FRY(I)=FRY(I)+DIY*BedIntConst*(ZB+SCL/2.0-Z)
-            FRZ(I)=FRZ(I)+DIZ*BedIntConst*(ZB+SCL/2.0-Z)
-            GSUM=GSUM+BedIntConst*(ZB+SCL/2.0-Z)**2
+            !BI is BedIntConst * the overlap between particle 
+            !        and bed accounting for non-horizontality
+            BI = BedIntConst * ((ZB + (SCL/2.0)/DIZ - Z) * DIZ)
+            !Velocity normal to the surface
+            Vel = DIX*DX + DIY*DY + DIZ*DZ
+
+            FRX(I)=FRX(I)+DIX*(BI + BedDampConst*Vel)
+            FRY(I)=FRY(I)+DIY*(BI + BedDampConst*Vel)
+            FRZ(I)=FRZ(I)+DIZ*(BI + BedDampConst*Vel)
+
+            GSUM=GSUM+BedIntConst*0.5*(ZB+SCL/2.0-Z)**2
+            BDE=BDE + 0.5*BedDampConst*Vel**2
           END IF
 	ENDIF
 
@@ -833,18 +937,18 @@ END IF
         !This code allows glacier edge/inflow boundary to be frozen in XY
         !TODO (esp for melange) - convert to contact BC/elastic rebound?
         IF(FixBack .OR. FixLat) THEN
-          XIND = INT((NRXF%M(1,I) + UTP(6*I-5))/GRID)
-          YIND = INT((NRXF%M(2,I) + UTP(6*I-4))/GRID)
-          gridratio = INT(MAX(SCL/GRID,1.0))
+          XIND = FLOOR((NRXF%M(1,I) + UTP(6*I-5) - origin(1))/GRID)
+          YIND = FLOOR((NRXF%M(2,I) + UTP(6*I-4) - origin(2))/GRID)
+          gridratio = FLOOR(MAX(SCL/GRID,1.0))
 
           !Freeze if near back plane
           IF(FixBack) THEN
             IF(GeomMasked) THEN 
               !geommask goes from 0:nx-1, 0:ny-1 
               !ensure within bounds
-              xmin = MIN(MAX(XIND,0),2000)
-              ymin = MIN(MAX(YIND-(2*gridratio),0),2000)
-              ymax = MIN(MAX(YIND,0),2000)
+              xmin = MIN(MAX(XIND,0),nx-1)
+              ymin = MIN(MAX(YIND-(2*gridratio),0),ny-1)
+              ymax = MIN(MAX(YIND,0),ny-1)
               IF(ANY(GEOMMASK(xmin,ymin:ymax)==0) .OR. ymin == 0) THEN
                 UTP(6*I-5)=UT%M(6*I-5)
                 UTP(6*I-4)=UT%M(6*I-4)
@@ -859,7 +963,12 @@ END IF
 
           !Freeze if near edge of glacier
           IF(FixLat) THEN
-            IF(ANY(GEOMMASK(XIND-(2*gridratio):XIND+(2*gridratio),YIND)==0)) THEN
+            !geommask goes from 0:nx-1, 0:ny-1
+            ymin = MIN(MAX(YIND,0),ny-1)
+            xmin = MIN(MAX(XIND-(2*gridratio),0),nx-1)
+            xmax = MIN(MAX(XIND+(2*gridratio),0),nx-1)
+
+            IF(ANY(GEOMMASK(xmin:xmax,ymin)==0)) THEN
               UTP(6*I-5)=UT%M(6*I-5)
               UTP(6*I-4)=UT%M(6*I-4)
             END IF
@@ -898,7 +1007,7 @@ END IF
 
        IF(DebugMode) PRINT *, myid,'going to check solution' 
        ! !Check for particles leaving the domain, travelling suspiciously quickly, etc
-       CALL CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,GRID,DT,MAXUT,IsLost,IsOutlier)
+       CALL CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,DT,MAXUT,IsLost,IsOutlier)
        IF(DebugMode) PRINT *, myid,'done check solution' 
 
 
@@ -923,15 +1032,16 @@ END IF
         CALL MPI_ALLREDUCE(DMPEN,DMPENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to drag/basal friction
         CALL MPI_ALLREDUCE(WEN,WENS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)  !strain energy from particle collision
         CALL MPI_ALLREDUCE(GSUM,GSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !strain energy from bed interaction
+        CALL MPI_ALLREDUCE(BDE,BDES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !damped energy from bed interaction
         CALL MPI_ALLREDUCE(DPE,DPES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to stiffness/collision damping
         CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to broken bonds
         CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr) !broken bond count
         CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy from backwall pressure (not used)
  	IF (myid.EQ.0) WRITE(612,*) T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
-      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0
+      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0-BDES
 
  	IF (myid.EQ.0) WRITE(610,10) T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0
- 	IF (myid.EQ.0) WRITE(611,10) T,DPES,DMPENS,PSUMS,GSUMS
+ 	IF (myid.EQ.0) WRITE(611,10) T,DPES,DMPENS,PSUMS,GSUMS,BDES
  	IF (myid.EQ.0) WRITE(613,19) T,KINS2,BCES,BCCS
 	END IF
 
@@ -1197,6 +1307,19 @@ CONTAINS
 
  SUBROUTINE WriteRestart()
         INTEGER :: counter
+        LOGICAL :: FirstTime=.TRUE.
+        SAVE :: FirstTime
+
+        !Write out my particles to nodfil - once only
+        IF(FirstTime) THEN
+          FirstTime = .FALSE.
+22        FORMAT(I8,' ',4F14.7,2I8)
+          OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
+          DO i=1,NN
+            WRITE(510+myid,22) i,NRXF%A(:,i),1.0
+          END DO
+          CLOSE(510+myid)
+        END IF
 
    ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')

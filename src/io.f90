@@ -26,17 +26,19 @@ CONTAINS
 
  SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
       RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG, BedIntConst, BedZOnly, OUTINT, RESOUTINT, MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack)
+      DAMP2, DRAG_AIR, DRAG_WATER, ViscDist, ViscForce, BedIntConst, BedZOnly, BedDampFactor, OUTINT, RESOUTINT, &
+      MAXUT, SCL, WL, STEPS0, GRID, fractime, &
+      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack, gotMelange, MelRunName)
+
    REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
-   REAL(KIND=dp) :: DAMP1, DAMP2, DRAG,MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
-   REAL(KIND=dp) :: fractime
+   REAL(KIND=dp) :: DAMP1, DAMP2, DRAG_AIR, DRAG_WATER, MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
+   REAL(KIND=dp) :: fractime,viscforce,viscdist, BedDampFactor
    INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
    INTEGER :: readstat, i,incount
-   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,wrkdir,&
+   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,MelRunName,wrkdir,&
         resdir,restname
    LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
-        FixBack,GeomMasked,doShearLine
+        FixBack,GeomMasked,doShearLine,gotMelange
    LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
@@ -62,7 +64,10 @@ CONTAINS
    SEEDI = 11695378
    DAMP1 = 1.0E4
    DAMP2 = 1.0E4
-   DRAG = 1.0E1
+   DRAG_AIR = 1.0E1
+   DRAG_WATER = 1.0E1
+   viscforce=1.0E4
+   viscdist = 4.0E-2
    OUTINT = 20000
    RESOUTINT = 20000
    MAXUT = 1.0E6
@@ -70,6 +75,7 @@ CONTAINS
    RHO = 900.0
    RHOW = 1030.0
    BedIntConst = 1.0E8
+   BedDampFactor = 1.0
    BedZOnly = .TRUE.
    wrkdir = './'
    resdir = './'
@@ -82,6 +88,7 @@ CONTAINS
    GeomMasked = .FALSE.
    DebugMode = .FALSE.
    PrintTimes = .FALSE.
+   gotMelange = .FALSE.
 
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
@@ -155,8 +162,17 @@ CONTAINS
        READ(VarValue,*) DAMP1
      CASE("rotational damping")
        READ(VarValue,*) DAMP2
+     CASE("viscous distance")
+       READ(VarValue,*) viscdist
+     CASE("viscous force")
+       READ(VarValue,*) viscforce
      CASE("drag coefficient")
-       READ(VarValue,*) DRAG
+       READ(VarValue,*) DRAG_AIR
+       DRAG_WATER = DRAG_AIR
+     CASE("air drag coefficient")
+       READ(VarValue,*) DRAG_AIR
+     CASE("water drag coefficient")
+       READ(VarValue,*) DRAG_WATER
      CASE("output interval")
        READ(VarValue,*) OUTINT
      CASE("restart output interval")
@@ -180,6 +196,8 @@ CONTAINS
        READ(VarValue,*) resdir
      CASE("bed stiffness constant")
        READ(VarValue,*) BedIntConst
+     CASE("bed damping factor")
+       READ(VarValue,*) BedDampFactor
      CASE("bed z only")
        READ(VarValue,*) BedZOnly
      CASE("fracture after time")
@@ -198,6 +216,9 @@ CONTAINS
        READ(VarValue,*) DebugMode
      CASE("print times")
        READ(VarValue,*) PrintTimes
+     CASE("melange run name")
+       READ(VarValue,*) MelRunName
+       gotMelange = .TRUE.
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -216,6 +237,7 @@ CONTAINS
    IF(.NOT. gotRestName .AND. REST == 1) THEN
      restname = runname
    END IF
+   IF(REST == 1 .AND. gotMelange) CALL FatalError("Can't restart and load melange in same run!")
 
    IF(FixLat .AND. .NOT. GeomMasked) THEN
      CALL FatalError("'Fixed Lateral Margin' requires a geometry file with mask")
@@ -255,8 +277,10 @@ CONTAINS
      WRITE(*,'(A,I0)') "Random Seed = ",SEEDI
      WRITE(*,'(A,ES12.5)') "Translational Damping = ",DAMP1
      WRITE(*,'(A,ES12.5)') "Rotational Damping = ",DAMP2
-     WRITE(*,'(A,ES12.5)') "Drag Coefficient = ",DRAG
+     WRITE(*,'(A,ES12.5)') "Air Drag Coefficient = ",DRAG_AIR
+     WRITE(*,'(A,ES12.5)') "Water Drag Coefficient = ",DRAG_WATER
      WRITE(*,'(A,ES12.5)') "Bed Stiffness Constant = ",BedIntConst
+     WRITE(*,'(A,ES12.5)') "Bed Damping Factor = ",BedDampFactor
      WRITE(*,'(A,L)') "Bed Z Only = ",BedZOnly
      WRITE(*,'(A,I0)') "Output Interval = ",OUTINT
      WRITE(*,'(A,I0)') "Restart Output Interval = ",RESOUTINT

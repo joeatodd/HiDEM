@@ -1,27 +1,19 @@
 MODULE TypeDefs
 
+  IMPLICIT NONE
+
   INTEGER, PARAMETER :: dp = SELECTED_REAL_KIND(12)
   INTEGER, PARAMETER :: sp = SELECTED_REAL_KIND(6,37)
+  INTEGER, PARAMETER :: INTERP_MISS_FILL=0,INTERP_MISS_NEAREST=1,INTERP_MISS_ERR=2
+
   REAL(KIND=dp) :: part_expand=0.5
   INTEGER :: myid, ntasks
   LOGICAL :: DebugMode,PrintTimes
 
   INCLUDE 'param.dat'
   INCLUDE 'mpif.h'
+  INCLUDE 'na90.dat'
 
-  !Types are defined here to save passing large numbers of arguments.
-  !Type members refer to the arrays belonging to partitions:
-  !M = 'mine', F,B,R,L = Forward, Back, Right, Left, etc
-
-  TYPE NAN_t
-     INTEGER :: M(3,NOCON), L(3,NOMA), R(3,NOMA), F(3,NOMA), B(3,NOMA), &
-          FR(3,NOMA), FL(3,NOMA), BR(3,NOMA), BL(3,NOMA)
-  END TYPE NAN_t
-
-  TYPE NTOT_t
-     INTEGER :: M=0, L=0, R=0, F=0, B=0, FR=0, FL=0, BR=0, BL=0
-  END TYPE NTOT_t
-  
   !Structure for holding initial position of this partition's points, as well
   !as relevant neighbouring [C]onnected and [P]roximal points.
   !Note that %C & %P are not currently in use.
@@ -33,7 +25,7 @@ MODULE TypeDefs
      REAL(KIND=dp), ALLOCATABLE :: A(:,:)
      REAL(KIND=dp), POINTER :: M(:,:)=>NULL(), C(:,:)=>NULL(), P(:,:)=>NULL()
      INTEGER :: mstrt, cstrt, pstrt,NN,NC,NP
-     INTEGER, ALLOCATABLE :: PartInfo(:,:)
+     INTEGER, ALLOCATABLE :: PartInfo(:,:), GID(:)
   END TYPE NRXF_t
 
   !Type to hold information on particles shared between partitions
@@ -55,28 +47,37 @@ MODULE TypeDefs
      INTEGER :: CCount, PCount, SCCount, SPCount, NID
   END TYPE InvPartInfo_t
 
-  TYPE EF_t
-     REAL(KIND=dp) :: M(NOCON),L(NOCON),R(NOCON),F(NOCON),B(NOCON),FR(NOCON),&
-          FL(NOCON),BR(NOCON),BL(NOCON)
-  END TYPE EF_t
-
-  TYPE NEI_t
-     INTEGER :: L=-1,R=-1,F=-1,B=-1,FR=-1,FL=-1,BR=-1,BL=-1
-  END TYPE NEI_t
-
   TYPE UT_t
      REAL(KIND=dp), ALLOCATABLE :: A(:)
      REAL(KIND=dp), POINTER :: M(:)=>NULL(), C(:)=>NULL(), P(:)=>NULL()
   END TYPE UT_t
 
-  TYPE FXF_t
-     INTEGER :: M(2,NODC),L(2,NODC),R(2,NODC),F(2,NODC),B(2,NODC),&
-          FR(2,NODC),FL(2,NODC),BR(2,NODC),BL(2,NODC)
-  END TYPE FXF_t
+  !Loading melange from a previous sim requires one partition reading *all* partitions info
+  ! for flexiblity. Therefore need an allocatable datastructure to allow holding all that info
+  TYPE MelangeDataHolder_t
+     REAL(KIND=dp), ALLOCATABLE :: EFS(:)
+     REAL(KIND=dp) :: BBox(6)
+     INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:),NDL(:,:)
+     TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
+     TYPE(NRXF_t) :: NRXF
+     TYPE(UT_t) ::  UT, UTM
+     INTEGER :: NTOT,NN,ND
+     LOGICAL, ALLOCATABLE :: IsOutlier(:), IsLost(:),PartIsNeighbour(:)
+     LOGICAL :: Active=.FALSE.
+  END TYPE MelangeDataHolder_t
+
 
   TYPE PointEx_t
      INTEGER :: partid=-1,scount=0,rcount=0
-     INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:)
+     INTEGER, ALLOCATABLE :: SendIDs(:), RecvIDs(:),SendGIDs(:), RecvGIDs(:)
      REAL(KIND=dp), ALLOCATABLE :: S(:),R(:)
   END TYPE PointEx_t
+
+  !Memory-flexible alternative for CN/NCN
+  TYPE Conn_t
+     INTEGER, ALLOCATABLE :: Conn(:), Part(:)
+     INTEGER :: NCN, ID
+     REAL(KIND=dp), ALLOCATABLE :: Dists(:)
+  END TYPE Conn_t
+
 END MODULE TypeDefs
