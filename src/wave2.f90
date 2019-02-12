@@ -107,22 +107,6 @@ IF(myid==0) THEN
   WRITE(*,5) datetime(3),datetime(2),datetime(1),datetime(5),datetime(6),datetime(7)
 END IF
 
-
- 6      FORMAT(F11.6,' ',I8,' ',2F11.6)
- 7	FORMAT(7F13.7)
- 8	FORMAT (A)
- 9	FORMAT(I4,'     ',2F11.6)
- 10	FORMAT(5F28.4)
- 11	FORMAT(2I8,' ',7F22.9)
- 12	FORMAT(4F16.6)
- 13	FORMAT(6F22.12)
- 14	FORMAT(7I8)
- 15	FORMAT(5F20.7)
- 16	FORMAT(F11.6,' ',I4)
- 17	FORMAT(10I9)
- 18	FORMAT(6F16.6)
- 19	FORMAT(3F24.4,' ',I8)
-
 !writing out energy output
         OPEN(UNIT=609, FILE='HIDEM_STARTINFO',STATUS='OLD')
         READ(609,*) INFILE
@@ -1037,12 +1021,12 @@ END IF
         CALL MPI_ALLREDUCE(BCE,BCES,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy lost to broken bonds
         CALL MPI_ALLREDUCE(BCC,BCCS,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr) !broken bond count
         CALL MPI_ALLREDUCE(PSUM,PSUMS,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr) !energy from backwall pressure (not used)
- 	IF (myid.EQ.0) WRITE(612,*) T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
-      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0-BDES
 
- 	IF (myid.EQ.0) WRITE(610,10) T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0
- 	IF (myid.EQ.0) WRITE(611,10) T,DPES,DMPENS,PSUMS,GSUMS,BDES
- 	IF (myid.EQ.0) WRITE(613,19) T,KINS2,BCES,BCCS
+ 	IF (myid.EQ.0) WRITE(612,'(F15.8,2E20.12)') T,WENS+ENMS+ENMS0-BCES+KINS+KINS2&
+      	+MGHS-MGH0,PSUMS-DPES-DMPENS-GSUMS+GSUM0-BDES
+ 	IF (myid.EQ.0) WRITE(610,'(F15.8,4E20.12)') T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0
+ 	IF (myid.EQ.0) WRITE(611,'(F15.8,5E20.12)') T,DPES,DMPENS,PSUMS,GSUMS,BDES
+ 	IF (myid.EQ.0) WRITE(613,'(F15.8,2E20.12,I8)') T,KINS2,BCES,BCCS
 	END IF
 
         !Flush output by closing and reopening files
@@ -1163,7 +1147,7 @@ END IF
 	  X=NRXFW(1,I)+UTW(6*I-5)
 	  Y=NRXFW(2,I)+UTW(6*I-4)
 	  Z=NRXFW(3,I)+UTW(6*I-3)
-          WRITE(910,12) X,Y,Z
+          WRITE(910,'(3F16.6)') X,Y,Z
           END DO
 
           DO I=1,NTOTW(source)
@@ -1189,7 +1173,7 @@ END IF
 
 
 !          IF (Z.GT.MAXZ-120.0) WRITE(920,12) X,Y,Z,STR
-          WRITE(920,12) X,Y,Z,STR
+          WRITE(920,'(4F16.6)') X,Y,Z,STR
           END DO
 
           END DO
@@ -1198,7 +1182,7 @@ END IF
 	  X=NRXF%M(1,I)+UT%M(6*I-5)
 	  Y=NRXF%M(2,I)+UT%M(6*I-4)
 	  Z=NRXF%M(3,I)+UT%M(6*I-3)
-          WRITE(910,12) X,Y,Z
+          WRITE(910,'(3F16.6)') X,Y,Z
           END DO
 
           DO I=1,NTOT
@@ -1222,7 +1206,7 @@ END IF
 	STR=(DL-L)/L
 
 !          IF (Z.GT.MAXZ-120.0) WRITE(920,12) X,Y,STR
-          WRITE(920,12) X,Y,Z,STR
+          WRITE(920,'(4F16.6)') X,Y,Z,STR
           END DO
 
         ENDIF !myid==0
@@ -1313,34 +1297,33 @@ CONTAINS
         !Write out my particles to nodfil - once only
         IF(FirstTime) THEN
           FirstTime = .FALSE.
-22        FORMAT(I8,' ',4F14.7,2I8)
           OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
           DO i=1,NN
-            WRITE(510+myid,22) i,NRXF%A(:,i),1.0
+            WRITE(510+myid,'(I8,,4F20.10)') i,NRXF%A(:,i),1.0
           END DO
           CLOSE(510+myid)
         END IF
 
    ! Write out the restart files
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST0'//na(myid),STATUS='UNKNOWN')
-	WRITE(117+myid,*) NRXF%NN,NRXF%cstrt,NRXF%NC,NRXF%pstrt,NRXF%NP,SIZE(NRXF%A,2),NTOT,BCC
-	WRITE(117+myid,*) MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
-	WRITE(117+myid,*) DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
+	WRITE(117+myid,'(8I9)') NRXF%NN,NRXF%cstrt,NRXF%NC,NRXF%pstrt,NRXF%NP,SIZE(NRXF%A,2),NTOT,BCC
+	WRITE(117+myid,'(5ES20.10)') MAXX,MAXY,MAXZ,DMPEN,ENM+ENM0
+	WRITE(117+myid,'(6ES20.10,I10)') DPE,BCE,MGH0,GSUM0,PSUM,T,RY-1
 
 	CLOSE (117+myid)
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST1'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NTOT
-	WRITE(117+myid,*) CT(12*I-11),CT(12*I-10),CT(12*I-9),CT(12*I-8),CT(12*I-7),CT(12*I-6)
-	WRITE(117+myid,*) CT(12*I-5),CT(12*I-4),CT(12*I-3),CT(12*I-2),CT(12*I-1),CT(12*I-0)
+	WRITE(117+myid,'(6ES25.12)') CT(12*I-11),CT(12*I-10),CT(12*I-9),CT(12*I-8),CT(12*I-7),CT(12*I-6)
+	WRITE(117+myid,'(6ES25.12)') CT(12*I-5),CT(12*I-4),CT(12*I-3),CT(12*I-2),CT(12*I-1),CT(12*I-0)
 	END DO
 	CLOSE (117+myid)
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_REST2'//na(myid),STATUS='UNKNOWN')
 	DO I=1,NN
-	WRITE(117+myid,*) UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
-	WRITE(117+myid,*) UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
-	WRITE(117+myid,*) IsOutlier(I), IsLost(I)
+	WRITE(117+myid,'(6ES25.12)') UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
+	WRITE(117+myid,'(6ES25.12)') UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
+	WRITE(117+myid,'(2L)') IsOutlier(I), IsLost(I)
 	END DO
 	CLOSE (117+myid)
 
@@ -1355,7 +1338,7 @@ CONTAINS
         counter = 0
         DO I=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
           IF(NRXF%PartInfo(1,i) == -1) CALL FatalError("Programming error in ONODFIL2")
-          WRITE(117+myid,*) i,NRXF%PartInfo(:,i)
+          WRITE(117+myid,'(3I9)') i,NRXF%PartInfo(:,i)
         END DO
 	CLOSE (117+myid)
 
@@ -1365,7 +1348,7 @@ CONTAINS
 
 	OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/'//TRIM(runname)//'_FS'//na(myid),STATUS='UNKNOWN')
 	DO SI=1,NTOT
-	WRITE(117+myid,*) NANS(1,SI),NANS(2,SI),NANPart(SI),&
+	WRITE(117+myid,'(3I9,7ES22.10)') NANS(1,SI),NANS(2,SI),NANPart(SI),&
            NRXF%A(1,NANS(1,SI)),NRXF%A(2,NANS(1,SI)),&
            NRXF%A(3,NANS(1,SI)),NRXF%A(1,NANS(2,SI)),&
            NRXF%A(2,NANS(2,SI)),NRXF%A(3,NANS(2,SI)),EFS(SI)

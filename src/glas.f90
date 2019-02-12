@@ -39,10 +39,6 @@ TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
 TYPE(MelangeDataHolder_t) :: melange_data
 !Open(300,file='mass.dat',STATUS='OLD')
 
- 12    FORMAT(2I8,' ',2F14.7)
- 13    FORMAT(4F14.7)
- 14    FORMAT(3F14.7)
-
 !Not really used
 ALLOCATE(melt(0:UBOUND(surf,1),0:UBOUND(surf,2)))
 melta = 0.0_dp
@@ -98,9 +94,6 @@ TYPE(NRXF_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
 TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
 TYPE(MelangeDataHolder_t) :: melange_data
-
-11    FORMAT(2I8,' ',2F14.7)
-13    FORMAT(4F14.7)
 
 b=SCL*box/REAL(l,8)  ! the size of the unit cell is the box length divided by l
 x0(:,:)=b/2.0d0; x0(:,1)=0.0d0; x0(3,2)=0.0d0; x0(2,3)=0.0d0; x0(1,4)=0.0d0 
@@ -557,10 +550,9 @@ END DO
 CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
 !Write out my particle to nodfil
-12    FORMAT(I8,' ',4F14.7,2I8)
 OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
 DO i=1,NN
-  WRITE(510+myid,12) i,NRXF%A(:,i),1.0
+  WRITE(510+myid,'(I8,3F16.8)') i,NRXF%A(:,i),1.0
 END DO
 ! DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
 !   WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
