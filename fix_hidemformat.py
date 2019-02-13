@@ -23,6 +23,8 @@ infiles = glob(infile_glob+"*")
 #cycle input files
 for f in infiles:
 
+    counter = 0
+
     #move to backup
     bak_name = f+".BAK"
     os.rename(f,bak_name)
@@ -40,10 +42,9 @@ for f in infiles:
                     num = rep.group(2)
                     #create string replacement (and remove last ', ')
                     new_str = ((num+", ") * cnt)[:-2]
-                    print old_str
                     print new_str
                     line = line.replace(old_str, new_str, 1)
-                    print line
+                    counter += 1
 
                 dest.write(line)
-
+    print "Substituted "+str(counter)+" cray strings in "+f
