@@ -1,19 +1,46 @@
-import numpy as np
 import argparse
+
+#Set up args - do this before expensive paraview import in case of errors - fail quickly!
+parser = argparse.ArgumentParser()
+parser.add_argument("vtu_inglob", type=str, help="e.g. HiDEM_Run*.vtu")
+parser.add_argument("--no-mpi", dest='mpi', default=True, action="store_false", help="If you get nasty mpi errors trying to run this in serial, use this flag.")
+parser.add_argument("--redo", default=False, action="store_true", help="If image file already exists, by default processing is not redone")
+args = parser.parse_args()
+
+import numpy as np
 from paraview.simple import servermanager, XMLUnstructuredGridReader, GetActiveSource
 from paraview.numpy_support import vtk_to_numpy
 from scipy.spatial import cKDTree
+
+#weird stuff required for matplotlib (temp file for matplotlib workspace I guess?)
+import os
+import tempfile
+os.environ['MPLCONFIGDIR'] = tempfile.mkdtemp()
 import matplotlib.pyplot as plt
+
 from glob import glob
 
-#Set up args
-parser = argparse.ArgumentParser()
-parser.add_argument("vtu_inglob", type=str, help="e.g. HiDEM_Run*.vtu")
-args = parser.parse_args()
 
+#Check for serial or MPI (see notes on --no-mpi if errors occur)
+if args.mpi:
+    try:
+        from mpi4py import MPI
+        mpi_job = True
+    except:
+        print("Failed to load mpi - falling back to serial")
+        mpi_job = False
+else:
+    mpi_job = False
+
+if mpi_job:
+    mpi_size = MPI.COMM_WORLD.Get_size()
+    mpi_rank = MPI.COMM_WORLD.Get_rank()
+
+redo = args.redo
+print('redo is : '+str(redo))
 #glob pattern for files to operate on
 vtu_inglob = args.vtu_inglob
-vtu_inglob = vtu_inglob.split("vtu")[0] #strip off 'vtu' if specified (re-added below)
+vtu_inglob = vtu_inglob.rsplit("vtu",1)[0] #strip off 'vtu' if specified (re-added below)
 
 #user specifiable
 box_pixel = 50.0
@@ -39,8 +66,18 @@ bboxy = (np.min(polygon[:,1]),np.max(polygon[:,1]))
 vtu_infiles = glob(vtu_inglob+"vtu")
 vtu_infiles.sort()
 
+assert len(vtu_infiles) > 0, 'Bad glob!'
+
+#take a subset of files or don't (embarrassingly parallel)
+if mpi_job:
+    vtu_infiles = vtu_infiles[mpi_rank::mpi_size]
 
 def compression_plot(vtu_in):
+
+    outfile = vtu_in+".png"
+    if os.path.isfile(outfile) and not redo:
+        print("Skipping existing output: "+outfile)
+        return
 
     #read the vtu input
     reader = XMLUnstructuredGridReader( FileName=vtu_in )
@@ -121,12 +158,12 @@ def compression_plot(vtu_in):
             #gather stress in box
             boxforce = fry[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]
             if(boxforce.size > 0):
-                boxed_force[i,j] = np.sum(boxforce)#/boxforce.size
+                boxed_force[i,j] = np.sum(boxforce)/box_pixel
             else:
                 boxed_force[i,j] = 0.0
 
     plt.matshow(boxed_force, vmax=2000.0)
-    plt.savefig(vtu_in+".png")
+    plt.savefig(outfile)
 
 
 #loop over files, making figs
