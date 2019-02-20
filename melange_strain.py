@@ -1,8 +1,7 @@
 import numpy as np
 import argparse
-from paraview import simple as PV
+from paraview.simple import servermanager, XMLUnstructuredGridReader, GetActiveSource
 from paraview.numpy_support import vtk_to_numpy
-from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 
@@ -32,11 +31,11 @@ bboxx = (np.min(polygon[:,0]),np.max(polygon[:,0]))
 bboxy = (np.min(polygon[:,1]),np.max(polygon[:,1]))
 
 #read the vtu input
-reader = PV.XMLUnstructuredGridReader( FileName=vtu_in )
+reader = XMLUnstructuredGridReader( FileName=vtu_in )
 reader.UpdatePipeline()
 
-data = PV.servermanager.Fetch(reader)
-GlacierSource = PV.GetActiveSource()
+data = servermanager.Fetch(reader)
+GlacierSource = GetActiveSource()
 
 points = vtk_to_numpy(data.GetPoints().GetData())
 
