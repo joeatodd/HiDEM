@@ -11,6 +11,7 @@ import numpy as np
 from paraview.simple import servermanager, XMLUnstructuredGridReader, GetActiveSource
 from paraview.numpy_support import vtk_to_numpy
 from scipy.spatial import cKDTree
+import re
 
 #weird stuff required for matplotlib (temp file for matplotlib workspace I guess?)
 import os
@@ -37,7 +38,7 @@ if mpi_job:
     mpi_rank = MPI.COMM_WORLD.Get_rank()
 
 redo = args.redo
-print('redo is : '+str(redo))
+
 #glob pattern for files to operate on
 vtu_inglob = args.vtu_inglob
 vtu_inglob = vtu_inglob.rsplit("vtu",1)[0] #strip off 'vtu' if specified (re-added below)
@@ -51,6 +52,9 @@ EFS = 1.0e9 #youngs modulus (1e9 is HiDEM default)
 
 LNN = SCL * 1.1225
 Thresh = LNN * 0.9 #filter noise
+
+#regex for extracting run name
+title_re = re.compile("_([0-9]*_[0-9]*)_JYR([0-9]*)")
 
 #polygon for points to check (assume rectangle atm)
 polygon = np.zeros((4,2))
@@ -78,6 +82,9 @@ def compression_plot(vtu_in):
     if os.path.isfile(outfile) and not redo:
         print("Skipping existing output: "+outfile)
         return
+
+    #generate figure title
+    figtitle = "Run: "+title_re.search(vtu_in).group(1) + " Step: " + title_re.search(vtu_in).group(2)
 
     #read the vtu input
     reader = XMLUnstructuredGridReader( FileName=vtu_in )
@@ -112,20 +119,18 @@ def compression_plot(vtu_in):
     rc = rc[rc > Thresh]
 
     #xyz components of particle distance
-    rcx = (points[close[:,0],0] - points[close[:,1],0])
-    rcy = (points[close[:,0],1] - points[close[:,1],1])
-    rcz = (points[close[:,0],2] - points[close[:,1],2])
+    rcx = (points[close[:,0],0] - points[close[:,1],0])/rc
+    rcy = (points[close[:,0],1] - points[close[:,1],1])/rc
+    rcz = (points[close[:,0],2] - points[close[:,1],2])/rc
 
     #centrepoints of interaction
     cpoints = (points[close[:,0],:] + points[close[:,1],:])/2.0
 
-    #force (missing youngs modulus)
     #pulled this from circ.f90
-    force = (rc * EFS * (LNN - rc)**1.5) / 1.0e6 #meganewtons
-    frx = (abs(rcx * EFS * (LNN - rc)**1.5)) / 1.0e6
-    fry = (abs(rcy * EFS * (LNN - rc)**1.5)) / 1.0e6
-    frz = (abs(rcz * EFS * (LNN - rc)**1.5)) / 1.0e6
-
+    force = (SCL * EFS * (LNN - rc)**1.5) / 1.0e6 #meganewtons
+    frx = abs(rcx * SCL * EFS * (LNN - rc)**1.5) / 1.0e6
+    fry = abs(rcy * SCL * EFS * (LNN - rc)**1.5) / 1.0e6
+    frz = abs(rcz * SCL * EFS * (LNN - rc)**1.5) / 1.0e6
 
     #Plot the collisions w/ stress - this is not very compelling, try something else
     # plt.scatter(collis_centre[:,0],collis_centre[:, 1], c=force)
@@ -138,31 +143,27 @@ def compression_plot(vtu_in):
     nx = xx.size
     ny = yy.size
 
-    # boxed_force = np.zeros((nx,ny))
-    # for i in range(nx-1):
-    #     for j in range(ny-1):
-    #         #gather stress in box
-    #         boxforce = force[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]
-    #         if(boxforce.size > 0):
-    #             boxed_force[i,j] = np.sum(boxforce)#/boxforce.size
-    #         else:
-    #             boxed_force[i,j] = 0.0
-
-    # plt.matshow(boxed_force,vmax=5.0)
-
-
-    #compute pixel values for force in Y direction
+    #compute pixel values for total force
     boxed_force = np.zeros((nx,ny))
     for i in range(nx-1):
         for j in range(ny-1):
-            #gather stress in box
-            boxforce = fry[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]
+
+            #gather force in box
+            boxforce = force[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]
+
+            #Alternative  - xy force
+#            boxforce = (fry[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]**2.0 + 
+#            frx[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]**2.0)**0.5
             if(boxforce.size > 0):
-                boxed_force[i,j] = np.sum(boxforce)/box_pixel
+                boxed_force[i,j] = np.sum(boxforce)/(box_pixel**2.0)
             else:
                 boxed_force[i,j] = 0.0
 
-    plt.matshow(boxed_force, vmax=2000.0)
+    mat = plt.matshow(boxed_force, vmax=1.0, cmap='jet')
+    fig = plt.gcf()
+    ax = plt.gca()
+    fig.colorbar(mat,fraction=0.05)
+    ax.set_title(figtitle)
     plt.savefig(outfile)
 
 
