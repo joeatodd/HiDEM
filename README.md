@@ -10,6 +10,8 @@ This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulat
 
 See the model in action [here](https://youtu.be/owUrbm_3zi0) and [here](https://youtu.be/wXMK0e2isM4).
 
+The model physics is described in detail in [Åström et al. 2013](https://www.the-cryosphere.net/7/1591/2013/).
+
 ## Compilation ##
 
 Configuration, compilation and installation is handled by CMake. Example installation scripts for Cray and Ubuntu systems are located in scripts/compilation. These scripts invoke cmake with toolchain files located in scripts/toolchains, which set default compilers etc.
@@ -331,30 +333,9 @@ For the bed: get bed.csv, read it in same as other CSVs
 then apply Delaunay2D filter.  
 
 
-## Changes made by Jan since commit ##
-
-Got rid of: UTPP, VELO, D, MAXDT,XIND,YIND  
-
-The change means BEDZONLY=TRUE is implicit  
-
-Using lbound,rbound fib00,tbed files, but NOT dtmax  
-
-Changed ice density  
-
-lots of things involving SCL seem to have changed power  
-
-some change to setting porisity/predamage - no longer considers proximity to bed/base?  
-
-EFLOAD1,2 -> EFFLOAD: Only EFFLOAD exists, and its passed more stuff  
-
-Seems to get rid of UTP prediction, damping  
-
-
 ## TO DO ##
 
  * BC strategy
-
- * KIND=dp?
 
  * Translate & Rotate input
 
