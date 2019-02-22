@@ -132,10 +132,15 @@ def compression_plot(vtu_in):
     fry = abs(rcy * SCL * EFS * (LNN - rc)**1.5) / 1.0e6
     frz = abs(rcz * SCL * EFS * (LNN - rc)**1.5) / 1.0e6
 
-    #Plot the collisions w/ stress - this is not very compelling, try something else
-    # plt.scatter(collis_centre[:,0],collis_centre[:, 1], c=force)
-    # ax = plt.gca()
-    # ax.set_aspect(1)
+    #Cycle through points in box, adding up forces from 'force'
+    particle_force = np.zeros(points.shape)
+
+    np.add.at(particle_force[:,0], close[:,:], np.stack((frx,frx)).T)
+    np.add.at(particle_force[:,1], close[:,:], np.stack((fry,fry)).T)
+    np.add.at(particle_force[:,2], close[:,:], np.stack((frz,frz)).T)
+    #force magnitude
+    particle_fmag = np.linalg.norm(particle_force, axis=1)
+
 
     xx = np.arange(bboxx[0],bboxx[1],box_pixel)
     yy = np.arange(bboxy[0],bboxy[1],box_pixel)
@@ -143,23 +148,20 @@ def compression_plot(vtu_in):
     nx = xx.size
     ny = yy.size
 
-    #compute pixel values for total force
-    boxed_force = np.zeros((nx,ny))
-    for i in range(nx-1):
-        for j in range(ny-1):
+    #find xy bin for each particle
+    xbins = np.digitize(points[:,0], xx) - 1
+    ybins = np.digitize(points[:,1], yy) - 1
 
-            #gather force in box
-            boxforce = force[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]
+    #compute pixel values for total force (vectorised!)
+    boxed_force = np.zeros((nx,ny,3))
+    np.add.at(boxed_force[:,:,0], (xbins, ybins), particle_force[:,0])
+    np.add.at(boxed_force[:,:,1], (xbins, ybins), particle_force[:,1])
+    np.add.at(boxed_force[:,:,2], (xbins, ybins), particle_force[:,2])
 
-            #Alternative  - xy force
-#            boxforce = (fry[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]**2.0 + 
-#            frx[(cpoints[:,0] > xx[i]) & (cpoints[:,0] < xx[i+1]) & (cpoints[:,1] > yy[j]) & (cpoints[:,1] < yy[j+1])]**2.0)**0.5
-            if(boxforce.size > 0):
-                boxed_force[i,j] = np.sum(boxforce)/(box_pixel**2.0)
-            else:
-                boxed_force[i,j] = 0.0
+    boxed_forcemag = np.linalg.norm(boxed_force,axis=2) / (box_pixel**2.0)
 
-    mat = plt.matshow(boxed_force, vmax=1.0, cmap='jet')
+    boxed_force /= (box_pixel**2.0)
+    mat = plt.matshow(boxed_force[:,:,1], vmax=2.0, cmap='jet')
     fig = plt.gcf()
     ax = plt.gca()
     fig.colorbar(mat,fraction=0.05)
