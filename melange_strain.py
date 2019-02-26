@@ -16,7 +16,7 @@ SCL - the particle size (diameter)
 EFS - Youngs modulus of simulation
 box_pixel - the resolution of output image
 polygon - rectangle defining the region of interest
-
+bigforce_thresh - the threshold (-ve) for particle to be part of a force chain
 Output:
 _melthick.png - thickness of melange
 _melstress.png - depth integrated stress in pixel (but this is potentially incorrectly formulated!)
@@ -78,6 +78,7 @@ EFS = 1.0e9 #youngs modulus (1e9 is HiDEM default)
 
 LNN = SCL * 1.1225
 Thresh = LNN * 0.9 #filter noise
+bigforce_thresh = -0.4 #threshold for force chain stress
 
 #regex for extracting run name
 title_re = re.compile("_([0-9]*_[0-9]*)_JYR([0-9]*)")
@@ -136,13 +137,15 @@ def compression_plot(vtu_in):
     #construct kd tree & find pairs closer than LNN
     tree = cKDTree(points)
     close = np.asarray(list(tree.query_pairs(LNN)))
+    ncontacts = close.shape[0]
 
     #compute dists of above
     rc = np.linalg.norm((points[close[:,0],:] - points[close[:,1],:]),axis=1)
 
     #filter out those too close - TODO investigate further
-    # close = close[rc > Thresh]
-    # rc = rc[rc > Thresh]
+    print("Removing "+str(np.sum(rc < Thresh))+" of "+str(ncontacts))
+    close = close[rc > Thresh]
+    rc = rc[rc > Thresh]
 
     #xyz components of particle distance
     rcx = (points[close[:,0],0] - points[close[:,1],0])/rc
@@ -163,43 +166,58 @@ def compression_plot(vtu_in):
 
     force_vec = np.stack((frx,fry,frz)).T
 
+    #Gather force magnitudes on each particle - this replaces code below
+    #which summed up x,y,z components (not necessary and also wrong - too
+    #low magnitudes - see comment just below
+
+    particle_fmag_direct = np.zeros(npoints)
+    np.add.at(particle_fmag_direct, close[:,:], np.stack((force,force)).T)
+
+    #norm(force_vec) is *pretty close* to force (max error 1e-7)
+    #but then particle_fmag_direct doesn't equal particle_fmag below...
+    #Error up to 0.4, fmag_direct is consistently larger
+    #Because sum of vector magnitudes is *not* equal to magnitude of vector sums...
+    #But which is correct? My feeling is sum of vector magnitudes (because we are
+    #trying to resolve pressure/internal stress on particles, not their direction)
+
+
     #Limit all stresses to a 180 degree range (invert those which have -ve Y)
     #Prevents equivalent compressions from cancelling each other out
-    fry_dir = np.sign(fry)
+    # fry_dir = np.sign(fry)
     # frx *= fry_dir
     # fry *= fry_dir
     # frz *= fry_dir
 
     #the normalised force vector
-    force_direction = (np.stack((frx,fry,frz))/force).T
+    # force_direction = (np.stack((frx,fry,frz))/force).T
 
     #Collect force contributions on each particle
     #=========================================
 
-    particle_force = np.zeros(points.shape)
+    # particle_force = np.zeros(points.shape)
 
-    np.add.at(particle_force[:,0], close[:,:], np.abs(np.stack((frx,frx))).T)
-    np.add.at(particle_force[:,1], close[:,:], np.abs(np.stack((fry,fry))).T)
-    np.add.at(particle_force[:,2], close[:,:], np.abs(np.stack((frz,frz))).T)
-    #force magnitude
-    particle_fmag = np.linalg.norm(particle_force, axis=1)
+    # np.add.at(particle_force[:,0], close[:,:], np.abs(np.stack((frx,frx))).T)
+    # np.add.at(particle_force[:,1], close[:,:], np.abs(np.stack((fry,fry))).T)
+    # np.add.at(particle_force[:,2], close[:,:], np.abs(np.stack((frz,frz))).T)
+    # #force magnitude
+    # particle_fmag = np.linalg.norm(particle_force, axis=1)
 
-    #the force direction...
-    #this causes issues - how does one 'average' a direction...
-    particle_forcedir = np.zeros(points.shape)
+    # #the force direction...
+    # #this causes issues - how does one 'average' a direction...
+    # particle_forcedir = np.zeros(points.shape)
 
-    # pf_cnt = np.zeros(points.shape[0])
-    # pf_ones = np.ones(force_direction[:,0].shape)
-    # np.add.at(pf_cnt, close[:,:], np.stack((pf_ones, pf_ones)).T)
+    # # pf_cnt = np.zeros(points.shape[0])
+    # # pf_ones = np.ones(force_direction[:,0].shape)
+    # # np.add.at(pf_cnt, close[:,:], np.stack((pf_ones, pf_ones)).T)
 
-    np.add.at(particle_forcedir[:,0], close[:,:], np.stack((force_direction[:,0], 
-                                                            force_direction[:,0])).T)
-    np.add.at(particle_forcedir[:,1], close[:,:], np.stack((force_direction[:,1], 
-                                                            force_direction[:,1])).T)
-    np.add.at(particle_forcedir[:,2], close[:,:], np.stack((force_direction[:,2], 
-                                                            force_direction[:,2])).T)
+    # np.add.at(particle_forcedir[:,0], close[:,:], np.stack((force_direction[:,0], 
+    #                                                         force_direction[:,0])).T)
+    # np.add.at(particle_forcedir[:,1], close[:,:], np.stack((force_direction[:,1], 
+    #                                                         force_direction[:,1])).T)
+    # np.add.at(particle_forcedir[:,2], close[:,:], np.stack((force_direction[:,2], 
+    #                                                         force_direction[:,2])).T)
 
-    particle_forcedir /= np.linalg.norm(particle_forcedir, axis=1)[:,None]
+    # particle_forcedir /= np.linalg.norm(particle_forcedir, axis=1)[:,None]
 
 
     #Particle based full force vector for force chains
@@ -239,7 +257,6 @@ def compression_plot(vtu_in):
     eigd_compr *= np.sign(eigd_compr[:,1])[:,None]
 
     #Threshold first on z component (not interested in vertical stress for force chains)
-    bigforce_thresh = -0.4
     bigforce = (np.abs(eigd_compr[:,-1]) < (1/(2.0**0.5)))
     #Then thresh on value of stress - NB arbitrary factor 0.5 here
 #    bigforce = (eigv[:,0] < 0.5*np.mean(eigv[bigforce,0])) & bigforce #(np.abs(eigd_compr[:,-1]) < (1/(2.0**0.5)))
@@ -262,22 +279,25 @@ def compression_plot(vtu_in):
     xbins = np.digitize(points[:,0], xx) - 1
     ybins = np.digitize(points[:,1], yy) - 1
 
-    #compute pixel values for total force (vectorised!)
-    #These have already been 'abs'd
-    boxed_force = np.zeros((nx,ny,3))
+    # #compute pixel values for total force (vectorised!)
+    # #These have already been 'abs'd
+    # boxed_force = np.zeros((nx,ny,3))
 
-    np.add.at(boxed_force[:,:,0], (xbins, ybins), particle_force[:,0])
-    np.add.at(boxed_force[:,:,1], (xbins, ybins), particle_force[:,1])
-    np.add.at(boxed_force[:,:,2], (xbins, ybins), particle_force[:,2])
+    # np.add.at(boxed_force[:,:,0], (xbins, ybins), particle_force[:,0])
+    # np.add.at(boxed_force[:,:,1], (xbins, ybins), particle_force[:,1])
+    # np.add.at(boxed_force[:,:,2], (xbins, ybins), particle_force[:,2])
 
-    boxed_forcemag = np.linalg.norm(boxed_force,axis=2) / (box_pixel**2.0)
-    boxed_force /= (box_pixel**2.0)
+    # boxed_forcemag = np.linalg.norm(boxed_force,axis=2) / (box_pixel**2.0)
+    # boxed_force /= (box_pixel**2.0)
 
+    boxed_forcemag_direct = np.zeros((nx,ny))
+    np.add.at(boxed_forcemag_direct[:,:], (xbins, ybins), particle_fmag_direct[:])
+    boxed_forcemag_direct /= (box_pixel**2.0)
 
     #Mean force direction in boxes
-    boxed_forcedir = np.zeros((nx,ny,3))
-    np.add.at(boxed_forcedir, (xbins, ybins), particle_forcedir)
-    boxed_forcedir /= np.linalg.norm(boxed_forcedir, axis=2)[:,:,None]
+    # boxed_forcedir = np.zeros((nx,ny,3))
+    # np.add.at(boxed_forcedir, (xbins, ybins), particle_forcedir)
+    # boxed_forcedir /= np.linalg.norm(boxed_forcedir, axis=2)[:,:,None]
 
     #Melange thickness per box
     #===========================
@@ -305,17 +325,16 @@ def compression_plot(vtu_in):
     plt.close()
 
     #Pressure magnitude figure
-    mat = plt.matshow(np.flipud(boxed_force[:,:,1].T), vmax=2.0, cmap='jet')
+    #This is the sum of all particle forces in every pixel, divided by pixel *area*
+    # not volume! So the result is depth-integrated melange stress.
+    mat = plt.matshow(np.flipud(boxed_forcemag_direct[:,:].T), vmax=3.0, cmap='jet')
     fig = plt.gcf()
     ax = plt.gca()
     cbar=fig.colorbar(mat,fraction=0.05)
-    cbar.set_label("Melange stress (MPa)")
+    cbar.set_label("Melange stress (MPa) - depth integrated")
     ax.set_title(figtitle)
     plt.savefig(outfile,dpi=600)
     plt.close()
-
-    # #Just plot the x part of the boxed force direction
-    # mat = plt.matshow(boxed_forcedir[:,:,0], vmin=-0.2, vmax=0.2, cmap='seismic')
 
     #Particle forces for above average force
     plt.quiver(points[bigforce,0],points[bigforce,1],eigd_compr[bigforce,0],
@@ -323,6 +342,7 @@ def compression_plot(vtu_in):
                scale=100.0)
     ax = plt.gca()
     ax.set_aspect(1)
+    ax.set_title(figtitle)
     plt.savefig(vtu_in+"_melfchains.png",dpi=600)
     plt.close()
 
