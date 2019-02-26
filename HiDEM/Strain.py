@@ -31,6 +31,17 @@ def str_from_file(fname,legacy_input=False):
     strain = strain[:,0]
     return x,y,z,strain
 
+def str_to_file(x,y,z,strain,fname):
+    """
+    Spits out a .bin file like HiDEM would produce. Use case: extract a subset of
+    data on server for download
+    """
+    data = np.stack((x,y,z,strain))
+    count = strain.size
+    with open(fname,'wb') as fout:
+        fout.write("Count: "+str(count)+" Type: Float32\n")
+        data.tofile(fout)
+
 def grid_gen(x,y,z,buff=500.0,dx=60.0):
     """
     Generate an xx,yy,zz grid for gridding strain.

@@ -1,25 +1,53 @@
+import sys
+import getopt
 import numpy as np
 from glob import glob
 import re
 from HiDEM import Strain
 
-x,y,z,strain = Strain.str_from_file("ElmerHiDEM_store_summer_bg1pl1_uc032_r01_STR0050.bin")
-thresh = np.arange(0,2.1,0.1)
+def usage():
+    print ("Usage: " + sys.argv[0] + " -i input_file_glob -v strain_threshold -l legacy_input (switch)")
 
-print strain.shape
-for t in thresh:
-    print t, (np.sum(strain > t) / float(strain.size))
+try:
+    opts, args = getopt.getopt(sys.argv[1:],"i:lv:")
+except getopt.GetoptError:
+    usage()
+    sys.exit(2)
 
-
+legacy_input = False
 thresh = 0.5
+for opt, arg in opts:
+    if(opt =="-i"):
+        inglob = arg
+    elif(opt =='-l'):
+        legacy_input = True
+    elif(opt =='-v'):
+        thresh = float(arg)
+    else:
+        print "help"
+        usage()
+        sys.exit(2)
 
-broken = strain > thresh
+if legacy_input:
+    infiles = glob("*"+inglob+"*STR*.csv")
+else:
+    infiles = glob("*"+inglob+"*STR*.bin")
+infiles.sort()
 
-xout = x[broken]
-yout = y[broken]
-zout = z[broken]
-strout = strain[broken]
+for f in infiles:
+    x,y,z,strain = Strain.str_from_file(f,legacy_input)
 
-output =  np.stack((xout,yout,zout,strout),axis=-1)
-print output.shape
-np.savetxt("test_out.csv",output,header="X,Y,Z,Strain", comments="", delimiter=",")
+    broken = strain > thresh
+
+    xout = x[broken]
+    yout = y[broken]
+    zout = z[broken]
+    strout = strain[broken]
+
+    outfile = f.rsplit(".",1)[0] + "_broken.bin"
+    print outfile
+    Strain.str_to_file(xout,yout,zout,strout,outfile)
+
+# output =  np.stack((xout,yout,zout,strout),axis=-1)
+# print output.shape
+# np.savetxt("test_out.csv",output,header="X,Y,Z,Strain", comments="", delimiter=",")
