@@ -1,5 +1,5 @@
 """
-Script to analyse the mélange particle interactions from a HiDEM simulation.
+Script to analyse the melange particle interactions from a HiDEM simulation.
 Set up for Store Glacier but would work with any, given modification of bounding box.
 
 Particle stress tensor is defined using the Love-Weber formula, described most succintly here:
