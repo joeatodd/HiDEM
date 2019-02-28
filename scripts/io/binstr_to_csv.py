@@ -39,10 +39,10 @@ def str_from_file(fname,legacy_input):
         num_count = int(count_re.search(header).group(1))
         float_type = type_re.search(header).group(1).lower()
         the_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*4)
-    return the_data.reshape((-1,4))
+        return the_data.reshape((4,-1)).T
 
 for f in infiles:
 
     print("Processing: "+f)
     strain = str_from_file(f,legacy_input)
-    np.savetxt(f+'.csv',strain, fmt="%.12e")
+    np.savetxt(f+'.csv',strain,header="X,Y,Z,Strain",comments="",delimiter=",", fmt="%.12e")
