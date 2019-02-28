@@ -34,7 +34,7 @@ parser.add_argument("--redo", default=False, action="store_true", help="If image
 args = parser.parse_args()
 
 import numpy as np
-from paraview.simple import servermanager, XMLUnstructuredGridReader, GetActiveSource
+import paraview.simple as PV
 from paraview.numpy_support import vtk_to_numpy
 from scipy.spatial import cKDTree
 import re
@@ -114,11 +114,11 @@ def compression_plot(vtu_in):
     figtitle = "Run: "+title_re.search(vtu_in).group(1) + " Step: " + title_re.search(vtu_in).group(2)
 
     #read the vtu input
-    reader = XMLUnstructuredGridReader( FileName=vtu_in )
+    reader = PV.XMLUnstructuredGridReader( FileName=vtu_in )
     reader.UpdatePipeline()
 
-    data = servermanager.Fetch(reader)
-    GlacierSource = GetActiveSource()
+    data = PV.servermanager.Fetch(reader)
+    GlacierSource = PV.GetActiveSource()
 
     points = vtk_to_numpy(data.GetPoints().GetData())
 
@@ -164,14 +164,14 @@ def compression_plot(vtu_in):
     fry = rcy * SCL * EFS * (LNN - rc)**1.5 / 1.0e6
     frz = rcz * SCL * EFS * (LNN - rc)**1.5 / 1.0e6
 
-    force_vec = np.stack((frx,fry,frz)).T
+    force_vec = np.vstack((frx,fry,frz)).T
 
     #Gather force magnitudes on each particle - this replaces code below
     #which summed up x,y,z components (not necessary and also wrong - too
     #low magnitudes - see comment just below
 
     particle_fmag_direct = np.zeros(npoints)
-    np.add.at(particle_fmag_direct, close[:,:], np.stack((force,force)).T)
+    np.add.at(particle_fmag_direct, close[:,:], np.vstack((force,force)).T)
 
     #norm(force_vec) is *pretty close* to force (max error 1e-7)
     #but then particle_fmag_direct doesn't equal particle_fmag below...
@@ -189,16 +189,16 @@ def compression_plot(vtu_in):
     # frz *= fry_dir
 
     #the normalised force vector
-    # force_direction = (np.stack((frx,fry,frz))/force).T
+    # force_direction = (np.vstack((frx,fry,frz))/force).T
 
     #Collect force contributions on each particle
     #=========================================
 
     # particle_force = np.zeros(points.shape)
 
-    # np.add.at(particle_force[:,0], close[:,:], np.abs(np.stack((frx,frx))).T)
-    # np.add.at(particle_force[:,1], close[:,:], np.abs(np.stack((fry,fry))).T)
-    # np.add.at(particle_force[:,2], close[:,:], np.abs(np.stack((frz,frz))).T)
+    # np.add.at(particle_force[:,0], close[:,:], np.abs(np.vstack((frx,frx))).T)
+    # np.add.at(particle_force[:,1], close[:,:], np.abs(np.vstack((fry,fry))).T)
+    # np.add.at(particle_force[:,2], close[:,:], np.abs(np.vstack((frz,frz))).T)
     # #force magnitude
     # particle_fmag = np.linalg.norm(particle_force, axis=1)
 
@@ -208,13 +208,13 @@ def compression_plot(vtu_in):
 
     # # pf_cnt = np.zeros(points.shape[0])
     # # pf_ones = np.ones(force_direction[:,0].shape)
-    # # np.add.at(pf_cnt, close[:,:], np.stack((pf_ones, pf_ones)).T)
+    # # np.add.at(pf_cnt, close[:,:], np.vstack((pf_ones, pf_ones)).T)
 
-    # np.add.at(particle_forcedir[:,0], close[:,:], np.stack((force_direction[:,0], 
+    # np.add.at(particle_forcedir[:,0], close[:,:], np.vstack((force_direction[:,0], 
     #                                                         force_direction[:,0])).T)
-    # np.add.at(particle_forcedir[:,1], close[:,:], np.stack((force_direction[:,1], 
+    # np.add.at(particle_forcedir[:,1], close[:,:], np.vstack((force_direction[:,1], 
     #                                                         force_direction[:,1])).T)
-    # np.add.at(particle_forcedir[:,2], close[:,:], np.stack((force_direction[:,2], 
+    # np.add.at(particle_forcedir[:,2], close[:,:], np.vstack((force_direction[:,2], 
     #                                                         force_direction[:,2])).T)
 
     # particle_forcedir /= np.linalg.norm(particle_forcedir, axis=1)[:,None]
@@ -342,9 +342,18 @@ def compression_plot(vtu_in):
                scale=100.0)
     ax = plt.gca()
     ax.set_aspect(1)
+    ax.set_xlim(bboxx)
+    ax.set_ylim(bboxy)
     ax.set_title(figtitle)
     plt.savefig(vtu_in+"_melfchains.png",dpi=600)
     plt.close()
+
+    #Clear out paraview memory
+    PV.Delete(GlacierSource)
+    PV.Delete(reader)
+    del(data)
+    del(GlacierSource)
+    del(reader)
 
 
 #loop over files, making figs
