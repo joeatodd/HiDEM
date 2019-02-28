@@ -335,9 +335,28 @@ then apply Delaunay2D filter.
 
 ## TO DO ##
 
+ * Take care of Lost particles in a few places (marked with TODO)
+
  * BC strategy
 
  * Translate & Rotate input
+
+### Output Improvements ###
+
+ Some improvements could be made to make the output more logical/useful. At present, two 'result' files are produced each output interval: JYR (particle positions, displacement, partition), STR (beam centrepoint and strain)
+
+ Problems:
+
+ - No way to link bonds to particles
+ - Cluster analysis depends on FS_ files (as a result)
+
+ Improvements:
+
+ - Link bonds to particles (STR)
+ - Maybe it would be nice to know VDP on each particle? (JYR)
+ - A boolean for 'broken bond' [at the moment its inferred from large strain] (STR)
+ - Fix the cluster analysis FORTRAN extension
+ - UT rotation (orientation) in JYR (better graphics)
 
  ## Notes ##
 
