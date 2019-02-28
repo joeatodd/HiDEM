@@ -1391,6 +1391,7 @@ END SUBROUTINE ExchangeEFS
 
 !Use octree search to find nodes which are nearby
 !Direct contact is identified by circ
+!TODO - take care of IsLost particles
 SUBROUTINE FindNearbyParticles(NRXF, UT, NN, BBox,search_dist,ND,NDL)
 
   USE Octree
@@ -1510,6 +1511,7 @@ END SUBROUTINE FindNearbyParticles
 
 
 !Use octree search to find nodes which are in contact
+!TODO - take care of IsLost particles
 SUBROUTINE FindBeams(xo, ip, SCL, CN, nbeams, searchdist_in)
   
   USE Octree
@@ -1604,6 +1606,7 @@ CALL Octree_final()
 END SUBROUTINE FindBeams
 
 !Use octree search to find nearest N particles to each particle
+!TODO - take care of IsLost particles
 SUBROUTINE FindNNearest(xo, ip, nfind, SCL, CN)
   
   USE Octree
@@ -1703,6 +1706,7 @@ CALL Octree_final()
 END SUBROUTINE FindNNearest
 
 !Use octree search to find connections between separate clusters of particles
+!TODO - take care of IsLost particles
 SUBROUTINE FindClusterConns(xo, CN, Cluster, nfind, SCL)
   
   USE Octree

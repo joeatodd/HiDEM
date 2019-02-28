@@ -15,7 +15,9 @@
 ! *  You should have received a copy of the GNU General Public License
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
-
+!
+! NOT IN USE - see FindCollisions in glas.f90
+!
 SUBROUTINE CIRC(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
      T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL)
 

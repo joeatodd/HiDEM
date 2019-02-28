@@ -712,6 +712,8 @@ END IF
           END IF
         END IF
 
+        IF(IsLost(I)) CYCLE !ignore lost particles
+
 	X=NRXF%M(1,I)+UT%M(6*I-5)  !<- x,y,z actual positions, NRXF%M = original, UT%M = displacement
 	Y=NRXF%M(2,I)+UT%M(6*I-4)
 	Z=NRXF%M(3,I)+UT%M(6*I-3)
