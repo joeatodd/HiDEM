@@ -552,7 +552,7 @@ CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 !Write out my particle to nodfil
 OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
 DO i=1,NN
-  WRITE(510+myid,'(I8,3F16.8)') i,NRXF%A(:,i),1.0
+  WRITE(510+myid,'(I8,4F16.8)') i,NRXF%A(:,i),1.0
 END DO
 ! DO i=NRXF%cstrt, NRXF%cstrt + NRXF%NC - 1
 !   WRITE(510+myid,12) i,NRXF%A(:,i),1.0,NRXF%PartInfo(:,i)
