@@ -360,9 +360,9 @@ SUBROUTINE BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
     ALLOCATE(rotations(3*NN))
     rotations = 0.0
     DO i=1,NN
-      rotations((i-1)*3 + 1) = UT%M(6*I-2) - UTM%M(6*I-2)
-      rotations((i-1)*3 + 2) = UT%M(6*I-1) - UTM%M(6*I-1)
-      rotations((i-1)*3 + 3) = UT%M(6*I-0) - UTM%M(6*I-0)
+      rotations((i-1)*3 + 1) = UT%M(6*I-2)
+      rotations((i-1)*3 + 2) = UT%M(6*I-1)
+      rotations((i-1)*3 + 3) = UT%M(6*I-0)
     END DO
   END IF
 
