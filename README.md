@@ -229,7 +229,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' | False |
 | Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane | False |
 | Fixed Inflow Margin | FixBack | If true, particles near the inflow margin are not permitted to move in XY plane | True |
-
+| Output Displacement | outputDispl | If true, .vtu result file shows particle displacement in current timestep |
+| Output Rotation | outputRot | If true, .vtu result file shows particle rotation |
+| Output Partition | outputPart | If true, .vtu result file shows particle MPI partition no. |
 
 ### Geometry file ####
 

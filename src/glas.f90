@@ -19,37 +19,35 @@ CONTAINS
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
 !myid - this partition id
-SUBROUTINE FIBG3(base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
-     neighcount,l,wrkdir,geomfile,SCL,grid,melta,wl,UC,StrictDomain,GeomMasked,RunName,melange_data)
+SUBROUTINE FIBG3(SI,base,surf,origin,NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
+     neighcount,melange_data)
 
   IMPLICIT NONE
 
 REAL(KIND=dp) :: surf(0:,0:),base(0:,0:)
 REAL(KIND=dp),ALLOCATABLE :: melt(:,:)
-Real(KIND=dp) :: x,y,s1,b1,b2,u1,grid,m1,melta,wl,UC,z1
-REAL(KIND=dp) :: box,b,SCL,origin(2)
-INTEGER :: l,NN,i,j,mask
+Real(KIND=dp) :: x,y
+REAL(KIND=dp) :: box,b,origin(2)
+INTEGER :: NN,i,j,mask
 INTEGER :: N1,N2,xk,yk,neighcount,NTOT
 INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:)
-CHARACTER(LEN=256) :: wrkdir,geomfile,runname
-LOGICAL :: StrictDomain,GeomMasked
-!TYPE(NTOT_t) :: NTOT
 TYPE(NRXF_t) :: NRXF
 TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
 TYPE(MelangeDataHolder_t) :: melange_data
+TYPE(SimInfo_t) :: SI
+
 !Open(300,file='mass.dat',STATUS='OLD')
 
 !Not really used
 ALLOCATE(melt(0:UBOUND(surf,1),0:UBOUND(surf,2)))
-melta = 0.0_dp
-melt = melta*0.0_dp
+melt = SI%melt*0.0_dp
 
 !box is never actualy used...
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
-box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
-CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
-     neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
+box=2.0d0**(2.0d0/3.0d0)*REAL(SI%LS,8) ! box size equal to fcc ground state
+CALL Initializefcc(SI,NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
+     neighcount,box,surf,base,melt,origin,melange_data)
 
 CLOSE(400)
 
@@ -58,9 +56,8 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart, &
-     InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
-     melange_data)
+SUBROUTINE Initializefcc(SI,NN,NTOT,NANS,NRXF,NANPart, &
+     InvPartInfo,neighcount,box,surf,base,melt,origin,melange_data)
 
   USE Melange
 
@@ -70,16 +67,14 @@ REAL(KIND=dp) :: surf(0:,0:),base(0:,0:),melt(0:,0:)
 REAL(KIND=dp) :: b,x0(3,4),box,SCL,origin(2)
 REAL(KIND=dp) :: gridminx, gridmaxx, gridminy, gridmaxy,T1,T2
 REAL(KIND=dp) :: minx, miny
-REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,wl,lc,UC,UCV, efficiency
+REAL(KIND=dp) :: z,x,y,sint,bint,mint,grid,lc,efficiency
 REAL(KIND=dp) :: X1,X2,Y1,Y2,Z1,Z2,RC,rc_min,rc_max
 REAL(KIND=dp), ALLOCATABLE :: xo(:,:),work_arr(:,:)
 
-INTEGER i,j,k,n,ix,K1,k2,l,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
+INTEGER i,j,k,n,ix,K1,k2,ip,glac_ip,NN,nb,xk,yk,nx,ny,nbeams,nbeams_mel,nprox_metis,ierr,pown
 INTEGER NTOT,stats(4), local, part, neighcount
 INTEGER, ALLOCATABLE ::  particles_L(:),NANS(:,:),NANPart(:),PartNN(:),&
      SendGIDs(:),ConnStream(:),RConnStream(:)
-CHARACTER(LEN=256) :: wrkdir,runname
-LOGICAL :: StrictDomain
 LOGICAL, ALLOCATABLE :: neighparts(:)
 TYPE(Conn_t), ALLOCATABLE :: CN(:),CN_Glac(:),CN_metis(:),CN_Melange(:)
 
@@ -94,8 +89,12 @@ TYPE(NRXF_t), TARGET :: NRXF
 TYPE(NRXF_t) :: NRXFold
 TYPE(InvPartInfo_t), ALLOCATABLE, TARGET :: InvPartInfo(:)
 TYPE(MelangeDataHolder_t) :: melange_data
+TYPE(SimInfo_t) :: SI
 
-b=SCL*box/REAL(l,8)  ! the size of the unit cell is the box length divided by l
+SCL = SI%SCL
+grid = SI%grid
+
+b=SCL*box/REAL(SI%LS,8)  ! the size of the unit cell is the box length divided by l
 x0(:,:)=b/2.0d0; x0(:,1)=0.0d0; x0(3,2)=0.0d0; x0(2,3)=0.0d0; x0(1,4)=0.0d0 
 
 IF(myid==0) THEN
@@ -133,7 +132,7 @@ IF(myid==0) THEN
   ip=0
   DO i=1,nx !x step
     DO j=1,ny !y step
-      DO k=-2,l !vertical layer
+      DO k=-2,SI%LS !vertical layer
         DO k1=1,4
 
           x=(x0(1,k1) + minx + REAL(i-1)*b)
@@ -145,7 +144,7 @@ IF(myid==0) THEN
 
           !just beyond edge of geom def
           IF(xk < 0 .OR. yk < 0) CYCLE
-          IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. StrictDomain) CYCLE
+          IF(ANY(surf(xk:xk+1,yk:yk+1) == base(xk:xk+1,yk:yk+1)) .AND. SI%StrictDomain) CYCLE
 
           bint = InterpRast(X,Y,base,grid,origin,INTERP_MISS_FILL,1.0_dp) ! 1 > 0
           sint = InterpRast(X,Y,surf,grid,origin,INTERP_MISS_FILL,0.0_dp) ! i.e. no particle here
@@ -156,6 +155,7 @@ IF(myid==0) THEN
           ! .AND.base(xk+1,yk+1).NE.0.0) THEN
 
           !TODO - unhardcode this
+          ! wl = SI%WL
           ! If (z.ge.bint+mint.and.z.le.sint.and.((sint-bint).gt.4.0*SCL.or.&
           ! (ABS(z-wl).LT.4.0*SCL.AND.bint.LT.wl))) THEN
           IF (z.GE.bint+mint .AND. z.LT.sint .AND. (sint-(bint+mint)).GT.SCL) THEN
@@ -163,8 +163,8 @@ IF(myid==0) THEN
             ! undercut shape functions
             ! lc=4420.0+1.5e-04*(x-3300.0)**2+0.42*exp((x-3700.0)/2.0e+02)
             ! UCV=lc-1500.0*exp(-(x-3500.0)**2/50000.0)
-            ! If (y.lt.lc-UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-20.0) then
-            ! If (y.lt.lc-UC.or.z.gt.bint+3.0*SQRT(y-(lc-UC)).or.z.ge.WL-40.0) then
+            ! If (y.lt.lc-SI%UC.or.y.gt.lc.or.z.gt.bint+3.0*SQRT(y-(lc-SI%UC)).or.z.ge.WL-20.0) then
+            ! If (y.lt.lc-SI%UC.or.z.gt.bint+3.0*SQRT(y-(lc-SI%UC)).or.z.ge.WL-40.0) then
             ! If (y.lt.UCV.or.(z.gt.bint+3.0*sqrt(y-UCV)).or.z.ge.WL-40.0) then
 
             ip=ip+1
@@ -536,7 +536,7 @@ DO i=1,NTOT
 END DO
 
 ! !TODO - need comms here
-! OPEN(UNIT=117+myid,FILE=TRIM(wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
+! OPEN(UNIT=117+myid,FILE=TRIM(SI%wrkdir)//'/FS'//na(myid),STATUS='UNKNOWN')
 ! DO I=1,NTOT
 !   WRITE(117+myid,*) NANS(1,I),NANS(2,I),NANS(3,I),&
 !        NRXF%M(1,NANS(1,I)),NRXF%M(2,NANS(1,I)),&
@@ -550,7 +550,7 @@ END DO
 CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo)
 
 !Write out my particle to nodfil
-OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
+OPEN(510+myid,file=TRIM(SI%wrkdir)//'/'//TRIM(SI%runname)//'_NODFIL2'//na(myid))
 DO i=1,NN
   WRITE(510+myid,'(I8,4F16.8)') i,NRXF%A(:,i),1.0
 END DO
@@ -1935,8 +1935,8 @@ SUBROUTINE EnsureDualGraph(CN)
 
 END SUBROUTINE EnsureDualGraph
 
-SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
-     T,IS,DT,WE,EFC,FXF,FXC,NDL,LNN,SCL,ViscDist,ViscForce)
+SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
+     T,IS,WE,EFC,FXF,FXC,NDL,LNN)
 
   USE TypeDefs
   USE Utils
@@ -1946,8 +1946,8 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   REAL(KIND=dp) ::  T1,T2
   REAL(KIND=dp), ALLOCATABLE :: EFC(:)
   REAL(KIND=dp) ::  SX,SY,SZ,SUM,T,WE(:),L0
-  REAL(KIND=dp) ::  DDEL,DWE,OWE,DT,ESUM,LNN
-  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscDist,ViscForce
+  REAL(KIND=dp) ::  DDEL,DWE,OWE,ESUM,LNN
+  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscForce
   INTEGER ierr,FXC,ND
   INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
@@ -1956,8 +1956,12 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   TYPE(UT_t) :: UT
   TYPE(NRXF_t) :: NRXF
   LOGICAL :: own(2)
+  TYPE(SimInfo_t) :: SI
 
   IF(PrintTimes) CALL CPU_TIME(T1)
+
+  SCL = SI%SCL
+  ViscForce = SI%ViscForce
 
   IF(.NOT. ALLOCATED(FXF)) ALLOCATE(FXF(2,NN*12))
   FXF = 0 !particle proximity info
@@ -2024,7 +2028,7 @@ SUBROUTINE FindCollisions(ND,NN,NRXF,UT,FRX,FRY,FRZ, &
 
       !if almost touching, add forces but don't register interaction
       !NOTE - TODO - is this an attractive force??
-      IF (RC.GT.LNN.AND.RC.LT.LNN+ViscDist*SCL) THEN
+      IF (RC.GT.LNN.AND.RC.LT.LNN+SI%ViscDist*SCL) THEN
         IF(own(1)) THEN
           FRX(N1)=FRX(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCX
           FRY(N1)=FRY(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCY

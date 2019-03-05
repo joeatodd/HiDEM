@@ -19,20 +19,22 @@ MODULE EFFL
 
 CONTAINS
 
-	SUBROUTINE EFFLOAD(S,NTOT,NN,T,DT,M,JS,DMP,DMP2,UT,UTM,R,EN,RY, &
-     FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,LNN)
+  SUBROUTINE EFFLOAD(SI,NTOT,NN,T,M,JS,UT,UTM,R,EN,RY, &
+       FXF,FXC,VDP,DPE,EFS,NANS,NRXF,MFIL,CT,LNN)
 
         USE INOUT
         USE TypeDefs
 
 	IMPLICIT NONE
         REAL(KIND=dp) :: MFIL(NN),VDP(NN)
-	REAL(KIND=dp) :: LNN,DPE,S
+	REAL(KIND=dp) :: LNN,DPE
 	REAL(KIND=dp) :: CT(NTOT*12),EN(NN*6),R(NN*6)
 	REAL(KIND=dp) :: T1,T2
-	REAL(KIND=dp) :: T,DT,M,JS,DMP,DMP2
+	REAL(KIND=dp) :: T,M,JS
         INTEGER :: NTOT,NN
+        TYPE(SimInfo_t) :: SI
  !-----------------------------------------------
+        REAL(KIND=dp) :: DMP,DMP2,DT,S
 	REAL(KIND=dp) :: DX1,DY1,DZ1,DX2,DY2,DZ2
 	REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,TT(12,12),DUT(12)
         REAL(KIND=dp),ALLOCATABLE :: EFS(:),A(:),C(:),F(:),D(:)
@@ -54,6 +56,11 @@ CONTAINS
           FirstTime = .FALSE.
           ALLOCATE(A(NN*6),C(NN*6),F(NN*6),D(NN*6))
         END IF
+
+        DMP = SI%DMP
+        DMP2 = SI%DMP2
+        DT = SI%DT
+        S = SI%S
 
         A = 0.0
         C = 0.0

@@ -9,7 +9,7 @@ IMPLICIT NONE
 
 CONTAINS
 
-SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
+SUBROUTINE LoadMelange(SI, melange_data)
   INTEGER :: i,j,k,mel_parts, mel_nn,ierr,counter,N1,N2,P1
   INTEGER :: cstrt,NC,pstrt,NP,NSIZE,NTOT,BCC,IX,Part,ID
   INTEGER, ALLOCATABLE :: pnn(:),mel_pstrt(:)
@@ -21,7 +21,12 @@ SUBROUTINE LoadMelange(MelangeRunName,wrkdir, melange_data)
   TYPE(UT_t) :: melange_UT, melange_UTM
   TYPE(MelangeDataHolder_t), ALLOCATABLE, TARGET :: mel_data(:)
   TYPE(MelangeDataHolder_t) :: melange_data
+  TYPE(SimInfo_t) :: SI
+
   !Note: Need to load all the files - not just our partitions.
+
+  wrkdir = SI%wrkdir
+  MelangeRunName = SI%MelRunName
 
   !Count the REST0 files
   i = 0

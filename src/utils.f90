@@ -670,15 +670,16 @@ MODULE UTILS
     !Checks particle position and velocity for anything suspicious
     !Freezes particles which are outside the domain, determines outliers 
     !for the purpose of BBox calculation
-    SUBROUTINE CheckSolution(NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,DT,MAXUT,Lost,Outlier)
+    SUBROUTINE CheckSolution(SI,NRXF,UT,UTP,NN,NTOT,NANS,EFS,grid_bbox,Lost,Outlier)
 
       INTEGER ::  NN, NTOT
       INTEGER :: NANS(:,:)
       REAL(KIND=dp), ALLOCATABLE :: EFS(:),UTP(:)
-      REAL(KIND=dp) :: DT,grid_bbox(4),MAXUT
+      REAL(KIND=dp) :: grid_bbox(4)
       TYPE(UT_t) :: UT
       TYPE(NRXF_t) :: NRXF
       LOGICAL, ALLOCATABLE :: Lost(:), Outlier(:)
+      TYPE(SimInfo_t) :: SI
       !-----------------------------------
       INTEGER :: i,j,ierr
       REAL(KIND=dp) :: BBox(6),bbox_vol,bbox_vols(ntasks),med_vol,max_gap(3),gap(3)
@@ -697,7 +698,7 @@ MODULE UTILS
 
       freezer(:) = -500.0
       speed_limit = 50.0 !m/s - TODO unharcode
-      disp_limit = speed_limit * DT !save some calculations
+      disp_limit = speed_limit * SI%DT !save some calculations
  
       check_outliers = .FALSE.
       too_fast = .FALSE.
@@ -730,8 +731,8 @@ MODULE UTILS
         END IF
 
         !Check total displacement
-        IF(ABS(UTP(6*I-5)) > MAXUT .OR. ABS(UTP(6*I-4)) > MAXUT .OR. &
-             ABS(UTP(6*I-3)) > MAXUT) Lost(i) = .TRUE.
+        IF(ABS(UTP(6*I-5)) > SI%MAXUT .OR. ABS(UTP(6*I-4)) > SI%MAXUT .OR. &
+             ABS(UTP(6*I-3)) > SI%MAXUT) Lost(i) = .TRUE.
 
         IF(Lost(i)) THEN
           PRINT *, myid, " Lost a particle : ",I

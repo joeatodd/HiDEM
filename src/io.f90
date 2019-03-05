@@ -24,72 +24,19 @@ MODULE INOUT
 
 CONTAINS
 
- SUBROUTINE ReadInput(INFILE, runname, wrkdir, resdir, geomfile, PRESS, MELT, UC, DT, S, GRAV, &
-      RHO, RHOW, EF0, LS, SUB, GL, SLIN, doShearLine, MLOAD, FRIC, REST, restname, POR, SEEDI, DAMP1, &
-      DAMP2, DRAG_AIR, DRAG_WATER, ViscDist, ViscForce, BedIntConst, BedZOnly, BedDampFactor, OUTINT, RESOUTINT, &
-      MAXUT, SCL, WL, STEPS0, GRID, fractime, &
-      StrictDomain, DoublePrec, CSVOutput, GeomMasked, FixLat,FixBack, gotMelange, MelRunName)
+ SUBROUTINE ReadInput(INFILE, SimInfo)
 
-   REAL(KIND=dp) :: PRESS, MELT, UC, DT, S, EF0, SUB, GL, SLIN, MLOAD, FRIC, POR
-   REAL(KIND=dp) :: DAMP1, DAMP2, DRAG_AIR, DRAG_WATER, MAXUT, SCL, WL, GRID, GRAV, RHO, RHOW, BedIntConst
-   REAL(KIND=dp) :: fractime,viscforce,viscdist, BedDampFactor
-   INTEGER :: REST, SEEDI, OUTINT, RESOUTINT, STEPS0, LS
+   TYPE(SimInfo_t) :: SimInfo
    INTEGER :: readstat, i,incount
-   CHARACTER(256) :: INFILE, geomfile, buff,VarName,VarValue,runname,MelRunName,wrkdir,&
-        resdir,restname
-   LOGICAL :: BedZOnly,StrictDomain,DoublePrec,CSVOutput,FileExists,FixLat,&
-        FixBack,GeomMasked,doShearLine,gotMelange
-   LOGICAL :: gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
+   CHARACTER(256) :: INFILE, buff, VarName,VarValue
+   LOGICAL :: FileExists, gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
 
-   !Set default values
-   PRESS = 0.0
-   MELT = 0.0
-   UC = 0.0
-   DT = 1.0e-4
-   S = 0.7
-   EF0 = 1.0e+9
-   LS = 100
-   SUB = 0.0
-   GL = -100.0
-   SLIN = 2000.0
-   doShearLine = .FALSE.
-   MLOAD = 0.0002
-   FRIC = 1.0
-   REST = 0
-   POR = 0.1
-   SEEDI = 11695378
-   DAMP1 = 1.0E4
-   DAMP2 = 1.0E4
-   DRAG_AIR = 1.0E1
-   DRAG_WATER = 1.0E1
-   viscforce=1.0E4
-   viscdist = 4.0E-2
-   OUTINT = 20000
-   RESOUTINT = 20000
-   MAXUT = 1.0E6
-   GRAV = 9.81
-   RHO = 900.0
-   RHOW = 1030.0
-   BedIntConst = 1.0E8
-   BedDampFactor = 1.0
-   BedZOnly = .TRUE.
-   wrkdir = './'
-   resdir = './'
-   fractime = 40.0
-   StrictDomain = .TRUE.
-   DoublePrec = .FALSE.
-   CSVOutput = .FALSE.
-   FixLat = .FALSE.
-   FixBack = .TRUE.
-   GeomMasked = .FALSE.
-   DebugMode = .FALSE.
-   PrintTimes = .FALSE.
-   gotMelange = .FALSE.
-
+   !Note - these variables have default values which
+   !are set in their type definition (typedefs.f90)
    DO
      READ(112,"(A)", IOSTAT=readstat) buff
      IF(readstat > 0) STOP
@@ -106,119 +53,123 @@ CONTAINS
      VarName = buff(1:i-1)
      VarValue = buff(i+1:)
 
-!     PRINT *, TRIM(ToLowerCase(VarName)),' has value: ',TRIM(VarValue)
-
      SELECT CASE (TRIM(ToLowerCase(VarName)))
      CASE ("density")
-       READ(VarValue,*) RHO
+       READ(VarValue,*) SimInfo % RHO
      CASE ("water density")
-       READ(VarValue,*) RHOW
+       READ(VarValue,*) SimInfo % RHOW
      CASE("gravity")
-       READ(VarValue,*) GRAV
+       READ(VarValue,*) SimInfo % GRAV
      CASE("backwall pressure")
-       READ(VarValue,*) PRESS
+       READ(VarValue,*) SimInfo % PRESS
      CASE("submarine melt")
-       READ(VarValue,*) MELT
+       READ(VarValue,*) SimInfo % MELT
      CASE("uc")
-       READ(VarValue,*) UC
+       READ(VarValue,*) SimInfo % UC
      CASE("timestep")
-       READ(VarValue,*) DT
+       READ(VarValue,*) SimInfo % DT
      CASE("width")
-       READ(VarValue,*) S
+       READ(VarValue,*) SimInfo % S
      CASE("youngs modulus")
-       READ(VarValue,*) EF0
+       READ(VarValue,*) SimInfo % EF0
      CASE("size")
-       READ(VarValue,*) LS
+       READ(VarValue,*) SimInfo % LS
      CASE("domain inclination")
-       READ(VarValue,*) SUB
+       READ(VarValue,*) SimInfo % SUB
      CASE("water line")
-       READ(VarValue,*) WL
+       READ(VarValue,*) SimInfo % WL
        gotWL = .TRUE.
      CASE("grounding line")
-       READ(VarValue,*) GL
+       READ(VarValue,*) SimInfo % GL
      CASE("shear line")
-       READ(VarValue,*) SLIN
-       doShearLine = .TRUE.
+       READ(VarValue,*) SimInfo % SLIN
+       SimInfo % doShearLine = .TRUE.
      CASE("no timesteps")
-       READ(VarValue,*) STEPS0
+       READ(VarValue,*) SimInfo % STEPS0
        gotSteps = .TRUE.
      CASE("max load")
-       READ(VarValue,*) MLOAD
+       READ(VarValue,*) SimInfo % MLOAD
      CASE("friction scale")
-       READ(VarValue,*) FRIC
+       READ(VarValue,*) SimInfo % FRIC
      CASE("restart")
-       READ(VarValue,*) REST
+       READ(VarValue,*) SimInfo % REST
      CASE("scale")
-       READ(VarValue,*) SCL
+       READ(VarValue,*) SimInfo % SCL
        gotSCL = .TRUE.
      CASE("grid")
-       READ(VarValue,*) GRID
+       READ(VarValue,*) SimInfo % GRID
        gotGrid = .TRUE.
      CASE("porosity")
-       READ(VarValue,*) POR
+       READ(VarValue,*) SimInfo % POR
      CASE("random seed")
-       READ(VarValue,*) SEEDI
+       READ(VarValue,*) SimInfo % SEEDI
      CASE("translational damping")
-       READ(VarValue,*) DAMP1
+       READ(VarValue,*) SimInfo % DAMP1
      CASE("rotational damping")
-       READ(VarValue,*) DAMP2
+       READ(VarValue,*) SimInfo % DAMP2
      CASE("viscous distance")
-       READ(VarValue,*) viscdist
+       READ(VarValue,*) SimInfo % viscdist
      CASE("viscous force")
-       READ(VarValue,*) viscforce
+       READ(VarValue,*) SimInfo % viscforce
      CASE("drag coefficient")
-       READ(VarValue,*) DRAG_AIR
-       DRAG_WATER = DRAG_AIR
+       READ(VarValue,*) SimInfo % DRAG_AIR
+       SimInfo % DRAG_WATER = SimInfo % DRAG_AIR
      CASE("air drag coefficient")
-       READ(VarValue,*) DRAG_AIR
+       READ(VarValue,*) SimInfo % DRAG_AIR
      CASE("water drag coefficient")
-       READ(VarValue,*) DRAG_WATER
+       READ(VarValue,*) SimInfo % DRAG_WATER
      CASE("output interval")
-       READ(VarValue,*) OUTINT
+       READ(VarValue,*) SimInfo % OUTINT
      CASE("restart output interval")
-       READ(VarValue,*) RESOUTINT
+       READ(VarValue,*) SimInfo % RESOUTINT
      CASE("maximum displacement")
-       READ(VarValue,*) MAXUT
+       READ(VarValue,*) SimInfo % MAXUT
      CASE("run name")
-       READ(VarValue,*) runname
+       READ(VarValue,*) SimInfo % runname
        gotName = .TRUE.
      CASE("restart from run name")
-       READ(VarValue,*) restname
+       READ(VarValue,*) SimInfo % restname
        gotRestName = .TRUE.
      CASE("work directory")
-       READ(VarValue,*) wrkdir
+       READ(VarValue,*) SimInfo % wrkdir
      CASE("geometry file")
-       READ(VarValue,*) geomfile
+       READ(VarValue,*) SimInfo % geomfile
        gotGeom = .TRUE.
      CASE("geometry file has mask")
-       READ(VarValue,*) GeomMasked
+       READ(VarValue,*) SimInfo % GeomMasked
      CASE("results directory")
-       READ(VarValue,*) resdir
+       READ(VarValue,*) SimInfo % resdir
      CASE("bed stiffness constant")
-       READ(VarValue,*) BedIntConst
+       READ(VarValue,*) SimInfo % BedIntConst
      CASE("bed damping factor")
-       READ(VarValue,*) BedDampFactor
+       READ(VarValue,*) SimInfo % BedDampFactor
      CASE("bed z only")
-       READ(VarValue,*) BedZOnly
+       READ(VarValue,*) SimInfo % BedZOnly
      CASE("fracture after time")
-       READ(VarValue,*) fractime
+       READ(VarValue,*) SimInfo % fractime
      CASE("strict domain interpolation")
-       READ(VarValue,*) StrictDomain
+       READ(VarValue,*) SimInfo % StrictDomain
      CASE("double precision output")
-       READ(VarValue,*) DoublePrec
+       READ(VarValue,*) SimInfo % DoublePrec
      CASE("csv output")
-       READ(VarValue,*) CSVOutput
+       READ(VarValue,*) SimInfo % CSVOutput
      CASE("fixed lateral margins")
-       READ(VarValue,*) FixLat
+       READ(VarValue,*) SimInfo % FixLat
      CASE("fixed inflow margin")
-       READ(VarValue,*) FixBack
+       READ(VarValue,*) SimInfo % FixBack
      CASE("debug mode")
        READ(VarValue,*) DebugMode
      CASE("print times")
        READ(VarValue,*) PrintTimes
+     CASE("output displacement")
+       READ(VarValue,*) SimInfo % outputDispl
+     CASE("output rotation")
+       READ(VarValue,*) SimInfo % outputRot
+     CASE("output partition")
+       READ(VarValue,*) SimInfo % outputPart
      CASE("melange run name")
-       READ(VarValue,*) MelRunName
-       gotMelange = .TRUE.
+       READ(VarValue,*) SimInfo % MelRunName
+       SimInfo % gotMelange = .TRUE.
      CASE DEFAULT
        PRINT *,'Unrecognised input: ',TRIM(VarName)
        STOP
@@ -234,102 +185,105 @@ CONTAINS
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
    IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
    IF(.NOT. gotGeom) CALL FatalError("No Geometry File specified!")
-   IF(.NOT. gotRestName .AND. REST == 1) THEN
-     restname = runname
+   IF(.NOT. gotRestName .AND. SimInfo % REST == 1) THEN
+     SimInfo % restname = SimInfo % runname
    END IF
-   IF(REST == 1 .AND. gotMelange) CALL FatalError("Can't restart and load melange in same run!")
+   IF(SimInfo % REST == 1 .AND. SimInfo % gotMelange) CALL FatalError("Can't restart and load melange in same run!")
 
-   IF(FixLat .AND. .NOT. GeomMasked) THEN
+   IF(SimInfo % FixLat .AND. .NOT. SimInfo % GeomMasked) THEN
      CALL FatalError("'Fixed Lateral Margin' requires a geometry file with mask")
    END IF
 
    !check the geometry file exists
-   INQUIRE( FILE=TRIM(geomfile), EXIST=FileExists ) 
-   IF(.NOT. FileExists) CALL FatalError("Geometry input file '"//TRIM(geomfile)//"' doesn't exist!")
+   INQUIRE( FILE=TRIM(SimInfo % geomfile), EXIST=FileExists ) 
+   IF(.NOT. FileExists) CALL FatalError("Geometry input file '"//TRIM(SimInfo % geomfile)//"' doesn't exist!")
 
 
    IF(myid==0) THEN
      PRINT *,'--------------------Input Vars----------------------'
-     WRITE(*,'(A,A)') "Run Name = ",TRIM(runname)
-     IF(REST == 1) WRITE(*,'(A,A)') "Restarting from Run Name = ",TRIM(restname)
-     WRITE(*,'(A,A)') "Geometry File = ",TRIM(geomfile)
-     WRITE(*,'(A,A)') "Work Directory = ",TRIM(wrkdir)
-     WRITE(*,'(A,A)') "Results Directory = ",TRIM(resdir)
-     WRITE(*,'(A,L)') "Geometry File Has Mask = ",GeomMasked
-     WRITE(*,'(A,F9.2)') "Backwall Pressure = ",PRESS
-     WRITE(*,'(A,F9.2)') "Submarine Melt = ",MELT
-     WRITE(*,'(A,F9.2)') "UC = ",UC
-     WRITE(*,'(A,ES12.5)') "Timestep = ",DT
-     WRITE(*,'(A,F9.2)') "Width = ",S
-     WRITE(*,'(A,F9.2)') "Gravity = ",GRAV
-     WRITE(*,'(A,F7.2)') "Density = ",RHO
-     WRITE(*,'(A,F7.2)') "Water Density = ",RHOW
-     WRITE(*,'(A,ES12.5)') "Youngs Modulus = ",EF0
-     WRITE(*,'(A,I0)') "Size = ",LS
-     WRITE(*,'(A,F9.2)') "Domain Inclination = ",SUB
-     WRITE(*,'(A,F7.2)') "Grounding Line = ",GL
-     WRITE(*,'(A,L)') "Do Shear Line = ",doShearLine
-     WRITE(*,'(A,F7.2)') "Shear Line = ",SLIN
-     WRITE(*,'(A,ES12.5)') "Max Load = ",MLOAD
-     WRITE(*,'(A,ES12.5)') "Friction Scale = ",FRIC
-     WRITE(*,'(A,I0)') "Restart = ",REST
-     WRITE(*,'(A,F9.2)') "Porosity = ",POR
-     WRITE(*,'(A,I0)') "Random Seed = ",SEEDI
-     WRITE(*,'(A,ES12.5)') "Translational Damping = ",DAMP1
-     WRITE(*,'(A,ES12.5)') "Rotational Damping = ",DAMP2
-     WRITE(*,'(A,ES12.5)') "Air Drag Coefficient = ",DRAG_AIR
-     WRITE(*,'(A,ES12.5)') "Water Drag Coefficient = ",DRAG_WATER
-     WRITE(*,'(A,ES12.5)') "Bed Stiffness Constant = ",BedIntConst
-     WRITE(*,'(A,ES12.5)') "Bed Damping Factor = ",BedDampFactor
-     WRITE(*,'(A,L)') "Bed Z Only = ",BedZOnly
-     WRITE(*,'(A,I0)') "Output Interval = ",OUTINT
-     WRITE(*,'(A,I0)') "Restart Output Interval = ",RESOUTINT
-     WRITE(*,'(A,ES12.5)') "Maximum Displacement = ",MAXUT
-     WRITE(*,'(A,F9.2)') "Scale = ",SCL
-     WRITE(*,'(A,F9.2)') "Water Line = ",WL
-     WRITE(*,'(A,I0)') "No Timesteps = ",STEPS0
-     WRITE(*,'(A,F9.2)') "Grid = ",GRID
-     WRITE(*,'(A,F9.2)') "Fracture After Time = ",fractime
-     WRITE(*,'(A,L)') "Double Precision Output = ",DoublePrec
-     WRITE(*,'(A,L)') "Strict Domain Interpolation = ",StrictDomain
-     WRITE(*,'(A,L)') "Fixed Lateral Margins = ",FixLat
-     WRITE(*,'(A,L)') "Fixed Inflow Margin = ",FixBack
+     WRITE(*,'(A,A)') "Run Name = ",TRIM(SimInfo % runname)
+     IF(SimInfo % REST == 1) WRITE(*,'(A,A)') "Restarting from Run Name = ",TRIM(SimInfo % restname)
+     WRITE(*,'(A,A)') "Geometry File = ",TRIM(SimInfo % geomfile)
+     WRITE(*,'(A,A)') "Work Directory = ",TRIM(SimInfo % wrkdir)
+     WRITE(*,'(A,A)') "Results Directory = ",TRIM(SimInfo % resdir)
+     WRITE(*,'(A,L)') "Geometry File Has Mask = ",SimInfo % GeomMasked
+     WRITE(*,'(A,F9.2)') "Backwall Pressure = ", SimInfo % PRESS
+     WRITE(*,'(A,F9.2)') "Submarine Melt = ", SimInfo % MELT
+     WRITE(*,'(A,F9.2)') "UC = ", SimInfo % UC
+     WRITE(*,'(A,ES12.5)') "Timestep = ", SimInfo % DT
+     WRITE(*,'(A,F9.2)') "Width = ", SimInfo % S
+     WRITE(*,'(A,F9.2)') "Gravity = ", SimInfo % GRAV
+     WRITE(*,'(A,F7.2)') "Density = ", SimInfo % RHO
+     WRITE(*,'(A,F7.2)') "Water Density = ", SimInfo % RHOW
+     WRITE(*,'(A,ES12.5)') "Youngs Modulus = ", SimInfo % EF0
+     WRITE(*,'(A,I0)') "Size = ", SimInfo % LS
+     WRITE(*,'(A,F9.2)') "Domain Inclination = ", SimInfo % SUB
+     WRITE(*,'(A,F7.2)') "Grounding Line = ", SimInfo % GL
+     WRITE(*,'(A,L)') "Do Shear Line = ", SimInfo % doShearLine
+     WRITE(*,'(A,F7.2)') "Shear Line = ", SimInfo % SLIN
+     WRITE(*,'(A,ES12.5)') "Max Load = ", SimInfo % MLOAD
+     WRITE(*,'(A,ES12.5)') "Friction Scale = ", SimInfo % FRIC
+     WRITE(*,'(A,I0)') "Restart = ", SimInfo % REST
+     WRITE(*,'(A,F9.2)') "Porosity = ", SimInfo % POR
+     WRITE(*,'(A,I0)') "Random Seed = ", SimInfo % SEEDI
+     WRITE(*,'(A,ES12.5)') "Translational Damping = ", SimInfo % DAMP1
+     WRITE(*,'(A,ES12.5)') "Rotational Damping = ", SimInfo % DAMP2
+     WRITE(*,'(A,ES12.5)') "Air Drag Coefficient = ", SimInfo % DRAG_AIR
+     WRITE(*,'(A,ES12.5)') "Water Drag Coefficient = ", SimInfo % DRAG_WATER
+     WRITE(*,'(A,ES12.5)') "Bed Stiffness Constant = ", SimInfo % BedIntConst
+     WRITE(*,'(A,ES12.5)') "Bed Damping Factor = ", SimInfo % BedDampFactor
+     WRITE(*,'(A,L)') "Bed Z Only = ", SimInfo % BedZOnly
+     WRITE(*,'(A,I0)') "Output Interval = ", SimInfo % OUTINT
+     WRITE(*,'(A,I0)') "Restart Output Interval = ", SimInfo % RESOUTINT
+     WRITE(*,'(A,ES12.5)') "Maximum Displacement = ", SimInfo % MAXUT
+     WRITE(*,'(A,F9.2)') "Scale = ", SimInfo % SCL
+     WRITE(*,'(A,F9.2)') "Water Line = ", SimInfo % WL
+     WRITE(*,'(A,I0)') "No Timesteps = ", SimInfo % STEPS0
+     WRITE(*,'(A,F9.2)') "Grid = ", SimInfo % GRID
+     WRITE(*,'(A,F9.2)') "Fracture After Time = ", SimInfo % fractime
+     WRITE(*,'(A,L)') "Double Precision Output = ", SimInfo % DoublePrec
+     WRITE(*,'(A,L)') "Strict Domain Interpolation = ", SimInfo % StrictDomain
+     WRITE(*,'(A,L)') "Fixed Lateral Margins = ", SimInfo % FixLat
+     WRITE(*,'(A,L)') "Fixed Inflow Margin = ", SimInfo % FixBack
+     WRITE(*,'(A,L)') "Output Displacement = ", SimInfo % outputDispl
+     WRITE(*,'(A,L)') "Output Rotation = ", SimInfo % outputRot
+     WRITE(*,'(A,L)') "Output Partition = ", SimInfo % outputPart
      PRINT *,'----------------------------------------------------'
    END IF
 END SUBROUTINE ReadInput
 
-SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
-     UTM,NANS,NTOT,NANPart,DoublePrec)
+SUBROUTINE BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY,PNN(:)
-  CHARACTER(LEN=256) :: resdir, runname
   INTEGER :: NTOT, NANS(2,NTOT),NANPart(NTOT)
   TYPE(NRXF_t) :: NRXF
   TYPE(UT_t) :: UT, UTM
-  LOGICAL :: DoublePrec
   !----------------------------------
   INTEGER :: NN,NNTot,NBeamsTot,counter,ms_counter,VTK_Offset
   INTEGER :: i,j,GlobalNNOffset(ntasks)
   REAL(KIND=dp) :: X,Y,Z
   CHARACTER(LEN=1024) :: output_str,datatype_str
   CHARACTER :: lfeed
-  REAL(KIND=dp), ALLOCATABLE :: work_real_dp(:), displacements(:)
-  REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
+  REAL(KIND=dp), ALLOCATABLE :: work_real_dp(:), displacements(:), rotations(:)
   INTEGER :: fh,ierr,testsum,contig_type,realsize,intsize
   INTEGER :: Nbeams,PNbeams(ntasks),ntotal,mybeamoffset,otherbeamoffset,othertask
-  INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(4), fh_mystarts(4)
+  INTEGER(kind=MPI_Offset_kind) :: fh_mpi_offset,fh_mpi_byte_offset, fh_starts(10), fh_mystarts(10)
   INTEGER, ALLOCATABLE :: work_int(:)
-  LOGICAL :: OutputBeams,OutputDisplacement,OutputPartition
+  LOGICAL :: OutputBeams,OutputDisplacement,OutputRotation,OutputPartition
+  TYPE(SimInfo_t) :: SI
 
   lfeed = CHAR(10) !line feed character
-  OutputDisplacement = .TRUE.
-  OutputPartition = .TRUE.
+
+  OutputDisplacement = SI%outputDispl
+  OutputRotation = SI%outputRot
+  OutputPartition = SI%outputPart
+  OutputBeams = .FALSE.
 
   !Some MPI setup - define types and sizes
-  IF(DoublePrec) THEN
+  IF(SI%DoublePrec) THEN
     CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
     CALL MPI_Type_Contiguous(3, MPI_DOUBLE_PRECISION, contig_type, ierr)
     datatype_str = "Float64"
@@ -341,7 +295,6 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   CALL MPI_Type_Commit(contig_type, ierr)
   CALL MPI_TYPE_SIZE(MPI_INTEGER, intsize, ierr)
 
-  OutputBeams = .FALSE.
 
   !---------- Particle Info -----
   NN = PNN(myid+1)
@@ -402,60 +355,34 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     END DO
   END IF
 
+  !---- particle rotation ----
+  IF(OutputRotation) THEN
+    ALLOCATE(rotations(3*NN))
+    rotations = 0.0
+    DO i=1,NN
+      rotations((i-1)*3 + 1) = UT%M(6*I-2) - UTM%M(6*I-2)
+      rotations((i-1)*3 + 2) = UT%M(6*I-1) - UTM%M(6*I-1)
+      rotations((i-1)*3 + 3) = UT%M(6*I-0) - UTM%M(6*I-0)
+    END DO
+  END IF
+
   !Compute offsets (global and cpu specific)
   ms_counter = 1
   fh_starts(ms_counter)=0
   fh_mystarts(ms_counter)=0
 
-  DO i=1,ntasks
-    IF(i > myid) EXIT
-    fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*3*realsize
-  END DO
-  IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
+  CALL SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, PNN, 3, realsize, intsize)
 
-  ms_counter = ms_counter + 1
-  fh_starts(ms_counter) = NNTot*3*realsize + intsize
-  fh_mystarts(ms_counter) = fh_starts(ms_counter)
+  IF(OutputBeams) CALL SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, &
+       PNBeams, 2, intsize, intsize, ((NBeamsTot*4*intsize + intsize*3)))
+  IF(OutputDisplacement) CALL SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, &
+       PNN, 3, realsize, intsize)
+  IF(OutputRotation) CALL SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, PNN, &
+       3, realsize, intsize)
+  IF(OutputPartition) CALL SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, PNN, &
+       1, intsize, intsize)
 
-  IF(OutputBeams) THEN
-
-    !connectivity (particles in beams)
-    DO i=1,ntasks
-      IF(i > myid) EXIT
-      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNBeams(i)*2*intsize
-    END DO
-    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
-
-    ms_counter = ms_counter + 1
-    fh_starts(ms_counter) = fh_starts(ms_counter-1) + (NBeamsTot*4*intsize + intsize*3) !<- extra offset because root writes offsets & types
-    fh_mystarts(ms_counter) = fh_starts(ms_counter)
-  END IF
-
-  IF(OutputDisplacement) THEN
-    DO i=1,ntasks
-      IF(i > myid) EXIT
-      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*3*realsize
-    END DO
-    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
-
-    ms_counter = ms_counter + 1
-    fh_starts(ms_counter) = fh_starts(ms_counter-1) + NNTot*3*realsize + intsize
-    fh_mystarts(ms_counter) = fh_starts(ms_counter)
-  END IF
-
-  IF(OutputPartition) THEN
-    DO i=1,ntasks
-      IF(i > myid) EXIT
-      fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + PNN(i)*intsize
-    END DO
-    IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize !root writes an extra int at the start
-
-    ms_counter = ms_counter + 1
-    fh_starts(ms_counter) = fh_starts(ms_counter-1) + NNTot*intsize + intsize
-    fh_mystarts(ms_counter) = fh_starts(ms_counter)
-  END IF
-
-  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.vtu',&
+  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(SI%resdir)//'/'//TRIM(SI%runname)//'_JYR'//na(NRY)//'.vtu',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
 
   IF(myid==0) THEN
@@ -465,87 +392,101 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
     !TODO - test endianness
 
     WRITE( output_str,'(A)') '<?xml version="1.0"?>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
    
-    WRITE( output_str, '(A)') '<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    WRITE( output_str, '(A)') '<VTKFile type="UnstructuredGrid" version=&
+         &"0.1" byte_order="LittleEndian">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     WRITE( output_str,'(A)') '  <UnstructuredGrid>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,I0,A,I0,A)') '    <Piece NumberOfPoints="',NNtot,'" NumberOfCells="',NBeamsTot,'">'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    WRITE( output_str,'(A,I0,A,I0,A)') '    <Piece NumberOfPoints="',&
+         NNtot,'" NumberOfCells="',NBeamsTot,'">'//lfeed
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     !--------- POINTS ------------------
 
     WRITE( output_str,'(A)') '      <Points>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Position" &
+    WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',&
+         TRIM(datatype_str),'" Name="Position" &
          &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
 
     WRITE( output_str,'(A)') '      </Points>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     !--------- CELLS (beams)------------------
 
     WRITE( output_str,'(A)') '      <Cells>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="connectivity" &
          &format="appended" offset="',VTK_Offset,'"/>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*2*intsize + intsize
 
     WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="offsets" &
          &format="appended" offset="',VTK_Offset,'"/>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*intsize + intsize
 
     WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="types" &
          &format="appended" offset="',VTK_Offset,'"/>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
     IF(OutputBeams) VTK_Offset = VTK_Offset + NBeamsTot*intsize + intsize
 
     WRITE( output_str,'(A)') '      </Cells>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     !--------- POINT DATA ------------------
 
     WRITE( output_str,'(A)') '      <PointData>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
-    IF(OutputDisplacement) THEN
-      WRITE( output_str,'(A,A,A,I0,A)') '        <DataArray type="',TRIM(datatype_str),'" Name="Displacement" &
-           &NumberOfComponents="3" format="appended" offset="',VTK_Offset,'"/>'//lfeed
-      CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    IF(OutputDisplacement) CALL WriteVTKPointHeader(fh, "Displacement", &
+         datatype_str, 3, VTK_Offset, NNTot, realsize, intsize)
 
-      VTK_Offset = VTK_Offset + NNTot*3*realsize + intsize
-    END IF
-    IF(OutputPartition) THEN
-      WRITE( output_str,'(A,I0,A)') '        <DataArray type="Int32" Name="Partition" &
-           &NumberOfComponents="1" format="appended" offset="',VTK_Offset,'"/>'//lfeed
-      CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    IF(OutputRotation) CALL WriteVTKPointHeader(fh, "Rotation", &
+         datatype_str, 3, VTK_Offset, NNTot, realsize, intsize)
 
-      VTK_Offset = VTK_Offset + NNTot*intsize + intsize
-    END IF
+    IF(OutputPartition) CALL WriteVTKPointHeader(fh, "Partition", &
+         "Int32", 1, VTK_Offset, NNTot, intsize, intsize)
 
     WRITE( output_str,'(A)') '      </PointData>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     !----------- XML footer ----------------
 
     WRITE( output_str,'(A)') '    </Piece>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     WRITE( output_str,'(A)') '  </UnstructuredGrid>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     WRITE( output_str,'(A)') '  <AppendedData encoding="raw">'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
     CALL MPI_File_Write(fh, "_", 1, MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
 
@@ -562,76 +503,47 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
   fh_mystarts = fh_mpi_byte_offset + fh_mystarts
   ms_counter = 1
 
-  !Write the points (using collective I/O)
-  IF(DoublePrec) THEN
-    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION, contig_type, 'native', MPI_INFO_NULL, ierr)
-    IF(myid==0) CALL MPI_File_Write(fh, INT(NNtot * KIND(work_real_dp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-    CALL MPI_File_Write_All(fh, work_real_dp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
-  ELSE
-    ALLOCATE(work_real_sp(SIZE(work_real_dp)))
-
-    work_real_sp = work_real_dp
-    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, contig_type, 'native', MPI_INFO_NULL, ierr)
-    IF(myid==0) CALL MPI_File_Write(fh, INT(NNtot * KIND(work_real_sp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-    CALL MPI_File_Write_All(fh, work_real_sp, NN, contig_type, MPI_STATUS_IGNORE, ierr)
-  END IF
-  ms_counter = ms_counter + 1
+  CALL WriteRealPointDataToVTK(SI, fh, work_real_dp, fh_mystarts, ms_counter, PNN, 3)
 
   IF(OutputBeams) THEN
     !Find end of file, set view, write beam node nums, offsets, types
-    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER,&
+         'native', MPI_INFO_NULL, ierr)
     !Write byte count for connectivity
-    IF(myid==0) CALL MPI_File_Write(fh, INT(NBeamsTot*KIND(work_int) * 2), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    IF(myid==0) CALL MPI_File_Write(fh, INT(NBeamsTot*KIND(work_int) * 2), 1, &
+         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_int, NBeams*2, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
 
     !Reset the MPI I/O view to default (full file, read as bytes)
     fh_mpi_offset = 0
-    CALL MPI_File_Set_View(fh, fh_mpi_offset, MPI_BYTE, MPI_BYTE, 'native', MPI_INFO_NULL, ierr)
+    CALL MPI_File_Set_View(fh, fh_mpi_offset, MPI_BYTE, MPI_BYTE, 'native', &
+         MPI_INFO_NULL, ierr)
     !Write beam offsets & types
     IF(myid==0) THEN
       CALL MPI_File_Seek(fh, fh_mpi_offset,MPI_SEEK_END,ierr)
-      CALL MPI_File_Write(fh,NBeamsTot*KIND(work_int),1,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-      CALL MPI_File_Write(fh, (/(i*2,i=1,NBeamsTot)/),NBeamsTot,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-      CALL MPI_File_Write(fh,NBeamsTot*KIND(work_int),1,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-      CALL MPI_File_Write(fh, (/(3,i=0,NBeamsTot-1)/),NBeamsTot ,MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write(fh,NBeamsTot*KIND(work_int),1,MPI_INTEGER, &
+           MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write(fh, (/(i*2,i=1,NBeamsTot)/),NBeamsTot,MPI_INTEGER, &
+           MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write(fh,NBeamsTot*KIND(work_int),1,MPI_INTEGER, &
+           MPI_STATUS_IGNORE, ierr)
+      CALL MPI_File_Write(fh, (/(3,i=0,NBeamsTot-1)/),NBeamsTot ,MPI_INTEGER, &
+           MPI_STATUS_IGNORE, ierr)
     END IF
     ms_counter = ms_counter + 1
   END IF
 
-  IF(OutputDisplacement) THEN
-
-    !Find end of file, set view, write displacements
-    IF(DoublePrec) THEN
-      CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, 'native', MPI_INFO_NULL, ierr)
-      !Write byte count for connectivity
-      IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_real_dp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-      CALL MPI_File_Write_All(fh, displacements, NN*3, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)
-    ELSE
-
-      IF(ALLOCATED(work_real_sp)) DEALLOCATE(work_real_sp)
-      ALLOCATE(work_real_sp(SIZE(displacements)))
-      work_real_sp = displacements
-
-      CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, MPI_REAL4, 'native', MPI_INFO_NULL, ierr)
-      !Write byte count for connectivity
-      IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_real_sp) * 3), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-      CALL MPI_File_Write_All(fh, work_real_sp, NN*3, MPI_REAL4, MPI_STATUS_IGNORE, ierr)
-    END IF
-    ms_counter = ms_counter + 1
-  END IF
+  IF(OutputDisplacement) CALL WriteRealPointDataToVTK(SI, fh, displacements, fh_mystarts, &
+       ms_counter, PNN, 3)
+  IF(OutputRotation) CALL WriteRealPointDataToVTK(SI, fh, rotations, fh_mystarts, ms_counter, &
+       PNN, 3)
 
   IF(OutputPartition) THEN
-
     IF(ALLOCATED(work_int)) DEALLOCATE(work_int)
     ALLOCATE(work_int(NN))
     work_int = myid
 
-    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
-    !Write byte count for connectivity
-    IF(myid==0) CALL MPI_File_Write(fh, INT(NNTot*KIND(work_int)), 1, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-    CALL MPI_File_Write_All(fh, work_int, NN, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
-
-    ms_counter = ms_counter + 1
+    CALL WriteIntPointDataToVTK(fh, work_int, fh_mystarts, ms_counter, PNN, 1)
   END IF
 
   !---- Writing VTU Footer -----
@@ -639,37 +551,156 @@ SUBROUTINE BinaryVTKOutput(NRY,resdir,runname,PNN,NRXF,UT,&
 
   !Reset the MPI I/O view to default (full file, read as bytes)
   fh_mpi_offset = 0
-  CALL MPI_File_Set_View(fh, fh_mpi_offset, MPI_BYTE, MPI_BYTE, 'native', MPI_INFO_NULL, ierr)
+  CALL MPI_File_Set_View(fh, fh_mpi_offset, MPI_BYTE, MPI_BYTE, 'native', &
+       MPI_INFO_NULL, ierr)
 
   IF(myid==0) THEN
     !Write vtu footer to end of file
     CALL MPI_File_Seek(fh, fh_mpi_offset,MPI_SEEK_END,ierr)
     WRITE( output_str,'(A)') lfeed//'  </AppendedData>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER,&
+         MPI_STATUS_IGNORE, ierr)
     WRITE( output_str,'(A)') '</VTKFile>'//lfeed
-    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), MPI_CHARACTER,&
+         MPI_STATUS_IGNORE, ierr)
   END IF
 
   CALL MPI_File_Close(fh, ierr)
 
 
   DEALLOCATE(work_real_dp)
-  IF(.NOT. DoublePrec) DEALLOCATE(work_real_sp)
 
 END SUBROUTINE BinaryVTKOutput
 
-SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
-     NANS,NTOT,NANPart,DoublePrec)
+SUBROUTINE SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, counts, DOFs, var_size, intsize, custom_offset)
+
+  INTEGER(kind=MPI_Offset_kind) :: fh_starts(10), fh_mystarts(10)
+  INTEGER :: ms_counter, counts(:), DOFs, var_size, intsize
+  INTEGER, OPTIONAL :: custom_offset
+  !----------------------
+  INTEGER :: i,counts_tot
+  LOGICAL :: offset_override
+
+  offset_override = PRESENT(custom_offset)
+  counts_tot = SUM(counts(1:ntasks))
+
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + counts(i)*DOFs*var_size
+  END DO
+  !root writes an extra int at the start
+  IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize 
+
+
+  ms_counter = ms_counter + 1
+  IF(offset_override) THEN
+    fh_starts(ms_counter) = fh_starts(ms_counter-1) + custom_offset
+  ELSE
+    fh_starts(ms_counter) = fh_starts(ms_counter-1) + counts_tot*DOFs*var_size + intsize
+  END IF
+  fh_mystarts(ms_counter) = fh_starts(ms_counter)
+
+END SUBROUTINE SetVTKOffsets
+
+SUBROUTINE WriteVTKPointHeader(fh, varname, datatype, DOFs, VTK_Offset, counttot, var_size, intsize)
+  CHARACTER(LEN=1024) :: varname, datatype
+  INTEGER :: DOFs, VTK_Offset, var_size, intsize, counttot, fh
+  !------------------------
+  CHARACTER(LEN=1024) :: output_str
+  CHARACTER :: lfeed
+  INTEGER :: ierr
+
+  lfeed= CHAR(10)
+
+  WRITE( output_str,'(A,A,A,A,A,I0,A,I0,A,A)') '        <DataArray type="',&
+       TRIM(datatype),'" Name="',TRIM(varname),'" NumberOfComponents="',DOFs,'" &
+       &format="appended" offset="',VTK_Offset,'"/>'//lfeed
+  CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
+       MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+
+  VTK_Offset = VTK_Offset + counttot*DOFs*var_size + intsize
+
+END SUBROUTINE WriteVTKPointHeader
+
+SUBROUTINE WriteRealPointDataToVTK(SI,fh, data_arr, fh_mystarts, ms_counter, counts, DOFs)
+
+  REAL(KIND=dp) :: data_arr(:)
+  INTEGER(kind=MPI_Offset_kind) :: fh_mystarts(10)
+  INTEGER :: fh, ms_counter, DOFs, counts(:)
+  TYPE(SimInfo_t) :: SI
+  !-------------------------------
+  INTEGER :: mycount, totcount, ierr
+  REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
+
+  mycount = counts(myid+1)
+  totcount = SUM(counts(1:ntasks))
+
+  !Find end of file, set view, write var
+  IF(SI%DoublePrec) THEN
+
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION,&
+         MPI_DOUBLE_PRECISION, 'native', MPI_INFO_NULL, ierr)
+    !Root writes byte count
+    IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
+         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write_All(fh, data_arr, mycount*DOFs, MPI_DOUBLE_PRECISION, &
+         MPI_STATUS_IGNORE, ierr)
+
+
+  ELSE
+
+    ALLOCATE(work_real_sp(SIZE(data_arr)))
+    work_real_sp = REAL(data_arr,sp)
+
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, MPI_REAL4,&
+         'native', MPI_INFO_NULL, ierr)
+    !Write byte count for connectivity
+    IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(work_real_sp) * DOFs), 1,&
+         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write_All(fh, work_real_sp, mycount*DOFs, MPI_REAL4, &
+         MPI_STATUS_IGNORE, ierr)
+
+    DEALLOCATE(work_real_sp)
+
+  END IF
+
+  ms_counter = ms_counter + 1
+
+END SUBROUTINE WriteRealPointDataToVTK
+
+SUBROUTINE WriteIntPointDataToVTK(fh, data_arr, fh_mystarts, ms_counter, counts, DOFs)
+
+  INTEGER :: data_arr(:)
+  INTEGER(kind=MPI_Offset_kind) :: fh_mystarts(10)
+  INTEGER :: fh, ms_counter, DOFs, counts(:)
+  !-------------------------------
+  INTEGER :: mycount, totcount, ierr
+
+  mycount = counts(myid+1)
+  totcount = SUM(counts(1:ntasks))
+  
+  CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER,&
+       MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+  !Root writes byte count
+  IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
+       MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+  CALL MPI_File_Write_All(fh, data_arr, mycount*DOFs, MPI_INTEGER, &
+       MPI_STATUS_IGNORE, ierr)
+
+  ms_counter = ms_counter + 1
+
+END SUBROUTINE WriteIntPointDataToVTK
+
+SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY
-  CHARACTER(LEN=256) :: resdir, runname
   INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT)
   TYPE(UT_t), TARGET :: UT
   TYPE(NRXF_t), TARGET :: NRXF
-  LOGICAL :: DoublePrec
+  TYPE(SimInfo_t) :: SI
   !----------------------------------
   INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
   INTEGER :: i,j,N1,N2
@@ -684,7 +715,8 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
 
   lfeed = CHAR(10) !line feed character
 
-  IF(DoublePrec) THEN
+
+  IF(SI%DoublePrec) THEN
     CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
   ELSE
     CALL MPI_TYPE_SIZE(MPI_REAL4, realsize, ierr)
@@ -740,12 +772,12 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
 
   IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
 
-  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.bin',&
+  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(SI%resdir)//'/'//TRIM(SI%runname)//'_STR'//na(NRY)//'.bin',&
        MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
 
   !root write out header info (count & type)
   !everyone writes the string to get its size for offset...
-  IF(DoublePrec) THEN
+  IF(SI%DoublePrec) THEN
     WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float64'//lfeed
   ELSE
     WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float32'//lfeed
@@ -761,7 +793,7 @@ SUBROUTINE BinarySTROutput(NRY,resdir,runname,NRXF,UT,&
   END IF
 
   !Write the points (using collective I/O)
-  IF(DoublePrec) THEN
+  IF(SI%DoublePrec) THEN
     CALL MPI_File_Set_View(fh, fh_mystart, MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, &
          'native', MPI_INFO_NULL, ierr)
     CALL MPI_File_Write_All(fh, work_real, Nbeams*4, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)

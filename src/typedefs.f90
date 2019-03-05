@@ -80,4 +80,23 @@ MODULE TypeDefs
      REAL(KIND=dp), ALLOCATABLE :: Dists(:)
   END TYPE Conn_t
 
+  !Type for holding simulation settings
+  TYPE SimInfo_t
+
+     REAL(KIND=dp) :: PRESS = 0.0_dp, MELT = 0.0_dp, UC = 0.0_dp, DT = 1.0e-4, S = 0.7_dp
+     REAL(KIND=dp) :: EF0 = 1.0d+9, SUB = 0.0_dp, GL = -100.0_dp, SLIN = 2000.0_dp, MLOAD = 0.0002_dp
+     REAL(KIND=dp) :: FRIC = 1.0_dp, POR = 0.1_dp, DAMP1 = 1.0E4, DAMP2 = 1.0E4, DRAG_AIR = 1.0E1
+     REAL(KIND=dp) :: DRAG_WATER = 1.0E1, MAXUT = 1.0E6, SCL = 0.0_dp, WL = 0.0_dp, GRID = 0.0_dp
+     REAL(KIND=dp) :: GRAV = 9.81_dp, RHO = 900.0, RHOW  = 1030.0, BedIntConst = 1.0E8
+     REAL(KIND=dp) :: fractime = 40.0_dp,viscforce = 1.0E4,viscdist = 4.0E-2, BedDampFactor = 1.0_dp
+     INTEGER :: REST = 0, SEEDI = 11695378, OUTINT = 20000, RESOUTINT = 20000, STEPS0 = 0, LS = 100
+     CHARACTER(256) :: geomfile,runname,MelRunName,wrkdir = "./",resdir = "./",restname
+     LOGICAL :: BedZOnly = .TRUE., StrictDomain = .TRUE., DoublePrec = .FALSE.,CSVOutput=.FALSE.
+     LOGICAL :: FixLat = .FALSE., FixBack = .TRUE., GeomMasked = .FALSE., doShearLine = .FALSE.
+     LOGICAL :: gotMelange = .FALSE., outputDispl = .TRUE., outputRot = .TRUE., outputPart = .TRUE.
+     !------------------------------------
+     REAL(KIND=dp) :: DMP, DMP2 !<- not read, set in wave2.f90
+
+  END TYPE SimInfo_t
+
 END MODULE TypeDefs
