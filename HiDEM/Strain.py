@@ -31,6 +31,32 @@ def str_from_file(fname,legacy_input=False):
     strain = strain[:,0]
     return x,y,z,strain
 
+def str_from_file2(fname_bin, fname_vtu,legacy_input=False):
+    """
+    Returns the bond strain rate from given file
+    Strain is change_in_length / original_length
+    """
+    if(legacy_input):
+        bin_data = np.fromfile(fname_bin,sep=" ")
+    else:
+        count_re = re.compile("Count: ([0-9]*)")
+        type_re = re.compile('Type: ([a-zA-Z0-9]*)')
+
+        indata = open(fname, 'rb')
+        header = indata.readline()
+        num_count = int(count_re.search(header).group(1))
+        float_type = type_re.search(header).group(1).lower()
+        nn_data = np.fromfile(indata, dtype=np.dtype(np.int32), count=num_count*2)
+        bin_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*2)
+
+    bin_data = bin_data.reshape((-1,2))
+    nn_data = nn_data.reshape((-1,2))
+
+    efs = bin_data[:,0]
+    strain = bin_data[:,1]
+
+    return x,y,z,strain
+
 def str_to_file(x,y,z,strain,fname):
     """
     Spits out a .bin file like HiDEM would produce. Use case: extract a subset of
