@@ -1,3 +1,9 @@
+"""
+Extract list of broken bonds from an (old style) .bin file and
+write to new .bin
+Idea is that this information could be extracted server-side and
+then transferred.
+"""
 import sys
 import getopt
 import numpy as np
@@ -35,7 +41,7 @@ else:
 infiles.sort()
 
 for f in infiles:
-    x,y,z,strain = Strain.str_from_file(f,legacy_input)
+    x,y,z,strain = Strain.str_from_file_old(f,legacy_input)
 
     broken = strain > thresh
 

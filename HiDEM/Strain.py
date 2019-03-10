@@ -6,7 +6,7 @@ import re
 import numpy as np
 import math
 
-def str_from_file(fname,legacy_input=False):
+def str_from_file_old(fname,legacy_input=False):
     """
     Returns the bond strain rate from given file
     Strain is change_in_length / original_length
@@ -31,23 +31,21 @@ def str_from_file(fname,legacy_input=False):
     strain = strain[:,0]
     return x,y,z,strain
 
-def str_from_file2(fname_bin, fname_vtu,legacy_input=False):
+def str_from_file(fname_bin):
     """
     Returns the bond strain rate from given file
     Strain is change_in_length / original_length
     """
-    if(legacy_input):
-        bin_data = np.fromfile(fname_bin,sep=" ")
-    else:
-        count_re = re.compile("Count: ([0-9]*)")
-        type_re = re.compile('Type: ([a-zA-Z0-9]*)')
 
-        indata = open(fname, 'rb')
-        header = indata.readline()
-        num_count = int(count_re.search(header).group(1))
-        float_type = type_re.search(header).group(1).lower()
-        nn_data = np.fromfile(indata, dtype=np.dtype(np.int32), count=num_count*2)
-        bin_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*2)
+    count_re = re.compile("Count: ([0-9]*)")
+    type_re = re.compile('Type: ([a-zA-Z0-9]*)')
+
+    indata = open(fname_bin, 'rb')
+    header = indata.readline()
+    num_count = int(count_re.search(header).group(1))
+    float_type = type_re.search(header).group(1).lower()
+    nn_data = np.fromfile(indata, dtype=np.dtype(np.int32), count=num_count*2)
+    bin_data = np.fromfile(indata, dtype=np.dtype(float_type), count=num_count*2)
 
     bin_data = bin_data.reshape((-1,2))
     nn_data = nn_data.reshape((-1,2))
@@ -55,7 +53,7 @@ def str_from_file2(fname_bin, fname_vtu,legacy_input=False):
     efs = bin_data[:,0]
     strain = bin_data[:,1]
 
-    return x,y,z,strain
+    return nn_data, efs, strain
 
 def str_to_file(x,y,z,strain,fname):
     """
@@ -67,6 +65,14 @@ def str_to_file(x,y,z,strain,fname):
     with open(fname,'wb') as fout:
         fout.write("Count: "+str(count)+" Type: Float32\n")
         data.tofile(fout)
+
+def pointstr_from_files(vtuf,strf):
+
+    from HiDEM import Vtu
+    points = Vtu.points_from_vtu(vtuf)
+    nn,efs,strain = str_from_file(strf)
+    cpoints = get_bond_centrepoints(points,nn)
+    return cpoints,strain
 
 def grid_gen(x,y,z,buff=500.0,dx=60.0):
     """
@@ -122,3 +128,11 @@ def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0):
     sx_plan[np.isnan(sx_plan)] = 0.0
 
     return sx_plan, sx_side
+
+def get_bond_centrepoints(points,nn):
+    """
+    Returns the x,y,z centrepoint of each bond specified in NN
+    """
+
+    #-1 because NN refers to particle global IDs, which start at 1
+    return np.mean(points[nn[:,:]-1,:],1)
