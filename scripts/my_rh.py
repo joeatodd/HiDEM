@@ -55,7 +55,7 @@ else:
 infiles.sort()
 
 #Read the initial state
-x0,y0,z0,str0 = Strain.str_from_file(infiles[0],legacy_input)
+x0,y0,z0,str0 = Strain.str_from_file_old(infiles[0],legacy_input)
 
 xx,yy,zz = Strain.grid_gen(x0,y0,z0,buff=buff,dx=dx)
 
@@ -64,7 +64,7 @@ for j,f in enumerate(infiles[:]):
     if j % interval != 0: continue
     print f
 
-    x,y,z,str1 = Strain.str_from_file(f,legacy_input)
+    x,y,z,str1 = Strain.str_from_file_old(f,legacy_input)
 
     strate = abs(str1[:])
 
