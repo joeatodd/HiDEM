@@ -288,9 +288,7 @@
         CALL PointDataInit(UTM,NRXF)
 
         CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
 	PRINT *, 'Part: ',myid,' NN: ',NN,' NTOT: ',NTOT
-        CALL MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         !NN - particles in each core
         CALL MPI_ALLGATHER(NN,1,MPI_INTEGER,&
@@ -312,6 +310,7 @@
 
         UT%M = 0.0    ! UT%M = current displacement
         UTM%M = 0.0   ! UTM%M = previous displacement
+
 
         ALLOCATE(CT(NTOT*12),&
              RAN(NTOT),&
@@ -349,6 +348,16 @@
             EFS(I)=0.1
           ENDIF
         END DO
+
+        IF(melange_data % active) THEN
+          !Update particle & bond info (NRXF, UT, UTM, EFS) for melange particles
+          !This is done here (rather than on geometry creation) because initial
+          !particle positions x0 = NRXF + UT, here we revert back to NRXF
+          !And UT, UTM (i.e. melange in motion). We also overwrite randomly
+          !generated EFS values with those from previous sim.
+          CALL PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
+          CALL ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, .TRUE.)
+        END IF
 
         !Share randomly generated EFS with other parts to avoid conflict
         CALL ExchangeEFS(NANS, NANPart, NRXF, InvPartInfo, EFS)

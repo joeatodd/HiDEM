@@ -249,7 +249,7 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
   REAL(KIND=dp) :: SCL
   !-----------------------
   REAL(KIND=dp) :: oct_BBox(2,3),eps,x(3),xk,yk,zk,search_dist
-  REAL(KIND=dp), ALLOCATABLE :: work_nrxf(:,:),work_ut(:),work_utm(:)
+  REAL(KIND=dp), ALLOCATABLE :: work_nrxf(:,:),work_ut(:),work_utm(:),work_efs(:)
   INTEGER, ALLOCATABLE :: ngb_ids(:),node_loc(:),work_nans(:,:)
   INTEGER :: counter,num_ngb,N1,N2,pruned_NN, pruned_NTOT
   LOGICAL, ALLOCATABLE :: nodeRemove(:),NANRemove(:)
@@ -341,12 +341,14 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
        work_nrxf(3,pruned_NN),&
        work_ut(6*pruned_NN),&
        work_utm(6*pruned_NN),&
-       work_nans(2,pruned_NTOT))
+       work_nans(2,pruned_NTOT),&
+       work_efs(pruned_NTOT))
 
   work_nrxf = 0.0
   work_ut = 0.0
   work_utm = 0.0
   work_nans = 0
+  work_efs = 0.0
 
   !fill node_loc - the updated array locations of all particles
   !and work_nrxf, ut, utm
@@ -373,6 +375,7 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
       counter = counter + 1
       work_nans(1,counter) = node_loc(melange_data % NANS(1,i))
       work_nans(2,counter) = node_loc(melange_data % NANS(2,i))
+      work_efs(counter) = melange_data % EFS(i)
     END IF
   END DO
   IF(counter /= pruned_NTOT) CALL FatalError("Programming Error: counter /= pruned_NTOT")
@@ -399,6 +402,9 @@ SUBROUTINE Prune_Melange(melange_data,xo,ip,SCL)
 
   DEALLOCATE(melange_data%nans)
   CALL MOVE_ALLOC(work_nans, melange_data%nans)
+
+  DEALLOCATE(melange_data%EFS)
+  CALL MOVE_ALLOC(work_efs, melange_data%EFS)
 
   !Set partinfo so that FindNearbyParticles works
   IF(ALLOCATED(melange_data%NRXF%partinfo)) DEALLOCATE(melange_data%NRXF%partinfo)
@@ -459,5 +465,201 @@ SUBROUTINE MelangeBonds(melange_data, glac_ip, CN, nbeams_mel)
 
   nbeams_mel = melange_data % NTOT
 END SUBROUTINE MelangeBonds
+
+!Passes UT,UTM & EFS for melange particles from a previous sim.
+!When melange is loaded, NRXF + UT (1:3) => NRXF
+!We can then revert this back to NRXF + UT (and UTM if desired)
+SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
+
+  TYPE(MelangeDataHolder_t) :: melange_data
+  TYPE(SimInfo_t) :: SI
+  INTEGER :: NANS(:,:)
+  REAL(KIND=dp), ALLOCATABLE :: EFS(:)
+  TYPE(UT_t) :: UT,UTM
+  TYPE(NRXF_t) :: NRXF
+  TYPE(InvPartInfo_t) :: InvPartInfo(0:)
+  !----------------------------
+  REAL(KIND=dp), ALLOCATABLE :: recv_stream(:)
+  INTEGER :: i,j,part,ppcnt,my_ppcnt, my_beamcnt, ierr,counter,seek,N1,N2
+  INTEGER :: NTOT, stat(MPI_STATUS_SIZE)
+  INTEGER, ALLOCATABLE :: stats(:),recv_GIDs(:)
+  TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
+  LOGICAL :: send, matched
+
+  IF(.NOT. melange_data % active) RETURN
+
+  NTOT = SIZE(NANS, 2)
+
+  IF(myid==0) ALLOCATE(PointEx(0:ntasks-1))
+  ALLOCATE(stats(0:ntasks*3))
+  stats = MPI_REQUEST_NULL
+
+  !melange_data % owner(:) contains the partition ID of each melange particle
+  !melange_data % GID(:) contains the GID of each melange particle
+
+  !Determine & communicate particle counts to partitions
+  IF(myid == 0) THEN
+    DO part=0,ntasks-1
+      ppcnt = COUNT(melange_data % owner == part)
+      CALL MPI_ISend(ppcnt, 1, MPI_INTEGER, part, 300, MPI_COMM_WORLD,stats(part),ierr)
+    END DO
+  END IF
+  CALL MPI_IRecv(my_ppcnt, 1, MPI_INTEGER, 0, 300, MPI_COMM_WORLD,stats(ntasks),ierr)
+
+  !Wait for the previous non-blocking sends, then reset stats
+  CALL MPI_Waitall(ntasks+1, stats, MPI_STATUSES_IGNORE, ierr)
+  stats = MPI_REQUEST_NULL
+
+  !Allocate space and set up non-blocking receive
+  !Communicate: GID,UT*6,UTM*6
+  IF(my_ppcnt > 0) THEN
+    ALLOCATE(recv_stream(my_ppcnt * 12),recv_GIDs(my_ppcnt))
+    CALL MPI_IRecv(recv_GIDs, my_ppcnt, MPI_INTEGER, 0, 301, MPI_COMM_WORLD,stats(0),ierr)
+    CALL MPI_IRecv(recv_stream, my_ppcnt*12, MPI_DOUBLE_PRECISION, 0, 302, MPI_COMM_WORLD,stats(1),ierr)
+  END IF
+
+  !Root constructs & sends arrays
+  IF(myid == 0) THEN
+    DO part=0,ntasks-1
+
+      ppcnt = COUNT(melange_data % owner == part)
+      IF(ppcnt == 0) CYCLE
+      PointEx(part) % scount = ppcnt
+      ALLOCATE(PointEx(part) % SendGIDs(ppcnt),PointEx(part) % S(ppcnt*12))
+
+      !Cycle melange_data, constructing streams
+      counter = 0
+      DO i = 1,melange_data % NN
+        IF(melange_data % owner(i) /= part) CYCLE
+        counter = counter + 1
+        PointEx(part) % SendGIDs(counter) = melange_data % GID(i)
+        PointEx(part) % S(counter*12-11 : counter*12-6) = melange_data % UT%M(i*6-5:i*6)
+        PointEx(part) % S(counter*12-5 : counter*12) = melange_data % UTM%M(i*6-5:i*6)
+      END DO
+
+      CALL MPI_ISend(PointEx(part) % SendGIDs, ppcnt, MPI_INTEGER, part, 301, &
+           MPI_COMM_WORLD, stats(2+(part*2)),ierr)
+      CALL MPI_ISend(PointEx(part) % S, ppcnt*12, MPI_DOUBLE_PRECISION, part, 302, &
+           MPI_COMM_WORLD, stats(2+(part*2+1)),ierr)
+    END DO
+  END IF
+
+  !Wait for the previous non-blocking sends, then reset stats
+  CALL MPI_Waitall(ntasks+1, stats, MPI_STATUSES_IGNORE, ierr)
+  stats = MPI_REQUEST_NULL
+
+  !Put received values into UT, UTM
+  !and adjust NRXF accordingly (NOTE: O(N^2))
+  IF(my_ppcnt > 0) THEN
+    DO i=1,my_ppcnt
+      seek = recv_GIDs(i)
+      matched = .FALSE.
+      DO j=1,NRXF%NN
+        IF(NRXF%GID(j) == seek) THEN
+          UT%M(6*j-5:6*j) = recv_stream(i*12-11 : i*12-6)
+          UTM%M(6*j-5:6*j) = recv_stream(i*12-5 : i*12)
+          NRXF%M(1:3,j) = NRXF%M(1:3,j) - UT%M(6*j-5:6*j-3)
+          matched = .TRUE.
+          EXIT
+        END IF
+      END DO
+      IF(.NOT. matched) THEN
+        PRINT *,myid,' match particle failed, GID: ',seek
+        CALL FatalError("Failed to match GID for particle")
+      END IF
+    END DO
+  END IF
+
+  ! Exchange bond info:
+  ! melange_data % NANs is globally resolved (i.e. not partition specific)
+  ! particle numbering for each connection. We also have per particle  %owner
+  ! thus we can construct a list of bonds to send to each partition
+
+  !Root cycles partitions, constructing list of beams
+  IF(myid==0) THEN
+    DO part=0,ntasks-1
+
+      ppcnt = COUNT(melange_data % owner == part)
+      IF(ppcnt == 0) CYCLE
+
+      PointEx(part) % scount = 0
+      IF(ALLOCATED(PointEx(part) % SendGIDs)) DEALLOCATE(PointEx(part) % SendGIDs)
+      IF(ALLOCATED(PointEx(part) % S)) DEALLOCATE(PointEx(part) % S)
+      
+      ALLOCATE(PointEx(part) % SendGIDs(ppcnt * 6 * 2),& !send both particle GIDs
+           PointEx(part) % S(ppcnt * 6)) !EFS
+
+      !Cycle bonds, determining which ones to send & storing ID & EFS
+      DO i=1,melange_data % NTOT
+        N1 = melange_data % NANS(1,i)
+        N2 = melange_data % NANS(2,i)
+        send = (melange_data % owner(N1) == part) .OR. (melange_data % owner(N2) == part)
+        IF(.NOT. send) CYCLE
+
+        PointEx(part) % scount = PointEx(part) % scount + 1
+
+        !Grow arrays if necessary
+        IF(PointEx(part) % scount > SIZE(PointEx(part) % S)) THEN
+          CALL ExpandIntArray(PointEx(part) % SendGIDs)
+          CALL ExpandRealArray(PointEx(part) % S)
+        END IF
+
+        PointEx(part) % SendGIDs(PointEx(part) % scount * 2 - 1) = melange_data % GID(N1)
+        PointEx(part) % SendGIDs(PointEx(part) % scount * 2 - 0) = melange_data % GID(N2)
+        PointEx(part) % S(PointEx(part) % scount) = melange_data % EFS(i)
+        
+      END DO
+
+      !Send beam count
+      CALL MPI_ISend(PointEx(part) % scount, 1, MPI_INTEGER, part, 303,&
+           MPI_COMM_WORLD, stats(part*3),ierr)
+
+      !Send beam particle GIDs
+      CALL MPI_ISend(PointEx(part) % SendGIDs, PointEx(part) % scount*2, MPI_INTEGER, part, 304, &
+           MPI_COMM_WORLD, stats(part*3+1),ierr)
+
+      CALL MPI_ISend(PointEx(part) % S, PointEx(part) % scount, MPI_DOUBLE_PRECISION, &
+           part, 305, MPI_COMM_WORLD, stats(part*3+2),ierr)
+
+    END DO
+  END IF
+
+  !Recvs
+  IF(my_ppcnt > 0) THEN
+
+    DEALLOCATE(recv_stream,recv_GIDs)
+
+    CALL MPI_Recv(my_beamcnt, 1, MPI_INTEGER, 0, 303, MPI_COMM_WORLD, stat, ierr)
+    ALLOCATE(recv_GIDs(my_beamcnt * 2), recv_stream(my_beamcnt))
+
+    CALL MPI_Recv(recv_GIDs, my_beamcnt*2, MPI_INTEGER, 0, 304, &
+         MPI_COMM_WORLD, stat, ierr)
+    CALL MPI_Recv(recv_stream, my_beamcnt, MPI_DOUBLE_PRECISION, 0, 305, &
+         MPI_COMM_WORLD, stat, ierr)
+
+    DO i=1,my_beamcnt
+      matched = .FALSE.
+
+      DO j=1,NTOT
+
+        IF (.NOT. ANY(NRXF%GID(NANS(:,j))  == recv_GIDs(i*2-1))) CYCLE
+        IF (.NOT. ANY(NRXF%GID(NANS(:,j))  == recv_GIDs(i*2))) CYCLE
+
+        EFS(j) = recv_stream(i)
+        matched = .TRUE.
+        EXIT
+      END DO
+
+      IF(.NOT. matched) THEN
+        PRINT *,myid,' failed: ',i,recv_GIDs(i*2-1:i*2), recv_stream(i)
+        CALL FatalError("Programming Error: failed to match melange EFS value.")
+      END IF
+    END DO
+  END IF
+
+  CALL MPI_Waitall(ntasks*3, stats, MPI_STATUSES_IGNORE, ierr)
+  stats = MPI_REQUEST_NULL
+  
+END SUBROUTINE PassMelangeData
 
 END MODULE Melange

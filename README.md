@@ -354,11 +354,8 @@ then apply Delaunay2D filter.
 
  Improvements:
 
- - Link bonds to particles (STR)
  - Maybe it would be nice to know VDP on each particle? (JYR)
- - A boolean for 'broken bond' [at the moment its inferred from large strain] (STR)
  - Fix the cluster analysis FORTRAN extension
- - UT rotation (orientation) in JYR (better graphics)
 
  ## Notes ##
 
