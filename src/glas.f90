@@ -293,6 +293,16 @@ IF(myid==0) THEN
 
   particlepart = particlepart - 1 !mpi partitions are zero indexed
 
+  !Store melange particle owner & GID for later (PassMelangeData)
+  IF(melange_data % active) THEN
+    ALLOCATE(melange_data % owner(melange_data % NN),&
+         melange_data % GID(melange_data % NN))
+    melange_data % owner = particlepart(glac_ip+1 : ip)
+    DO i=1,melange_data % NN
+      melange_data % GID(i) = glac_ip + i
+    END DO
+  END IF
+
   DO i=1,ntasks
     PartNN(i) = COUNT(particlepart == i-1)
   END DO
@@ -693,7 +703,7 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
 
   IF(PRESENT(passNRXF)) doNRXF = passNRXF
 
-  ALLOCATE(PointEx(0:ntasks-1),stats(0:ntasks*2-1))
+  ALLOCATE(PointEx(0:ntasks-1),stats(0:ntasks*4-1))
   stats = MPI_REQUEST_NULL
 
   IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  0'
@@ -772,24 +782,31 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
 
       DO j=1,sendcount
         id = PointEx(i) % SendIDs(j)
+        PointEx(i) % SendGIDs(j) = NRXF%GID(id)
         PointEx(i) % S(j*3 - 2) = NRXF%M(1,id)
         PointEx(i) % S(j*3 - 1) = NRXF%M(2,id)
         PointEx(i) % S(j*3 - 0) = NRXF%M(3,id)
       END DO
 
       CALL MPI_ISend(PointEx(i) % S, sendcount*3, MPI_DOUBLE_PRECISION,neigh,&
-           200,MPI_COMM_WORLD,stats(i*2), ierr)
+           200,MPI_COMM_WORLD,stats(i*4), ierr)
+
+      CALL MPI_ISend(PointEx(i) % SendGIDs, sendcount, MPI_INTEGER,neigh,&
+           202,MPI_COMM_WORLD,stats(i*4+1), ierr)
 
       getcount = PointEx(i) % rcount
       CALL MPI_IRecv(PointEx(i) % R, getcount*3, MPI_DOUBLE_PRECISION,neigh,&
-           200, MPI_COMM_WORLD,stats(i*2+1), ierr)
+           200, MPI_COMM_WORLD,stats(i*4+2), ierr)
+
+      CALL MPI_IRecv(PointEx(i) % RecvGIDs, getcount, MPI_INTEGER,neigh,&
+           202, MPI_COMM_WORLD,stats(i*4+3), ierr)
 
     END DO
 
     IF(DebugMode) PRINT *,myid, ' ExchangeConnPoints Checkpoint:  3'
 
     !Wait for the previous non-blocking sends, then reset stats
-    CALL MPI_Waitall(ntasks*2, stats, MPI_STATUSES_IGNORE, ierr)
+    CALL MPI_Waitall(ntasks*4, stats, MPI_STATUSES_IGNORE, ierr)
     stats = MPI_REQUEST_NULL
 
     !Put the points in NRXF
@@ -804,8 +821,8 @@ SUBROUTINE ExchangeConnPoints(NANS, NRXF, InvPartInfo, UT, UTM, passNRXF)
         NRXF%A(1,loc) = PointEx(i) % R(j*3 - 2)
         NRXF%A(2,loc) = PointEx(i) % R(j*3 - 1)
         NRXF%A(3,loc) = PointEx(i) % R(j*3 - 0)
-        NRXF%GID(loc) = PointEx(i) % RecvGIDs(j) !TODO!!!!
-        !IF(DebugMode) PRINT *,myid,' neigh: ',neigh,' loc: ',loc
+        NRXF%GID(loc) = PointEx(i) % RecvGIDs(j)
+        !IF(Debug) PRINT *,myid,' neigh: ',neigh,' loc: ',loc,' GID: ',NRXF%GID(loc)
       END DO
     END DO
   END IF
@@ -1706,6 +1723,12 @@ CALL Octree_final()
 END SUBROUTINE FindNNearest
 
 !Use octree search to find connections between separate clusters of particles
+!------------------------------------------------
+!Motivation for this: when metis-partitioning a normal simulation, all particles
+!are guaranteed to be connected to at least one other (i.e. one complete cluster)
+!But for melange simulations this is not the case, so metis might fail unless we
+!define pseudo-connectivity based on proximity.
+!------------------------------------------------
 !TODO - take care of IsLost particles
 SUBROUTINE FindClusterConns(xo, CN, Cluster, nfind, SCL)
   
@@ -2105,6 +2128,7 @@ END SUBROUTINE ConnectRegions
 
 !Function takes neighbourhood info in CN/NCN format
 !and finds clusters of connected particles.
+!Only works in serial! i.e. pre-metis step
 FUNCTION GetClusters(CN) RESULT(Cluster)
   TYPE(Conn_t), ALLOCATABLE :: CN(:)
   !--------------------------

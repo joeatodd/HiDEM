@@ -57,7 +57,7 @@ MODULE TypeDefs
   TYPE MelangeDataHolder_t
      REAL(KIND=dp), ALLOCATABLE :: EFS(:)
      REAL(KIND=dp) :: BBox(6)
-     INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:),NDL(:,:)
+     INTEGER, ALLOCATABLE :: NANS(:,:),NANPart(:),NDL(:,:),Owner(:),GID(:)
      TYPE(InvPartInfo_t), ALLOCATABLE :: InvPartInfo(:)
      TYPE(NRXF_t) :: NRXF
      TYPE(UT_t) ::  UT, UTM
