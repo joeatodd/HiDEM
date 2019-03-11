@@ -15,6 +15,10 @@
 ! *  You should have received a copy of the GNU General Public License
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
+!
+! Cluster analysis subroutine
+! Writes: 'frag' - 
+! Writes: 'maxi' - all the points in the largest cluster (i.e. intact glacier)
 
       SUBROUTINE CRACK(ntasks,NTOTW,PNN,PTR,PTB,YN)
 
@@ -34,6 +38,7 @@
  3    FORMAT(2F11.6,' ',2I6,' ',F11.6)
  4    FORMAT(3F15.6)
 
+      !Initialize - all in separate clusters (CLUST)
       IS=0
       DO my=0,ntasks-1
       SPN(my)=IS   
@@ -46,6 +51,10 @@
       END DO
 
 
+      !Exterior loop every connection
+      !Interior loop every particle in partition
+      ! O(N^2)
+      !Cluster by E > 0 (unbroken bond)
       SNN=0
       DO my=0,ntasks-1
       OPEN(UNIT=117,FILE='FS'//na(my),STATUS='UNKNOWN')
@@ -108,10 +117,12 @@
       CLOSE(117)
       END DO
 
+      !CN = size of cluster, per cluster
       DO I=1,IS
       CN(CLUST(I))=CN(CLUST(I))+1
       END DO
 
+      !CCN - the number of clusters of each cluster size
       MAXCN=0
       DO I=1,IS
       CCN(CN(I))=CCN(CN(I))+1
@@ -121,6 +132,7 @@
        ENDIF
       END DO
 
+      !Write out particle coords of all those in largest cluster
       SNN=0
       DO my=0,ntasks-1
       OPEN(UNIT=117,FILE='NODFIL2'//na(my),STATUS='UNKNOWN')
@@ -134,6 +146,7 @@
       ENDDO
 
 
+      !Write out cluster size distribution
       DO I=1,IS
       IF (CCN(I).NE.0) WRITE(112,*) I,CCN(I) 
       END DO
