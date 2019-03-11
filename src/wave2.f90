@@ -38,7 +38,7 @@
         REAL(KIND=dp), ALLOCATABLE :: EN(:),UTP(:),UTW(:),R(:),NRXFW(:,:)
 	REAL(KIND=dp) :: grid_bbox(4),origin(2),vdp_drag,vdp_fric,prop_vdp,prop_wl
 	REAL(KIND=dp), ALLOCATABLE :: BED(:,:),BASE(:,:),SUF(:,:),FBED(:,:),GEOMMASK(:,:)
-	REAL(KIND=dp) :: DIX,DIY,DIZ,BI
+	REAL(KIND=dp) :: DIX,DIY,DIZ,BI,resfreq
 	REAL(KIND=dp) :: ENM0,ENMS0,BBox(6)
         REAL(KIND=dp) :: mask,BIntC,BedDampConst,BDampF,RHO,RHOW,GRAV,grid
         REAL(KIND=dp), ALLOCATABLE :: PBBox(:,:)
@@ -162,6 +162,13 @@
 
         SI%DMP = SI%DAMP1 * SCL**3.0
         SI%DMP2= SI%DAMP2 * SCL**3.0
+
+        !Quit if bad DT
+        resfreq = SQRT(SI%EF0 / MN)
+        IF((SI%DT * 10.0) > (1.0/resfreq)) THEN
+          CALL FatalError("Simulation Error: You have chosen too high a timestep size given the &
+               &resonance frequency of the system!")
+        END IF
 
         !energy out int
         ENOutInt = MAX(SI%outint/100,1)
