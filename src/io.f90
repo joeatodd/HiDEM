@@ -198,7 +198,6 @@ CONTAINS
    INQUIRE( FILE=TRIM(SimInfo % geomfile), EXIST=FileExists ) 
    IF(.NOT. FileExists) CALL FatalError("Geometry input file '"//TRIM(SimInfo % geomfile)//"' doesn't exist!")
 
-
    IF(myid==0) THEN
      PRINT *,'--------------------Input Vars----------------------'
      WRITE(*,'(A,A)') "Run Name = ",TRIM(SimInfo % runname)
@@ -312,7 +311,7 @@ SUBROUTINE BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
   !------- Beam Info ----------
   IF(OutputBeams) THEN
     !For writing node connection info (beams) 
-    !need the global particle(node) numbers
+    !need the global particle(node) positions (NOT GID!)
     GlobalNNOffset(1) = 0
     DO i=2,ntasks
       GlobalNNOffset(i) = GlobalNNOffset(i-1) + PNN(i-1)
@@ -691,30 +690,34 @@ SUBROUTINE WriteIntPointDataToVTK(fh, data_arr, fh_mystarts, ms_counter, counts,
 
 END SUBROUTINE WriteIntPointDataToVTK
 
-SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
+SUBROUTINE BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY
-  INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT)
+  INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT),PNN(:)
   TYPE(UT_t), TARGET :: UT
   TYPE(NRXF_t), TARGET :: NRXF
   TYPE(SimInfo_t) :: SI
+  REAL(KIND=dp) :: EFS(:)
   !----------------------------------
   INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
-  INTEGER :: i,j,N1,N2
+  INTEGER :: i,j,N1,N2,GlobalNNOffset(ntasks),otherbeamoffset,mybeamoffset
   CHARACTER(LEN=1024) :: output_str
   CHARACTER :: lfeed
   REAL(KIND=dp) :: X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
   REAL(KIND=dp), ALLOCATABLE :: work_real(:)
   REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
+  INTEGER(KIND=4), ALLOCATABLE :: work_int(:) 
   INTEGER :: fh,ierr,realsize
-  INTEGER :: ntotal,othertask
-  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart
+  INTEGER :: ntotal,othertask,NVars
+  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart,fh_mystart_int, fh_mystart_inttot
 
   lfeed = CHAR(10) !line feed character
-
+  NVars = 2 !EFS, STR
+  !Cross-partition beam ownership goes to lower partition no
+  Nbeams = COUNT(NANPart >= myid)
 
   IF(SI%DoublePrec) THEN
     CALL MPI_TYPE_SIZE(MPI_DOUBLE_PRECISION, realsize, ierr)
@@ -722,23 +725,21 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
     CALL MPI_TYPE_SIZE(MPI_REAL4, realsize, ierr)
   END IF
 
-  !Cross-partition beam ownership goes to lower partition no
-  Nbeams = COUNT(NANPart >= myid)
-
   IF(DebugMode) PRINT *,myid,' debug nbeams, ntot: ',nbeams, ntot
 
   CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
        1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
   NBeamsTot = SUM(PNBeams(1:ntasks))
 
-  fh_mystart = 0
-  DO i=1,ntasks
-    IF(i > myid) EXIT
-    fh_mystart = fh_mystart + PNBeams(i)*4*realsize
-  END DO
-
   ! Write all beams to work array
-  ALLOCATE(work_real(Nbeams*4))
+  ALLOCATE(work_real(Nbeams*NVars),work_int(NBeams*2))
+
+  !Compute particle array offsets for NAN (not GID!)
+  GlobalNNOffset(1) = 0
+  DO i=2,ntasks
+    GlobalNNOffset(i) = GlobalNNOffset(i-1) + PNN(i-1)
+  END DO
+  mybeamoffset = GlobalNNOffset(myid+1)
 
   counter = 0
   DO j=1,NTOT
@@ -747,7 +748,9 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
 
     N1 = NANS(1,j)
     N2 = NANS(2,j)
+    otherbeamoffset = GlobalNNOffset(NANPart(j)+1)
 
+    !Compute strain (STR)
     X=(NRXF%A(1,N1)+UT%A(6*N1-5)+NRXF%A(1,N2)+UT%A(6*N2-5))/2.0
     Y=(NRXF%A(2,N1)+UT%A(6*N1-4)+NRXF%A(2,N2)+UT%A(6*N2-4))/2.0
     Z=(NRXF%A(3,N1)+UT%A(6*N1-3)+NRXF%A(3,N2)+UT%A(6*N2-3))/2.0
@@ -763,11 +766,13 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
     DL=SQRT(DDX**2+DDY**2+DDZ**2)
     STR=(DL-L)/L
 
-    work_real(counter*4 - 3) = X
-    work_real(counter*4 - 2) = Y
-    work_real(counter*4 - 1) = Z
-    work_real(counter*4 - 0) = STR
+    !Construct array of beam particle IDs
+    work_int(counter*2 - 1) = NRXF%PartInfo(2,N1) + otherbeamoffset
+    work_int(counter*2 - 0) = N2 + mybeamoffset
 
+    !And the EFS & STR values
+    work_real(counter*NVars - 1) = EFS(j)
+    work_real(counter*NVars - 0) = STR
   END DO
 
   IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
@@ -783,8 +788,35 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
     WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float32'//lfeed
   END IF
 
+  ! N1, N2, EFS, STR
+  ! x,y,z of points & centrepoints from VTU
+  ! TODO - this can be reduced to EFS only, and 1 initial file
+  ! containing N1, N2 (which never change!)
+
+  !offsets for ints & real variables
+  fh_mystart_int = 0
+  fh_mystart = 0
+
+  !N1, N2 offsets
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystart_int = fh_mystart_int + PNBeams(i)*2*4 !4 = INT32
+  END DO
+
+  !Var offsets
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystart = fh_mystart + PNBeams(i)*NVars*realsize
+  END DO
+
+  !Initial string
   fh_header_offset = LEN_TRIM(output_str) !fortran characters are 1 byte
-  fh_mystart = fh_mystart + fh_header_offset
+
+  fh_mystart_int = fh_mystart_int + fh_header_offset
+
+  fh_mystart_inttot = SUM(PNBeams) * 2 * 4
+
+  fh_mystart = fh_mystart + fh_mystart_inttot + fh_header_offset
 
   !... but only root writes it
   IF(myid==0) THEN
@@ -792,17 +824,24 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
          MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
   END IF
 
+  !Write N1, N2 (GID)
+  CALL MPI_File_Set_View(fh, fh_mystart_int, MPI_INTEGER, MPI_INTEGER, &
+       'native', MPI_INFO_NULL, ierr)
+  CALL MPI_File_Write_All(fh, work_int, Nbeams*2, MPI_INTEGER, &
+       MPI_STATUS_IGNORE, ierr)
+
   !Write the points (using collective I/O)
   IF(SI%DoublePrec) THEN
     CALL MPI_File_Set_View(fh, fh_mystart, MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, &
          'native', MPI_INFO_NULL, ierr)
-    CALL MPI_File_Write_All(fh, work_real, Nbeams*4, MPI_DOUBLE_PRECISION, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write_All(fh, work_real, Nbeams*NVars, MPI_DOUBLE_PRECISION, &
+         MPI_STATUS_IGNORE, ierr)
   ELSE
     CALL MPI_File_Set_View(fh, fh_mystart, MPI_REAL4, MPI_REAL4, &
          'native', MPI_INFO_NULL, ierr)
-    ALLOCATE(work_real_sp(NBeams*4))
+    ALLOCATE(work_real_sp(NBeams*NVars))
     work_real_sp = work_real
-    CALL MPI_File_Write_All(fh, work_real_sp, NBeams*4, MPI_REAL4, MPI_STATUS_IGNORE, ierr)
+    CALL MPI_File_Write_All(fh, work_real_sp, NBeams*NVars, MPI_REAL4, MPI_STATUS_IGNORE, ierr)
     DEALLOCATE(work_real_sp)
   END IF
 
@@ -811,10 +850,10 @@ SUBROUTINE BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
 END SUBROUTINE BinarySTROutput
 
  FUNCTION ToLowerCase(from) RESULT(to)
-   !------------------------------------------------------------------------------
+     !------------------------------------------------------------------------------
       CHARACTER(LEN=256)  :: from
       CHARACTER(LEN=256) :: to
-!------------------------------------------------------------------------------
+     !------------------------------------------------------------------------------
       INTEGER :: n
       INTEGER :: i,j,nlen
       INTEGER, PARAMETER :: A=ICHAR('A'),Z=ICHAR('Z'),U2L=ICHAR('a')-ICHAR('A')

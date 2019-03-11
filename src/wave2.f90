@@ -86,6 +86,9 @@
         TYPE(MelangeDataHolder_t) :: melange_data
         TYPE(SimInfo_t) :: SI
 
+        !===========================================================
+        !===========================================================
+
         CALL MPI_INIT(rc)
         IF (rc /= MPI_SUCCESS) THEN
         WRITE(*,*) 'MPI initialisation failed'
@@ -120,10 +123,14 @@
         grid = SI%grid
 
         IF(myid==0) THEN
-          OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',POSITION='APPEND')
-          OPEN(UNIT=611,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop01',STATUS='UNKNOWN',POSITION='APPEND')
-          OPEN(UNIT=612,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtopr',STATUS='UNKNOWN',POSITION='APPEND')
-          OPEN(UNIT=613,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_kins2',STATUS='UNKNOWN',POSITION='APPEND')
+          OPEN(UNIT=610,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop00',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=611,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtop01',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=612,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_dtopr',STATUS='UNKNOWN',&
+               POSITION='APPEND')
+          OPEN(UNIT=613,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_kins2',STATUS='UNKNOWN',&
+               POSITION='APPEND')
           ! OPEN(UNIT=614,FILE=TRIM(wrkdir)//'/lbound',STATUS='UNKNOWN')
           ! OPEN(UNIT=615,FILE=TRIM(wrkdir)//'/rbound',STATUS='UNKNOWN')
           ! OPEN(UNIT=110,FILE=TRIM(wrkdir)//'/fib00',STATUS='UNKNOWN')
@@ -1114,7 +1121,7 @@
           IF(.NOT. SI%CSVOutput) THEN
 
             CALL BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
-            CALL BinarySTROutput(SI,NRY,NRXF,UT,NANS,NTOT,NANPart)
+            CALL BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
           
           ELSE
 

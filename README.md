@@ -216,7 +216,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Drag Coefficient        | DRAG_WATER, DRAG_AIR  | The drag coefficient in both air & water (alternative to previous 2)  | 1e1 |
 | Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   | 4e-2 |
 | Viscous Force        | ViscForce  | The strength of viscous particle interaction | 1e4 |
-| Output Interval      | OUTINT| The output interval (every OUTINT steps, write out CSV)   | 20000 |
+| Output Interval      | OUTINT| The output interval (output files written every OUTINT steps)   | 20000 |
 | Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   | 20000 |
 | Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   | 1e6 |
 | Fracture After Time | FRACTIME | Fracture is permitted after this time (in s). | 40 |
@@ -224,7 +224,6 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Bed Damping Factor | BedDampFactor | Alters the damping of bed interaction (1.0 = critically damped) | 1.0 |
 | Bed Z Only | BedZOnly | Whether to consider only the z component of bed interaction (rather than normal) | True |
 | Strict Domain Interpolation | StrictDomain | Determines limit of interpolation w.r.t geometry input file. See note above | True |
-| CSV Output | CSVOutput | If true, produce output in .csv format rather than binary (uses more disk space) | False |
 | Double Precision Output | DoublePrec | If true, output data will be Float64 (as opposed to Float32, doubles output filesize) | False | 
 | Geometry File Has Mask | GeomMasked | Specifies whether the geometry file includes a mask column (required for 'Fixed Lateral Margins' | False |
 | Fixed Lateral Margins | FixLat | If true, particles near the lateral margins are not permitted to move in XY plane | False |
@@ -273,14 +272,28 @@ User may optionally specify a 'geom_mask' column in geometry input file, which t
 | NRXF%M,%F | initial position of the particles  |
 
 
-## Output - JYR and STR files ##
+## Model Output ##
 
-By default the model produces particle information in .vtu format (readable in Paraview (v5.5) - use HiDEM_load.py macro) and bond strain information in binary format (readable by the python script rh.py). For CSV output, use the 'CSV Output' option in the inp.dat (beware this produces much larger files which make visualisation time consuming).
+HiDEM produces data relating to *particles* and inter-particle *bonds*. Particle information is written to .vtu files (readable in Paraview (v5.5) - use HiDEM_load.py macro). In addition to particle positions, the user can decide to include:
 
-JYR files list the position of all particles in x,y,z, every 2 seconds.  
-Read this in paraview quite easily.  
+ - Particle motion in current timestep ('Displacement')
+ - Total particle rotation through simulation ('Rotation')
+ - Particle CPU partition (for debugging)
 
-STR file list the midpoint position and strain of each *bond* between two particles, for each node connection in initial geometry (including broken bonds)  
+Bond information is stored in two files \*STR\*.bin files, produced every timestep, and a \*STRH\*.bin file, produced once at the start of the simulation. The STRH contains the two particle IDs for each bond in the simulation, and is produced only once to save disk space (neither the particle IDs nor the number of bonds change over time). The STR file lists the EFS value (strength) of each bond. Values are usually:
+
+- 0.0 - broken bond
+- 0.1 - manually broken bond (porosity)
+- EF0 - unbroken bond (default EF0 is 1E9
+
+Bond locations & strain can be obtained by merging .vtu, STR.bin and STRH.bin files. This is obviously less user friendly than output with:
+
+X,Y,Z,EF0,STRAIN
+
+for each timestep, but it saves a significant amount of disk space.
+
+By default, output is produced every 20,000 timesteps, and in single precision, but both of these can be overridden.
+
 
 dtop* files - these show the total energy in the system for different parts  
 
