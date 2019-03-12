@@ -8,7 +8,7 @@ import math
 from glob import glob
 import re
 from timeit import default_timer as timer
-from HiDEM import Strain
+from HiDEM import Strain,Vtu
 
 # get input files from user
 
@@ -16,7 +16,7 @@ def usage():
     print ("Usage: " + sys.argv[0] + " -i input_file_glob -b buffer_dist (m, optional) -n interval (process every nth) -v max_str -d dx")
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],"i:b:d:n:lv:")
+    opts, args = getopt.getopt(sys.argv[1:],"i:b:d:n:v:")
 except getopt.GetoptError:
     usage()
     sys.exit(2)
@@ -25,7 +25,6 @@ except getopt.GetoptError:
 buff = 500.0
 dx = 60.0
 interval = 1
-legacy_input = False
 vmax = 0.01
 
 for opt, arg in opts:
@@ -37,8 +36,6 @@ for opt, arg in opts:
 		dx = float(arg)
     elif(opt =='-n'):
         interval == int(arg)
-    elif(opt =='-l'):
-        legacy_input = True
     elif(opt =='-v'):
         vmax = float(arg)
     else:
@@ -54,21 +51,35 @@ str_infiles.sort()
 vtu_infiles.sort()
 
 #x0,y0,z0,str0 = Strain.str_from_file_old(infiles[0],legacy_input)
-points0,str0 = Strain.pointstr_from_files(str_infiles[0],vtu_infiles[0])
+#points0,str0 = Strain.pointstr_from_files(vtu_infiles[0],str_infiles[0])
 
+#Get NN info (this doesn't change)
+nn, efs0 = Strain.bonds_from_file(str_infiles[0])
+points = Vtu.points_from_vtu(vtu_infiles[0])
 
-xx,yy,zz = Strain.grid_gen(x0,y0,z0,buff=buff,dx=dx)
+fname_sth = Strain.fname_sth_from_str(str_infiles[0])
+SCL = Strain.get_scl(fname_sth)
+LNN = SCL * 1.1225
+
+xx,yy,zz = Strain.grid_gen(points[:,0],points[:,1],points[:,2],buff=buff,dx=dx)
 
 for j,f in enumerate(str_infiles[:]):
 
     if j % interval != 0: continue
     print f
 
-    x,y,z,str1 = Strain.str_from_file_old(f,legacy_input)
+    points = Vtu.points_from_vtu(vtu_infiles[j])
 
-    strate = abs(str1[:])
+    lens = Strain.get_bond_lengths(points, nn)
+    strain = (lens-LNN)/LNN
+    cpoints = Strain.get_bond_centrepoints(points,nn)
 
-    sx_plan, sx_side = Strain.grid_strain(x,y,z,strate,xx,yy,zz,buff=buff, dx=dx)
+
+    strate = abs(strain)
+
+    print cpoints.shape
+    print strate.shape
+    sx_plan, sx_side = Strain.grid_strain(cpoints[:,0],cpoints[:,1],cpoints[:,2],strate,xx,yy,zz,buff=buff, dx=dx)
 
     plt.matshow(np.flipud(sx_side.T),vmin=0.0, vmax=vmax,cmap='jet')
     plt.savefig(f+"_side.png")
