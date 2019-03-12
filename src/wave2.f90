@@ -1115,146 +1115,31 @@
         ENDIF
  	END DO
 
-!--------------- Start of output ----------------------
+!--------------- Output to files ----------------------
 
-	IF (MOD(RY,SI%OUTINT).EQ.1) THEN
-          IF(PrintTimes) THEN
-20          FORMAT(" Times: ",11F7.1)
-            WRITE(*,20) TTCUM
-          END IF
+      IF (MOD(RY,SI%OUTINT).EQ.1) THEN
+        IF(PrintTimes) THEN
+20        FORMAT(" Times: ",11F7.1)
+          WRITE(*,20) TTCUM
+        END IF
 
-          NRY=INT(RY/SI%OUTINT)
+        NRY=INT(RY/SI%OUTINT)
 
-          IF(.NOT. SI%CSVOutput) THEN
+        !Write bond -> particle info (NANs) first time only [STH.bin]
+        IF(RY == 1) CALL BinarySTHOutput(SI,PNN,NRXF,NANS,NTOT,NANPart)
+        CALL BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
+        CALL BinarySTROutput(SI,NRY,NTOT,NANPart,EFS)
 
-            CALL BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
-            CALL BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
-          
-          ELSE
-
-            CALL FatalError("CSV Output not currently supported - needs to&
-                 &be recoded for metis partitining")
-          !--------------- CSV Output ----------------------
-          dest=0
-
-          !TODO - issue here - prev just sent our own beams, UT, NRXF, but now we would need
-          !to send others too. Or just scrap CSV Output?
-          tag=151
-          IF (myid.NE.0)&
-          CALL MPI_Send(UT%M,6*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_WORLD,ierr)
-
-          tag=152
-          IF (myid.NE.0)&
-          CALL MPI_Send(NANS,2*NTOT,MPI_INTEGER,&
-          dest,tag,MPI_COMM_WORLD,ierr)
-
-          tag=161
-          IF (myid.NE.0)&
-          CALL MPI_Send(NRXF%M,3*NN,MPI_DOUBLE_PRECISION,&
-          dest,tag,MPI_COMM_WORLD,ierr)
-
-          IF (myid.EQ.0) THEN
-          OPEN(UNIT=910,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_JYR'//na(NRY)//'.csv',STATUS='UNKNOWN')
-          OPEN(UNIT=920,FILE=TRIM(resdir)//'/'//TRIM(runname)//'_STR'//na(NRY)//'.csv',STATUS='UNKNOWN')
-
-          DO KK=1,ntasks-1
-
-          source=KK
-
-          tag=151
-          CALL MPI_Recv(UTW,6*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
-
-          tag=152
-          CALL MPI_Recv(NANW,2*NTOTW(source),MPI_INTEGER,source,tag,MPI_COMM_WORLD,stat,ierr)
-
-          tag=161
-          CALL MPI_Recv(NRXFW,3*PNN(source),MPI_DOUBLE_PRECISION,source,tag,MPI_COMM_WORLD,stat,ierr)
-
-          DO I=1,PNN(source)
-	  X=NRXFW(1,I)+UTW(6*I-5)
-	  Y=NRXFW(2,I)+UTW(6*I-4)
-	  Z=NRXFW(3,I)+UTW(6*I-3)
-          WRITE(910,'(3F16.6)') X,Y,Z
-          END DO
-
-          DO I=1,NTOTW(source)
-
-	  X=(NRXFW(1,NANW(1,I))+UTW(6*NANW(1,I)-5)+NRXFW(1,NANW(2,I))+UTW(6*NANW(2,I)-5))/2.0
-
-	  Y=(NRXFW(2,NANW(1,I))+UTW(6*NANW(1,I)-4)+NRXFW(2,NANW(2,I))+UTW(6*NANW(2,I)-4))/2.0
-
-	  Z=(NRXFW(3,NANW(1,I))+UTW(6*NANW(1,I)-3)+NRXFW(3,NANW(2,I))+UTW(6*NANW(2,I)-3))/2.0
-
-	  
-	N1=NANW(1,I)
-	N2=NANW(2,I)
-	DDX=NRXFW(1,N1)+UTW(6*N1-5)-NRXFW(1,N2)-UTW(6*N2-5)
-	DDY=NRXFW(2,N1)+UTW(6*N1-4)-NRXFW(2,N2)-UTW(6*N2-4)
-	DDZ=NRXFW(3,N1)+UTW(6*N1-3)-NRXFW(3,N2)-UTW(6*N2-3)
-	DX=NRXFW(1,N1)-NRXFW(1,N2)
-	DY=NRXFW(2,N1)-NRXFW(2,N2)
-	DZ=NRXFW(3,N1)-NRXFW(3,N2)
-	L=SQRT(DX**2+DY**2+DZ**2)
-	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-	STR=(DL-L)/L
-
-
-!          IF (Z.GT.MAXZ-120.0) WRITE(920,12) X,Y,Z,STR
-          WRITE(920,'(4F16.6)') X,Y,Z,STR
-          END DO
-
-          END DO
-
-          DO I=1,NN
-	  X=NRXF%M(1,I)+UT%M(6*I-5)
-	  Y=NRXF%M(2,I)+UT%M(6*I-4)
-	  Z=NRXF%M(3,I)+UT%M(6*I-3)
-          WRITE(910,'(3F16.6)') X,Y,Z
-          END DO
-
-          DO I=1,NTOT
-	  X=(NRXF%M(1,NANS(1,I))+UT%M(6*NANS(1,I)-5)+&
-            NRXF%M(1,NANS(2,I))+UT%M(6*NANS(2,I)-5))/2.0
-	  Y=(NRXF%M(2,NANS(1,I))+UT%M(6*NANS(1,I)-4)+&
-            NRXF%M(2,NANS(2,I))+UT%M(6*NANS(2,I)-4))/2.0
-	  Z=(NRXF%M(3,NANS(1,I))+UT%M(6*NANS(1,I)-3)+&
-            NRXF%M(3,NANS(2,I))+UT%M(6*NANS(2,I)-3))/2.0
-	  
-	N1=NANS(1,I)
-	N2=NANS(2,I)
-	DDX=NRXF%M(1,N1)+UT%M(6*N1-5)-NRXF%M(1,N2)-UT%M(6*N2-5)
-	DDY=NRXF%M(2,N1)+UT%M(6*N1-4)-NRXF%M(2,N2)-UT%M(6*N2-4)
-	DDZ=NRXF%M(3,N1)+UT%M(6*N1-3)-NRXF%M(3,N2)-UT%M(6*N2-3)
-	DX=NRXF%M(1,N1)-NRXF%M(1,N2)
-	DY=NRXF%M(2,N1)-NRXF%M(2,N2)
-	DZ=NRXF%M(3,N1)-NRXF%M(3,N2)
-	L=SQRT(DX**2+DY**2+DZ**2)
-	DL=SQRT(DDX**2+DDY**2+DDZ**2)
-	STR=(DL-L)/L
-
-!          IF (Z.GT.MAXZ-120.0) WRITE(920,12) X,Y,STR
-          WRITE(920,'(4F16.6)') X,Y,Z,STR
-          END DO
-
-        ENDIF !myid==0
-
-!          CALL PSNET(NTOT_prev%M,NN,myid,SI%GL,WL,SI%SUB,ntasks)
-	  CLOSE(910)
-	  CLOSE(920)
-
-        END IF !CSV or Binary output
-      
       ENDIF !output interval
 
-      !update UT
+
+!--------------- Update UT,UTM --------------------
+
       DO I=1,6*NN
         UTM%M(I)=UT%M(I)
         UT%M(I)=UTP(I)
       END DO
 
-
-!--------------- End of output --------------------
 
 	IF (MOD(RY,SI%RESOUTINT).EQ.1) THEN
             !Add restart stuff here

@@ -690,32 +690,28 @@ SUBROUTINE WriteIntPointDataToVTK(fh, data_arr, fh_mystarts, ms_counter, counts,
 
 END SUBROUTINE WriteIntPointDataToVTK
 
-SUBROUTINE BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
+SUBROUTINE BinarySTROutput(SI,NRY,NTOT,NANPart,EFS)
 
   USE MPI
   INCLUDE 'na90.dat'
 
   INTEGER :: NRY
-  INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT),PNN(:)
-  TYPE(UT_t), TARGET :: UT
-  TYPE(NRXF_t), TARGET :: NRXF
+  INTEGER :: NTOT, NANPart(NTOT)
   TYPE(SimInfo_t) :: SI
   REAL(KIND=dp) :: EFS(:)
   !----------------------------------
   INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
-  INTEGER :: i,j,N1,N2,GlobalNNOffset(ntasks),otherbeamoffset,mybeamoffset
+  INTEGER :: i,j
   CHARACTER(LEN=1024) :: output_str
   CHARACTER :: lfeed
-  REAL(KIND=dp) :: X,Y,Z,DDX,DDY,DDZ,DX,DY,DZ,DL,L,STR
   REAL(KIND=dp), ALLOCATABLE :: work_real(:)
   REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
-  INTEGER(KIND=4), ALLOCATABLE :: work_int(:) 
   INTEGER :: fh,ierr,realsize
   INTEGER :: ntotal,othertask,NVars
-  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart,fh_mystart_int, fh_mystart_inttot
+  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart
 
   lfeed = CHAR(10) !line feed character
-  NVars = 2 !EFS, STR
+  NVars = 1 !EFS    - STR, XYZ obtained using .vtu file
   !Cross-partition beam ownership goes to lower partition no
   Nbeams = COUNT(NANPart >= myid)
 
@@ -731,48 +727,14 @@ SUBROUTINE BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
        1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
   NBeamsTot = SUM(PNBeams(1:ntasks))
 
-  ! Write all beams to work array
-  ALLOCATE(work_real(Nbeams*NVars),work_int(NBeams*2))
+  ALLOCATE(work_real(Nbeams*NVars))
 
-  !Compute particle array offsets for NAN (not GID!)
-  GlobalNNOffset(1) = 0
-  DO i=2,ntasks
-    GlobalNNOffset(i) = GlobalNNOffset(i-1) + PNN(i-1)
-  END DO
-  mybeamoffset = GlobalNNOffset(myid+1)
-
+  !Write our EFS values to work array
   counter = 0
   DO j=1,NTOT
     IF(NANPart(j) < myid) CYCLE
     counter = counter + 1
-
-    N1 = NANS(1,j)
-    N2 = NANS(2,j)
-    otherbeamoffset = GlobalNNOffset(NANPart(j)+1)
-
-    !Compute strain (STR)
-    X=(NRXF%A(1,N1)+UT%A(6*N1-5)+NRXF%A(1,N2)+UT%A(6*N2-5))/2.0
-    Y=(NRXF%A(2,N1)+UT%A(6*N1-4)+NRXF%A(2,N2)+UT%A(6*N2-4))/2.0
-    Z=(NRXF%A(3,N1)+UT%A(6*N1-3)+NRXF%A(3,N2)+UT%A(6*N2-3))/2.0
-
-    DDX=NRXF%A(1,N1)+UT%A(6*N1-5)-NRXF%A(1,N2)-UT%A(6*N2-5)
-    DDY=NRXF%A(2,N1)+UT%A(6*N1-4)-NRXF%A(2,N2)-UT%A(6*N2-4)
-    DDZ=NRXF%A(3,N1)+UT%A(6*N1-3)-NRXF%A(3,N2)-UT%A(6*N2-3)
-
-    DX=NRXF%A(1,N1)-NRXF%A(1,N2)
-    DY=NRXF%A(2,N1)-NRXF%A(2,N2)
-    DZ=NRXF%A(3,N1)-NRXF%A(3,N2)
-    L=SQRT(DX**2+DY**2+DZ**2)
-    DL=SQRT(DDX**2+DDY**2+DDZ**2)
-    STR=(DL-L)/L
-
-    !Construct array of beam particle IDs
-    work_int(counter*2 - 1) = NRXF%PartInfo(2,N1) + otherbeamoffset
-    work_int(counter*2 - 0) = N2 + mybeamoffset
-
-    !And the EFS & STR values
-    work_real(counter*NVars - 1) = EFS(j)
-    work_real(counter*NVars - 0) = STR
+    work_real(counter) = EFS(j)
   END DO
 
   IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
@@ -788,49 +750,27 @@ SUBROUTINE BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
     WRITE( output_str,'(A,I0,A)') 'Count: ',NBeamsTot,' Type: Float32'//lfeed
   END IF
 
-  ! N1, N2, EFS, STR
-  ! x,y,z of points & centrepoints from VTU
-  ! TODO - this can be reduced to EFS only, and 1 initial file
-  ! containing N1, N2 (which never change!)
-
   !offsets for ints & real variables
-  fh_mystart_int = 0
   fh_mystart = 0
-
-  !N1, N2 offsets
-  DO i=1,ntasks
-    IF(i > myid) EXIT
-    fh_mystart_int = fh_mystart_int + PNBeams(i)*2*4 !4 = INT32
-  END DO
 
   !Var offsets
   DO i=1,ntasks
     IF(i > myid) EXIT
-    fh_mystart = fh_mystart + PNBeams(i)*NVars*realsize
+    fh_mystart = fh_mystart + PNBeams(i)*NVars*realsize !NVars == 1
   END DO
 
   !Initial string
   fh_header_offset = LEN_TRIM(output_str) !fortran characters are 1 byte
 
-  fh_mystart_int = fh_mystart_int + fh_header_offset
+  fh_mystart = fh_mystart + fh_header_offset
 
-  fh_mystart_inttot = SUM(PNBeams) * 2 * 4
-
-  fh_mystart = fh_mystart + fh_mystart_inttot + fh_header_offset
-
-  !... but only root writes it
+  !Only root writes header
   IF(myid==0) THEN
     CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
          MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
   END IF
 
-  !Write N1, N2 (GID)
-  CALL MPI_File_Set_View(fh, fh_mystart_int, MPI_INTEGER, MPI_INTEGER, &
-       'native', MPI_INFO_NULL, ierr)
-  CALL MPI_File_Write_All(fh, work_int, Nbeams*2, MPI_INTEGER, &
-       MPI_STATUS_IGNORE, ierr)
-
-  !Write the points (using collective I/O)
+  !Write EFS (using collective I/O)
   IF(SI%DoublePrec) THEN
     CALL MPI_File_Set_View(fh, fh_mystart, MPI_DOUBLE_PRECISION, MPI_DOUBLE_PRECISION, &
          'native', MPI_INFO_NULL, ierr)
@@ -848,6 +788,103 @@ SUBROUTINE BinarySTROutput(SI,NRY,PNN,NRXF,UT,NANS,NTOT,NANPart,EFS)
   CALL MPI_File_Close(fh, ierr)
 
 END SUBROUTINE BinarySTROutput
+
+
+SUBROUTINE BinarySTHOutput(SI,PNN,NRXF,NANS,NTOT,NANPart)
+
+  USE MPI
+  INCLUDE 'na90.dat'
+
+  INTEGER :: NTOT, NANPart(NTOT), NANS(2,NTOT),PNN(:)
+  TYPE(NRXF_t), TARGET :: NRXF
+  TYPE(SimInfo_t) :: SI
+  !----------------------------------
+  INTEGER :: Nbeams,PNbeams(ntasks),NBeamsTot,counter
+  INTEGER :: i,j,N1,N2,GlobalNNOffset(ntasks),otherbeamoffset,mybeamoffset
+  CHARACTER(LEN=1024) :: output_str
+  CHARACTER :: lfeed
+  INTEGER(KIND=4), ALLOCATABLE :: work_int(:)
+  INTEGER :: fh,ierr
+  INTEGER(kind=MPI_Offset_kind) :: fh_header_offset,fh_mystart_int
+
+  lfeed = CHAR(10) !line feed character
+  !Cross-partition beam ownership goes to lower partition no
+  Nbeams = COUNT(NANPart >= myid)
+
+  IF(DebugMode) PRINT *,myid,' debug nbeams, ntot: ',nbeams, ntot
+
+  CALL MPI_ALLGATHER(Nbeams, 1, MPI_INTEGER, PNBeams, &
+       1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
+  NBeamsTot = SUM(PNBeams(1:ntasks))
+
+  ! Write all beams to work array
+  ALLOCATE(work_int(NBeams*2))
+
+  !Compute particle array offsets for NAN (not GID!)
+  GlobalNNOffset(1) = 0
+  DO i=2,ntasks
+    GlobalNNOffset(i) = GlobalNNOffset(i-1) + PNN(i-1)
+  END DO
+  mybeamoffset = GlobalNNOffset(myid+1)
+
+  counter = 0
+  DO j=1,NTOT
+    IF(NANPart(j) < myid) CYCLE
+    counter = counter + 1
+
+    N1 = NANS(1,j)
+    N2 = NANS(2,j)
+    otherbeamoffset = GlobalNNOffset(NANPart(j)+1)
+
+    !Construct array of beam particle IDs
+    work_int(counter*2 - 1) = NRXF%PartInfo(2,N1) + otherbeamoffset
+    work_int(counter*2 - 0) = N2 + mybeamoffset
+  END DO
+
+  IF(counter /= nbeams) CALL FatalError("BinaryStrOutput: Programming error - wrong beam count")
+
+  CALL MPI_File_Open(MPI_COMM_WORLD,TRIM(SI%resdir)//'/'//TRIM(SI%runname)//'_STH.bin',&
+       MPI_MODE_WRONLY + MPI_MODE_CREATE, MPI_INFO_NULL, fh, ierr)
+
+  !root write out header info (count & type)
+  !everyone writes the string to get its size for offset...
+  WRITE( output_str,'(A,I0,A,ES15.8,A,ES15.8,A,ES15.8,A)') &
+       'BeamCount: ',NBeamsTot,&
+       ' SCL: ',SI%SCL,&
+       ' EF0: ',SI%EF0,&
+       ' DT: ',SI%DT,&
+       ' Type: Int32'//lfeed
+
+  !offsets for N1, N2
+  fh_mystart_int = 0
+
+  !N1, N2 offsets
+  DO i=1,ntasks
+    IF(i > myid) EXIT
+    fh_mystart_int = fh_mystart_int + PNBeams(i)*2*4 !4 = INT32
+  END DO
+
+  !Initial string
+  fh_header_offset = LEN_TRIM(output_str) !fortran characters are 1 byte
+
+  fh_mystart_int = fh_mystart_int + fh_header_offset
+
+  !... Only root writes the header
+  IF(myid==0) THEN
+    CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str), &
+         MPI_CHARACTER, MPI_STATUS_IGNORE, ierr)
+  END IF
+
+  !Write N1, N2 (GID)
+  CALL MPI_File_Set_View(fh, fh_mystart_int, MPI_INTEGER, MPI_INTEGER, &
+       'native', MPI_INFO_NULL, ierr)
+  CALL MPI_File_Write_All(fh, work_int, Nbeams*2, MPI_INTEGER, &
+       MPI_STATUS_IGNORE, ierr)
+
+  CALL MPI_File_Close(fh, ierr)
+
+END SUBROUTINE BinarySTHOutput
+
 
  FUNCTION ToLowerCase(from) RESULT(to)
      !------------------------------------------------------------------------------

@@ -280,11 +280,11 @@ HiDEM produces data relating to *particles* and inter-particle *bonds*. Particle
  - Total particle rotation through simulation ('Rotation')
  - Particle CPU partition (for debugging)
 
-Bond information is stored in two files \*STR\*.bin files, produced every timestep, and a \*STRH\*.bin file, produced once at the start of the simulation. The STRH contains the two particle IDs for each bond in the simulation, and is produced only once to save disk space (neither the particle IDs nor the number of bonds change over time). The STR file lists the EFS value (strength) of each bond. Values are usually:
+Bond information is stored in two files: \*STR\*.bin files, produced every timestep, and a \*STH\*.bin file, produced once at the start of the simulation. The STH contains the two particle IDs for each bond in the simulation, and is produced only once to save disk space (neither the particle IDs nor the number of bonds change over time). The STR file lists the EFS value (strength) of each bond. Values are usually:
 
 - 0.0 - broken bond
 - 0.1 - manually broken bond (porosity)
-- EF0 - unbroken bond (default EF0 is 1E9
+- EF0 - unbroken bond (default EF0 is 1E9)
 
 Bond locations & strain can be obtained by merging .vtu, STR.bin and STRH.bin files. This is obviously less user friendly than output with:
 
@@ -294,14 +294,12 @@ for each timestep, but it saves a significant amount of disk space.
 
 By default, output is produced every 20,000 timesteps, and in single precision, but both of these can be overridden.
 
-
 dtop* files - these show the total energy in the system for different parts  
 
 dtop00 - T,WENS,ENMS+ENMS0,KINS,MGHS-MGH0  
 dtop01 - T,DPES,DMPENS,PSUMS,GSUMS  
 dtopr  - T,system energy, damping energy?  
 
-Time  
 WENS - elastic energy of the spheres - imagine the particles overlap and are deformed against each other. Then they might bounce back apart.  
 ENMS+ENMS0 - elastic deformation energy - the energy held in a deformed/bent system  
 MGHS-MGH0 - potential energy  
@@ -357,15 +355,6 @@ then apply Delaunay2D filter.
  * Translate & Rotate input
 
 ### Output Improvements ###
-
- Some improvements could be made to make the output more logical/useful. At present, two 'result' files are produced each output interval: JYR (particle positions, displacement, partition), STR (beam centrepoint and strain)
-
- Problems:
-
- - No way to link bonds to particles
- - Cluster analysis depends on FS_ files (as a result)
-
- Improvements:
 
  - Maybe it would be nice to know VDP on each particle? (JYR)
  - Fix the cluster analysis FORTRAN extension
