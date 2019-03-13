@@ -10,6 +10,8 @@ from glob import glob
 from HiDEM import Vtu
 
 float_re = re.compile('-?\ *[0-9]+\.?[0-9]*(?:[Ee]\ *[-\+]?\ *[0-9]+)?')
+count_re = re.compile("Count: ([0-9]*)")
+type_re = re.compile('Type: ([a-zA-Z0-9]*)')
 
 def bonds_from_file(fname_bin, fname_sth=None):
     """
@@ -19,9 +21,6 @@ def bonds_from_file(fname_bin, fname_sth=None):
     #Get vtu and sth filenames if not provided
     if not fname_sth:
         fname_sth = fname_sth_from_str(fname_bin)
-
-    count_re = re.compile("Count: ([0-9]*)")
-    type_re = re.compile('Type: ([a-zA-Z0-9]*)')
 
     indata_str = open(fname_bin, 'rb')
     header = indata_str.readline()
@@ -37,6 +36,18 @@ def bonds_from_file(fname_bin, fname_sth=None):
     nn_data = nn_data.reshape((-1,2))
 
     return nn_data, efs_data
+
+def efs_from_file(fname_bin):
+    """
+    Returns only EFS values from a STR.bin file. Doesn't bother looking for NN or points
+    """
+
+    indata_str = open(fname_bin, 'rb')
+    header = indata_str.readline()
+    num_count = int(count_re.search(header).group(1))
+    float_type = type_re.search(header).group(1).lower()
+    efs_data = np.fromfile(indata_str, dtype=np.dtype(float_type), count=num_count)
+    return efs_data
 
 def strain_from_file(fname_str, fname_vtu=None, fname_sth=None):
     """
@@ -130,6 +141,9 @@ def fname_sth_from_str(fname_in, check=True):
 
 def fname_vtu_from_str(fname_in):
     return fname_in.replace("STR","JYR").replace(".bin",".vtu")
+
+def fname_str_from_vtu(fname_in):
+    return fname_in.replace("JYR","STR").replace(".vtu",".bin")
 
 def pointstr_from_files(vtuf,strf,sthf=None):
 
@@ -225,9 +239,6 @@ def str_from_file_old(fname,legacy_input=False):
     if(legacy_input):
         the_data = np.fromfile(fname,sep=" ")
     else:
-        count_re = re.compile("Count: ([0-9]*)")
-        type_re = re.compile('Type: ([a-zA-Z0-9]*)')
-
         indata = open(fname, 'rb')
         header = indata.readline()
         num_count = int(count_re.search(header).group(1))
