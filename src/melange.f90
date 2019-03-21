@@ -545,7 +545,7 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   END IF
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(ntasks+1, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(ntasks*2+2, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
 
   !Put received values into UT, UTM
