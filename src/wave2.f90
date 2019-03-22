@@ -544,8 +544,29 @@
         
         Zb = InterpRast(X,Y,BED,GRID,origin,INTERP_MISS_NEAREST)
         
-        IF (ABS(ZB-Z).LT.SCL*2.0) THEN
+        !Pure bed contact
+        IF (ABS(ZB-Z).LT.SCL*1.5) THEN
+
           VDP(I) = InterpRast(X,Y,FBED,GRID,origin,INTERP_MISS_NEAREST)
+
+        !Linearly decrease basal friction over 1.5 to 3.0*SCL from base
+        ELSE IF(ABS(ZB-Z).LT.SCL*3.0) THEN
+
+          vdp_fric = InterpRast(X,Y,FBED,GRID,origin,INTERP_MISS_NEAREST)
+
+          IF (Z.LT. WL-0.5*SCL) THEN
+            vdp_drag=SCL*SCL*SI%DRAG_WATER
+          ELSE IF (Z.GT.WL+0.5*SCL) THEN
+            vdp_drag=SCL*SCL*SI%DRAG_AIR
+          ELSE
+            prop_wl = (Z - (WL-0.5*SCL)) / SCL*1.0
+            vdp_drag = SCL*SCL*  ((prop_wl * SI%DRAG_AIR) + ((1-prop_wl) * SI%DRAG_WATER))
+          ENDIF
+          prop_vdp = ((3.0*SCL - ABS(ZB-Z)) / (1.5*SCL))
+          VDP(i) = prop_vdp * vdp_fric + (1-prop_vdp) * vdp_drag
+
+        !No bed contact, water/air drag only
+        !linear transition between water/air across 1*SCL
         ELSE
           IF (Z.LT. WL-0.5*SCL) THEN
             VDP(I)=SCL*SCL*SI%DRAG_WATER
@@ -556,6 +577,7 @@
             VDP(I) = SCL*SCL*  ((prop_wl * SI%DRAG_AIR) + ((1-prop_wl) * SI%DRAG_WATER))
           ENDIF
         ENDIF
+
 	END DO
 
  
@@ -781,19 +803,21 @@
         END IF
 
        !Update the drag calculation
+       !------------------------------
+
         IF(InDomain) THEN
           CALL BIPINT(I1,I2,BED(XK,YK),BED(XK,YK+1),BED(XK+1,YK),BED(XK+1,YK+1),ZB)
         ELSE
           ZB = BED(XK,YK)
         END IF
 
+        !Pure bed contact
         IF (ABS(ZB-Z).LT.SCL*1.5) THEN
           IF(InDomain) THEN
             CALL BIPINT(I1,I2,FBED(XK,YK),FBED(XK,YK+1),FBED(XK+1,YK),FBED(XK+1,YK+1),VDP(i))
           ELSE
             VDP(i) = FBED(XK,YK)
           END IF
-!         IF (VDP(I).GT.SCL*SCL*2.0e+07) VDP(I)=SCL*SCL*2.0e+07
 
         !Linearly decrease basal friction over 1.5 to 3.0*SCL from base
         ELSE IF(ABS(ZB-Z).LT.SCL*3.0) THEN
@@ -815,6 +839,8 @@
           prop_vdp = ((3.0*SCL - ABS(ZB-Z)) / (1.5*SCL))
           VDP(i) = prop_vdp * vdp_fric + (1-prop_vdp) * vdp_drag
 
+        !No bed contact, water/air drag only
+        !linear transition between water/air across 1*SCL
         ELSE
           IF (Z.LT. WL-0.5*SCL) THEN
             VDP(I)=SCL*SCL*SI%DRAG_WATER
@@ -825,6 +851,8 @@
             VDP(I) = SCL*SCL*  ((prop_wl * SI%DRAG_AIR) + ((1-prop_wl) * SI%DRAG_WATER))
           ENDIF
         ENDIF
+
+        !--------- end of VDP ---------------
 
         IF(PrintTimes) THEN
           CALL CPU_TIME(TT(7))
@@ -1212,7 +1240,7 @@ CONTAINS
           FirstTime = .FALSE.
           OPEN(510+myid,file=TRIM(wrkdir)//'/'//TRIM(runname)//'_NODFIL2'//na(myid))
           DO i=1,NN
-            WRITE(510+myid,'(I8,,4F20.10)') i,NRXF%A(:,i),1.0
+            WRITE(510+myid,'(I8,4F20.10)') i,NRXF%A(:,i),1.0
           END DO
           CLOSE(510+myid)
         END IF
