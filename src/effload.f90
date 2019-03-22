@@ -137,7 +137,7 @@ CONTAINS
         DX2=UT%A(6*N2-5)
         DY2=UT%A(6*N2-4)
         DZ2=UT%A(6*N2-3)
-        CALL TTMAT(X1+DX1,Y1+DY1,Z1+DZ1,X2+DX2,Y2+DY2,Z2+DZ2,RY,TT)
+        CALL TTMAT(X1+DX1,Y1+DY1,Z1+DZ1,X2+DX2,Y2+DY2,Z2+DZ2,RY,TT,.FALSE.)
 
         IF(N1 <= NN) THEN
         A(6*N1-5)= A(6*N1-5) &

@@ -16,7 +16,7 @@
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
 
-SUBROUTINE TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,TT)
+SUBROUTINE TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,TT,Transp)
 
   USE TypeDefs
 
@@ -25,6 +25,7 @@ SUBROUTINE TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,TT)
   REAL(KIND=dp) :: TT(12,12),DX,DY,DZ,DX2,DY2,DZ2
   REAL(KIND=dp) :: X1,Y1,Z1,X2,Y2,Z2,L,LP
   INTEGER :: RY
+  LOGICAL :: Transp
 
   DX=(X2-X1)
   DY=(Y2-Y1)
@@ -99,6 +100,10 @@ SUBROUTINE TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,TT)
   TT(10,12)=TT(1,3)
   TT(11,12)=TT(2,3)
   TT(12,12)=TT(3,3)
+
+  IF(Transp) THEN
+    TT = TRANSPOSE(TT)
+  END IF
 
   RETURN
 

@@ -38,7 +38,7 @@ c       IF (L.LT.0.01) L=0.01
 c       write(*,*) 'E=',E
 c      L=1.0
  
-      CALL TMAT(X1,Y1,Z1,X2,Y2,Z2,RY,T)
+      CALL TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,T,.TRUE.)
       CALL KMAT(E,G,W,L,RY,RK)
 
 
