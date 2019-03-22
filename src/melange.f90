@@ -469,6 +469,7 @@ END SUBROUTINE MelangeBonds
 !Passes UT,UTM & EFS for melange particles from a previous sim.
 !When melange is loaded, NRXF + UT (1:3) => NRXF
 !We can then revert this back to NRXF + UT (and UTM if desired)
+!NOTE: Cray ftn compiler may not like MPI self-send (0 to 0) in this subroutine
 SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
 
   TYPE(MelangeDataHolder_t) :: melange_data
@@ -481,7 +482,7 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   !----------------------------
   REAL(KIND=dp), ALLOCATABLE :: recv_stream(:)
   INTEGER :: i,j,part,ppcnt,my_ppcnt, my_beamcnt, ierr,counter,seek,N1,N2
-  INTEGER :: NTOT, stat(MPI_STATUS_SIZE)
+  INTEGER :: NTOT, stat(MPI_STATUS_SIZE), statcnt
   INTEGER, ALLOCATABLE :: stats(:),recv_GIDs(:)
   TYPE(PointEx_t), ALLOCATABLE :: PointEx(:)
   LOGICAL :: send, matched
@@ -491,8 +492,9 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   NTOT = SIZE(NANS, 2)
 
   IF(myid==0) ALLOCATE(PointEx(0:ntasks-1))
-  ALLOCATE(stats(0:ntasks*3))
+  ALLOCATE(stats(ntasks*3))
   stats = MPI_REQUEST_NULL
+  statcnt = 0
 
   !melange_data % owner(:) contains the partition ID of each melange particle
   !melange_data % GID(:) contains the GID of each melange particle
@@ -501,21 +503,27 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   IF(myid == 0) THEN
     DO part=0,ntasks-1
       ppcnt = COUNT(melange_data % owner == part)
-      CALL MPI_ISend(ppcnt, 1, MPI_INTEGER, part, 300, MPI_COMM_WORLD,stats(part),ierr)
+      statcnt = statcnt + 1
+      CALL MPI_ISend(ppcnt, 1, MPI_INTEGER, part, 300, MPI_COMM_WORLD,stats(statcnt),ierr)
     END DO
   END IF
-  CALL MPI_IRecv(my_ppcnt, 1, MPI_INTEGER, 0, 300, MPI_COMM_WORLD,stats(ntasks),ierr)
+
+  statcnt = statcnt + 1
+  CALL MPI_IRecv(my_ppcnt, 1, MPI_INTEGER, 0, 300, MPI_COMM_WORLD,stats(statcnt),ierr)
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(ntasks+1, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
+  statcnt = 0
 
   !Allocate space and set up non-blocking receive
   !Communicate: GID,UT*6,UTM*6
   IF(my_ppcnt > 0) THEN
     ALLOCATE(recv_stream(my_ppcnt * 12),recv_GIDs(my_ppcnt))
-    CALL MPI_IRecv(recv_GIDs, my_ppcnt, MPI_INTEGER, 0, 301, MPI_COMM_WORLD,stats(0),ierr)
-    CALL MPI_IRecv(recv_stream, my_ppcnt*12, MPI_DOUBLE_PRECISION, 0, 302, MPI_COMM_WORLD,stats(1),ierr)
+    statcnt = statcnt + 1
+    CALL MPI_IRecv(recv_GIDs, my_ppcnt, MPI_INTEGER, 0, 301, MPI_COMM_WORLD,stats(statcnt),ierr)
+    statcnt = statcnt + 1
+    CALL MPI_IRecv(recv_stream, my_ppcnt*12, MPI_DOUBLE_PRECISION, 0, 302, MPI_COMM_WORLD,stats(statcnt),ierr)
   END IF
 
   !Root constructs & sends arrays
@@ -537,16 +545,19 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
         PointEx(part) % S(counter*12-5 : counter*12) = melange_data % UTM%M(i*6-5:i*6)
       END DO
 
+      statcnt = statcnt + 1
       CALL MPI_ISend(PointEx(part) % SendGIDs, ppcnt, MPI_INTEGER, part, 301, &
-           MPI_COMM_WORLD, stats(2+(part*2)),ierr)
+           MPI_COMM_WORLD, stats(statcnt),ierr)
+      statcnt = statcnt + 1
       CALL MPI_ISend(PointEx(part) % S, ppcnt*12, MPI_DOUBLE_PRECISION, part, 302, &
-           MPI_COMM_WORLD, stats(2+(part*2+1)),ierr)
+           MPI_COMM_WORLD, stats(statcnt),ierr)
     END DO
   END IF
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(ntasks*2+2, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
+  statcnt = 0
 
   !Put received values into UT, UTM
   !and adjust NRXF accordingly (NOTE: O(N^2))
@@ -611,15 +622,18 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
       END DO
 
       !Send beam count
+      statcnt = statcnt + 1
       CALL MPI_ISend(PointEx(part) % scount, 1, MPI_INTEGER, part, 303,&
-           MPI_COMM_WORLD, stats(part*3),ierr)
+           MPI_COMM_WORLD, stats(statcnt),ierr)
 
       !Send beam particle GIDs
+      statcnt = statcnt + 1
       CALL MPI_ISend(PointEx(part) % SendGIDs, PointEx(part) % scount*2, MPI_INTEGER, part, 304, &
-           MPI_COMM_WORLD, stats(part*3+1),ierr)
+           MPI_COMM_WORLD, stats(statcnt),ierr)
 
+      statcnt = statcnt + 1
       CALL MPI_ISend(PointEx(part) % S, PointEx(part) % scount, MPI_DOUBLE_PRECISION, &
-           part, 305, MPI_COMM_WORLD, stats(part*3+2),ierr)
+           part, 305, MPI_COMM_WORLD, stats(statcnt),ierr)
 
     END DO
   END IF
@@ -657,8 +671,10 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
     END DO
   END IF
 
-  CALL MPI_Waitall(ntasks*3, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
+  statcnt = 0
+
   
 END SUBROUTINE PassMelangeData
 

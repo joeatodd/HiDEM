@@ -602,7 +602,7 @@ SUBROUTINE SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, counts, DOFs, var_s
 END SUBROUTINE SetVTKOffsets
 
 SUBROUTINE WriteVTKPointHeader(fh, varname, datatype, DOFs, VTK_Offset, counttot, var_size, intsize)
-  CHARACTER(LEN=1024) :: varname, datatype
+  CHARACTER(LEN=*) :: varname, datatype
   INTEGER :: DOFs, VTK_Offset, var_size, intsize, counttot, fh
   !------------------------
   CHARACTER(LEN=1024) :: output_str
@@ -611,7 +611,7 @@ SUBROUTINE WriteVTKPointHeader(fh, varname, datatype, DOFs, VTK_Offset, counttot
 
   lfeed= CHAR(10)
 
-  WRITE( output_str,'(A,A,A,A,A,I0,A,I0,A,A)') '        <DataArray type="',&
+  WRITE( output_str,'(A,A,A,A,A,I0,A,I0,A)') '        <DataArray type="',&
        TRIM(datatype),'" Name="',TRIM(varname),'" NumberOfComponents="',DOFs,'" &
        &format="appended" offset="',VTK_Offset,'"/>'//lfeed
   CALL MPI_File_Write(fh, TRIM(output_str), LEN_TRIM(output_str),&
@@ -888,7 +888,7 @@ END SUBROUTINE BinarySTHOutput
 
  FUNCTION ToLowerCase(from) RESULT(to)
      !------------------------------------------------------------------------------
-      CHARACTER(LEN=256)  :: from
+      CHARACTER(LEN=*)  :: from
       CHARACTER(LEN=256) :: to
      !------------------------------------------------------------------------------
       INTEGER :: n
