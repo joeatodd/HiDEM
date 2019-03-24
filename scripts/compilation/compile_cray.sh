@@ -1,4 +1,4 @@
-#module swap PrgEnv-gnu PrgEnv-cray
+module swap PrgEnv-gnu PrgEnv-cray
 mkdir -p build #make dir if first build
 cd build
 

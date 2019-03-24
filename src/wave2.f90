@@ -1264,7 +1264,7 @@ CONTAINS
 	DO I=1,NN
 	WRITE(117+myid,'(6ES25.12)') UT%M(6*I-5),UT%M(6*I-4),UT%M(6*I-3),UT%M(6*I-2),UT%M(6*I-1),UT%M(6*I-0)
 	WRITE(117+myid,'(6ES25.12)') UTM%M(6*I-5),UTM%M(6*I-4),UTM%M(6*I-3),UTM%M(6*I-2),UTM%M(6*I-1),UTM%M(6*I-0)
-	WRITE(117+myid,'(2L)') IsOutlier(I), IsLost(I)
+	WRITE(117+myid,'(2L3)') IsOutlier(I), IsLost(I)
 	END DO
 	CLOSE (117+myid)
 
