@@ -499,20 +499,19 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   !melange_data % owner(:) contains the partition ID of each melange particle
   !melange_data % GID(:) contains the GID of each melange particle
 
+  statcnt = statcnt + 1
+  CALL MPI_IRecv(my_ppcnt, 1, MPI_INTEGER, 0, 300, MPI_COMM_WORLD,stats(statcnt),ierr)
+
   !Determine & communicate particle counts to partitions
   IF(myid == 0) THEN
     DO part=0,ntasks-1
       ppcnt = COUNT(melange_data % owner == part)
-      statcnt = statcnt + 1
-      CALL MPI_ISend(ppcnt, 1, MPI_INTEGER, part, 300, MPI_COMM_WORLD,stats(statcnt),ierr)
+      CALL MPI_Send(ppcnt, 1, MPI_INTEGER, part, 300, MPI_COMM_WORLD, ierr)
     END DO
   END IF
 
-  statcnt = statcnt + 1
-  CALL MPI_IRecv(my_ppcnt, 1, MPI_INTEGER, 0, 300, MPI_COMM_WORLD,stats(statcnt),ierr)
-
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats(1:statcnt), MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
   statcnt = 0
 
@@ -555,7 +554,7 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
   END IF
 
   !Wait for the previous non-blocking sends, then reset stats
-  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats(1:statcnt), MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
   statcnt = 0
 
@@ -671,7 +670,7 @@ SUBROUTINE PassMelangeData(SI,melange_data,NRXF,UT,UTM,NANS,EFS,InvPartInfo)
     END DO
   END IF
 
-  CALL MPI_Waitall(statcnt, stats, MPI_STATUSES_IGNORE, ierr)
+  CALL MPI_Waitall(statcnt, stats(1:statcnt), MPI_STATUSES_IGNORE, ierr)
   stats = MPI_REQUEST_NULL
   statcnt = 0
 
