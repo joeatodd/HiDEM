@@ -42,7 +42,7 @@ for f in infiles:
                     num = rep.group(2)
                     #create string replacement (and remove last ', ')
                     new_str = ((num+", ") * cnt)[:-2]
-                    print new_str
+                    #print new_str
                     line = line.replace(old_str, new_str, 1)
                     counter += 1
 
