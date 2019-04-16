@@ -35,7 +35,18 @@ def bonds_from_file(fname_bin, fname_sth=None):
 
     nn_data = nn_data.reshape((-1,2))
 
+    indata_sth.close()
+
     return nn_data, efs_data
+
+def nn_from_file(fname_sth):
+    
+    with open(fname_sth, 'rb') as f:
+        header = f.readline()
+        num_count = int(count_re.search(header).group(1))
+        nn_data = np.fromfile(f, dtype=np.int32, count=num_count*2)
+    nn_data = nn_data.reshape((-1,2))
+    return nn_data
 
 def efs_from_file(fname_bin):
     """
@@ -84,13 +95,16 @@ def sth_to_file(nn,sth_header_template,fname_sth):
     fname_sth - the name of the file produced
     """
     count = nn.shape[0]
-
+    
     beamcnt_re = re.compile("(?<=BeamCount: )([0-9]*)")
     sth_header = re.sub(beamcnt_re,str(count),sth_header_template)
 
+    if(sth_header[-1] != '\n'):
+        sth_header+='\n'
+
     with open(fname_sth,'wb') as fout:
         fout.write(sth_header)
-        nn.tofile(fout)
+        nn.astype("int32").tofile(fout)
 
 def str_to_file(efs, fname_str):
     """
@@ -116,6 +130,34 @@ def get_scl(sth_file):
         except:
             raise Exception("Failed to get SCL info from STH header")
     return SCL
+
+def get_ef0(sth_file):
+    """
+    Return simulation ef0 from sth file
+    """
+    scl_re = re.compile("EF0:  ("+float_re.pattern+")")
+
+    with open(sth_file, 'rb') as f:
+        header = f.readline()
+        try:
+            ef0 = float(scl_re.search(header).group(1))
+        except:
+            raise Exception("Failed to get EF0 info from STH header")
+    return ef0
+
+def get_dt(sth_file):
+    """
+    Return simulation dt from sth file
+    """
+    scl_re = re.compile("DT:  ("+float_re.pattern+")")
+
+    with open(sth_file, 'rb') as f:
+        header = f.readline()
+        try:
+            dt = float(scl_re.search(header).group(1))
+        except:
+            raise Exception("Failed to get DT info from STH header")
+    return dt
 
 def fname_sth_from_str(fname_in, check=True):
     """
