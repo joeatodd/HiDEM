@@ -147,6 +147,7 @@ If the simulation [explodes](https://www.youtube.com/watch?v=LZIixgvlF8U) (parti
 ### Structure of the repository ###
 
 * `src` - all the code required to compile the HiDEM binary.
+* `python` - the HiDEM python module.
 * Within the `scripts` directory:
   - `analysis` - various fortran and python scripts for post-processing
   - `compilation` - example compilation scripts
@@ -312,6 +313,10 @@ GSUMS - energy of bed interaction
 
 
 ## Processing ##
+
+Various scripts for analysing model ouput are in the `scripts/analysis` directory. Many of these rely on the HiDEM python module, located in python/HiDEM/.
+
+The HiDEM python module contains various functions for extracting data from the .vtu, STR*bin and STH*bin files produced by HiDEM.
 
 rc2.f90 computes the size distribution of calved blocks  
 
