@@ -88,7 +88,7 @@ MODULE TypeDefs
      REAL(KIND=dp) :: FRIC = 1.0_dp, POR = 0.1_dp, DAMP1 = 1.0E4, DAMP2 = 1.0E4, DRAG_AIR = 1.0E1
      REAL(KIND=dp) :: DRAG_WATER = 1.0E1, MAXUT = 1.0E6, SCL = 0.0_dp, WL = 0.0_dp, GRID = 0.0_dp
      REAL(KIND=dp) :: GRAV = 9.81_dp, RHO = 900.0, RHOW  = 1030.0, BedIntConst = 1.0E8
-     REAL(KIND=dp) :: fractime = 40.0_dp,viscforce = 1.0E4,viscdist = 4.0E-2, BedDampFactor = 1.0_dp
+     REAL(KIND=dp) :: fractime = 40.0_dp,viscstrength = 0.0_dp, viscdist = 0.0_dp, BedDampFactor = 1.0_dp
      INTEGER :: REST = 0, SEEDI = 11695378, OUTINT = 20000, RESOUTINT = 20000, STEPS0 = 0, LS = 100
      CHARACTER(256) :: geomfile,runname,MelRunName,wrkdir = "./",resdir = "./",restname
      LOGICAL :: BedZOnly = .TRUE., StrictDomain = .TRUE., DoublePrec = .FALSE.,CSVOutput=.FALSE.

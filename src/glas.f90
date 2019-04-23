@@ -1970,7 +1970,7 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   REAL(KIND=dp), ALLOCATABLE :: EFC(:)
   REAL(KIND=dp) ::  SX,SY,SZ,SUM,T,WE(:),L0
   REAL(KIND=dp) ::  DDEL,DWE,OWE,ESUM,LNN
-  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscForce
+  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscStrength
   INTEGER ierr,FXC,ND
   INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
@@ -1984,7 +1984,7 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   IF(PrintTimes) CALL CPU_TIME(T1)
 
   SCL = SI%SCL
-  ViscForce = SI%ViscForce
+  ViscStrength = SI%ViscStrength
 
   IF(.NOT. ALLOCATED(FXF)) ALLOCATE(FXF(2,NN*12))
   FXF = 0 !particle proximity info
@@ -2053,19 +2053,19 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
       !NOTE - TODO - is this an attractive force??
       IF (RC.GT.LNN.AND.RC.LT.LNN+SI%ViscDist*SCL) THEN
         IF(own(1)) THEN
-          FRX(N1)=FRX(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCX
-          FRY(N1)=FRY(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCY
-          FRZ(N1)=FRZ(N1)+SCL**2.0*ViscForce*(LNN-RC)*RCZ
+          FRX(N1)=FRX(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCX
+          FRY(N1)=FRY(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCY
+          FRZ(N1)=FRZ(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCZ
         END IF
         IF(own(2)) THEN
-          FRX(N2)=FRX(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCX
-          FRY(N2)=FRY(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCY
-          FRZ(N2)=FRZ(N2)-SCL**2.0*ViscForce*(LNN-RC)*RCZ
+          FRX(N2)=FRX(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCX
+          FRY(N2)=FRY(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCY
+          FRZ(N2)=FRZ(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCZ
         END IF
         IF(own(2)) THEN
-          WE(N2)=WE(N2)+SCL**2.0*0.5*ViscForce*(LNN-RC)**2.0
+          WE(N2)=WE(N2)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
         ELSE
-          WE(N1)=WE(N1)+SCL**2.0*0.5*ViscForce*(LNN-RC)**2.0
+          WE(N1)=WE(N1)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
         END IF
       ENDIF
 
