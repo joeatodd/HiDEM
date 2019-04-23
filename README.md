@@ -215,8 +215,9 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Air Drag Coefficient        | DRAG_AIR  | The drag coefficient in air   | 1e1 |
 | Water Drag Coefficient        | DRAG_WATER  | The drag coefficient in water   | 1e1 |
 | Drag Coefficient        | DRAG_WATER, DRAG_AIR  | The drag coefficient in both air & water (alternative to previous 2)  | 1e1 |
-| Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   | 4e-2 |
-| Viscous Strength        | ViscStrength  | The strength of viscous particle interaction | 1e4 |
+| Viscoelastic        | Viscoelastic  | Viscous interaction (else just elastic)  | FALSE |
+| Viscous Distance        | ViscDist  | The SCLed particle proximity for viscous interaction   | = MLOAD |
+| Viscous Strength        | ViscStrength  | The strength of viscous particle interaction | = EF0 * POR |
 | Output Interval      | OUTINT| The output interval (output files written every OUTINT steps)   | 20000 |
 | Restart Output Interval   |RESOUTINT| The restart output interval (every RESOUTINT, write out restart files) <- Joe's addition   | 20000 |
 | Maximum Displacement       | MAXUT | The maximum displacement of particles - default 1.0e6 metres (particles further than this are frozen)   | 1e6 |

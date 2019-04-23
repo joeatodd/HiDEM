@@ -94,6 +94,7 @@ MODULE TypeDefs
      LOGICAL :: BedZOnly = .TRUE., StrictDomain = .TRUE., DoublePrec = .FALSE.,CSVOutput=.FALSE.
      LOGICAL :: FixLat = .FALSE., FixBack = .TRUE., GeomMasked = .FALSE., doShearLine = .FALSE.
      LOGICAL :: gotMelange = .FALSE., outputDispl = .TRUE., outputRot = .TRUE., outputPart = .TRUE.
+     LOGICAL :: ViscoElastic = .FALSE.
      !------------------------------------
      REAL(KIND=dp) :: DMP, DMP2 !<- not read, set in wave2.f90
 

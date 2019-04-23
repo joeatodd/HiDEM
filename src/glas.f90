@@ -1970,7 +1970,7 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
   REAL(KIND=dp), ALLOCATABLE :: EFC(:)
   REAL(KIND=dp) ::  SX,SY,SZ,SUM,T,WE(:),L0
   REAL(KIND=dp) ::  DDEL,DWE,OWE,ESUM,LNN
-  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscStrength
+  REAL(KIND=dp) ::  LS,LS2,DEL,SCL,ViscStrength,UpperBound
   INTEGER ierr,FXC,ND
   INTEGER dest,source,tag,stat(MPI_STATUS_SIZE),comm
   INTEGER, ALLOCATABLE :: FXF(:,:),NDL(:,:)
@@ -2014,7 +2014,10 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
     X2=NRXF%A(1,N2)+UT%A(6*N2-5)
     Y2=NRXF%A(2,N2)+UT%A(6*N2-4)
     Z2=NRXF%A(3,N2)+UT%A(6*N2-3)
-    IF (ABS(X1-X2).LE.LNN.AND.ABS(Y1-Y2).LE.LNN.AND.ABS(Z1-Z2).LE.LNN) THEN
+
+    UpperBound = LNN + SI%ViscDist*SCL !threshold beyond which neither collision nor viscous attraction can occur
+
+    IF (ABS(X1-X2).LE.UpperBound.AND.ABS(Y1-Y2).LE.UpperBound.AND.ABS(Z1-Z2).LE.UpperBound) THEN
       RC=SQRT((X1-X2)**2.0+(Y1-Y2)**2.0+(Z1-Z2)**2.0)
       RCX=(X1-X2)/RC
       RCY=(Y1-Y2)/RC
@@ -2025,8 +2028,9 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
 
       IF(FXC+1 > SIZE(FXF,2)) CALL ExpandIntArray(FXF)
 
+      !Repulsive collision
+      !---------------------
       IF (RC.LT.LNN) THEN
-
         IF(own(1)) THEN !One of our own particles
           FRX(N1)=FRX(N1)+EFC(N1)*(LNN-RC)**1.5*RCX
           FRY(N1)=FRY(N1)+EFC(N1)*(LNN-RC)**1.5*RCY
@@ -2049,25 +2053,27 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
         FXF(2,FXC)=N2 
       ENDIF
 
-      !if almost touching, add forces but don't register interaction
-      !NOTE - TODO - is this an attractive force??
-      IF (RC.GT.LNN.AND.RC.LT.LNN+SI%ViscDist*SCL) THEN
-        IF(own(1)) THEN
-          FRX(N1)=FRX(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCX
-          FRY(N1)=FRY(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCY
-          FRZ(N1)=FRZ(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCZ
-        END IF
-        IF(own(2)) THEN
-          FRX(N2)=FRX(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCX
-          FRY(N2)=FRY(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCY
-          FRZ(N2)=FRZ(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCZ
-        END IF
-        IF(own(2)) THEN
-          WE(N2)=WE(N2)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
-        ELSE
-          WE(N1)=WE(N1)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
-        END IF
-      ENDIF
+      !Viscous attraction
+      !---------------------
+      IF(SI % ViscoElastic) THEN
+        IF (RC.GT.LNN.AND.RC.LT.UpperBound) THEN
+          IF(own(1)) THEN
+            FRX(N1)=FRX(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCX
+            FRY(N1)=FRY(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCY
+            FRZ(N1)=FRZ(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCZ
+          END IF
+          IF(own(2)) THEN
+            FRX(N2)=FRX(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCX
+            FRY(N2)=FRY(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCY
+            FRZ(N2)=FRZ(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCZ
+          END IF
+          IF(own(2)) THEN
+            WE(N2)=WE(N2)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
+          ELSE
+            WE(N1)=WE(N1)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
+          END IF
+        ENDIF
+      END IF
 
     ENDIF
   ENDDO

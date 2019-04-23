@@ -31,7 +31,7 @@ CONTAINS
    CHARACTER(256) :: INFILE, buff, VarName,VarValue
    LOGICAL :: FileExists, gotWL=.FALSE., gotSteps=.FALSE., gotSCL=.FALSE., &
         gotGrid=.FALSE.,gotName=.FALSE.,gotGeom=.FALSE.,gotRestName=.FALSE., &
-        gotViscDist=.FALSE.
+        gotViscDist=.FALSE.,gotViscStrength=.FALSE.
 
    OPEN(UNIT=112,FILE=infile,STATUS='old')
    incount = 0
@@ -108,11 +108,14 @@ CONTAINS
        READ(VarValue,*) SimInfo % DAMP1
      CASE("rotational damping")
        READ(VarValue,*) SimInfo % DAMP2
+     CASE("viscoelastic")
+       READ(VarValue,*) SimInfo % ViscoElastic
      CASE("viscous distance")
        READ(VarValue,*) SimInfo % viscdist
        gotViscDist = .TRUE.
      CASE("viscous strength")
        READ(VarValue,*) SimInfo % ViscStrength
+       gotViscStrength = .TRUE.
      CASE("drag coefficient")
        READ(VarValue,*) SimInfo % DRAG_AIR
        SimInfo % DRAG_WATER = SimInfo % DRAG_AIR
@@ -187,7 +190,12 @@ CONTAINS
    IF(.NOT. gotSteps) CALL FatalError("Didn't get 'No Timesteps'")
    IF(.NOT. gotName) CALL FatalError("No Run Name specified!")
    IF(.NOT. gotGeom) CALL FatalError("No Geometry File specified!")
-   IF(.NOT. gotViscDist) SimInfo % ViscDist = SimInfo % MLOAD
+
+   IF(SimInfo % ViscoElastic) THEN
+     IF(.NOT. gotViscDist) SimInfo % ViscDist = SimInfo % MLOAD
+     IF(.NOT. gotViscStrength) SimInfo % ViscStrength = SimInfo%POR * SimInfo%EF0
+   END IF
+
    IF(.NOT. gotRestName .AND. SimInfo % REST == 1) THEN
      SimInfo % restname = SimInfo % runname
    END IF
@@ -243,6 +251,7 @@ CONTAINS
      WRITE(*,'(A,I0)') "No Timesteps = ", SimInfo % STEPS0
      WRITE(*,'(A,F9.2)') "Grid = ", SimInfo % GRID
      WRITE(*,'(A,F9.2)') "Fracture After Time = ", SimInfo % fractime
+     WRITE(*,'(A,F9.2)') "Viscoelastic sim = ", SimInfo % ViscoElastic
      WRITE(*,'(A,F9.2)') "Viscous Distance = ", SimInfo % ViscDist
      WRITE(*,'(A,F9.2)') "Viscous Strength = ", SimInfo % ViscStrength
      WRITE(*,'(A,L)') "Double Precision Output = ", SimInfo % DoublePrec
