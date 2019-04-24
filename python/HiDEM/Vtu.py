@@ -86,3 +86,12 @@ def data_to_vtu(points, point_data, fname, dp=False):
     writer.Write()
 
     #TODO - presumably might need to clean up some data after this? C memory leaks?
+
+def vtu_sort_fun(fname):
+    """
+    Sorting key for non-zero padded filenames
+    """
+    #substitute the _integer__ with a zero padded equivalent string
+    #return re.sub(fname_re, "_"+str(int(fname_re.search(fname).group(1))).zfill(4),fname)
+    fname_re = re.compile("[0-9]+")
+    return re.sub(fname_re, lambda x: x.group(0).zfill(4), fname)
