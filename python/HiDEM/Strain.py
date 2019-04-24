@@ -181,6 +181,28 @@ def fname_sth_from_str(fname_in, check=True):
     else:
         return fname_out
 
+def fname_sth_from_vtu(fname_in, check=True):
+    """
+    Given a STR000*.bin filename, returns equivalent STH filename
+    Fuzzy matching for restarted runs
+    """
+    fname_out = fname_in.rsplit("JYR",1)[0]+"STH.bin"
+
+    #If that file doesn't exist, try fuzzy matching on
+    #text characters from STR.bin filename
+    if (not os.path.isfile(fname_out)) and check:
+        text_re = re.compile("([a-zA-Z_-]+)")
+        strings = text_re.findall(fname_in)
+        search_glob = "*".join(strings)
+        search_glob = search_glob.replace("JYR*","STH.")
+        infiles = glob(search_glob)
+        if len(infiles) > 1:
+            raise Exception("Fuzzy matching found more than 1 possible STH file")
+        else:
+            return infiles[0]
+    else:
+        return fname_out
+
 def fname_vtu_from_str(fname_in):
     return fname_in.replace("STR","JYR").replace(".bin",".vtu")
 
