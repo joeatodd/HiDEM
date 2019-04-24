@@ -252,8 +252,8 @@ CONTAINS
      WRITE(*,'(A,F9.2)') "Grid = ", SimInfo % GRID
      WRITE(*,'(A,F9.2)') "Fracture After Time = ", SimInfo % fractime
      WRITE(*,'(A,L)') "Viscoelastic sim = ", SimInfo % ViscoElastic
-     WRITE(*,'(A,F9.2)') "Viscous Distance = ", SimInfo % ViscDist
-     WRITE(*,'(A,F9.2)') "Viscous Strength = ", SimInfo % ViscStrength
+     WRITE(*,'(A,ES12.5)') "Viscous Distance = ", SimInfo % ViscDist
+     WRITE(*,'(A,ES12.5)') "Viscous Strength = ", SimInfo % ViscStrength
      WRITE(*,'(A,L)') "Double Precision Output = ", SimInfo % DoublePrec
      WRITE(*,'(A,L)') "Strict Domain Interpolation = ", SimInfo % StrictDomain
      WRITE(*,'(A,L)') "Fixed Lateral Margins = ", SimInfo % FixLat
