@@ -176,6 +176,8 @@ def fname_sth_from_str(fname_in, check=True):
         infiles = glob(search_glob)
         if len(infiles) > 1:
             raise Exception("Fuzzy matching found more than 1 possible STH file")
+        elif len(infiles) == 0:
+            raise Exception("Failed to find STH file")
         else:
             return infiles[0]
     else:
@@ -194,11 +196,14 @@ def fname_sth_from_vtu(fname_in, check=True):
         text_re = re.compile("([a-zA-Z_-]+)")
         strings = text_re.findall(fname_in)
         search_glob = "*".join(strings)
-        search_glob = search_glob.replace("JYR*","STH.")
+        search_glob = search_glob.replace("JYR*","STH.").replace(".vtu",".bin")
         infiles = glob(search_glob)
         if len(infiles) > 1:
             raise Exception("Fuzzy matching found more than 1 possible STH file")
+        elif len(infiles) == 0:
+            raise Exception("Failed to find STH file")
         else:
+            print len(infiles)
             return infiles[0]
     else:
         return fname_out
