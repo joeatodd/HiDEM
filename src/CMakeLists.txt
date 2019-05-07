@@ -1,5 +1,5 @@
 #Define the source code which makes up HiDEM
-add_executable (HiDEM typedefs.f90 utils.f90 io.f90 octree.F90 melange.f90 glas.f90 effload.f90 amat.f ttmat.f90 kmat.f ranmar.f wave2.f90)
+add_executable (HiDEM typedefs.f90 utils.f90 io.f90 octree.F90 melange.f90 glas.f90 effload.f90 amat.f ttmat.f90 kmat.f ranmar.f wave2.F90)
 
 #Locate MPI and add relevant flags, links
 find_package(MPI REQUIRED)
