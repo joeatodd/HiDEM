@@ -101,9 +101,10 @@
 
         IF(myid==0) THEN
           CALL DATE_AND_TIME(VALUES=datetime)
-5         FORMAT("HiDEM run starting at: ",i2.2,"/",i2.2,"/",i4.4,' ',i2.2,':',i2.2,':',i2.2)
+5         FORMAT(" HiDEM run starting at: ",i2.2,"/",i2.2,"/",i4.4,' ',i2.2,':',i2.2,':',i2.2)
           PRINT *, '----------------------------------------------------'
           WRITE(*,5) datetime(3),datetime(2),datetime(1),datetime(5),datetime(6),datetime(7)
+          WRITE(*,*) "Version: ",GIT_BRANCH,"-",GIT_COMMIT_HASH
         END IF
 
 !writing out energy output
