@@ -258,7 +258,7 @@ def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0):
     nx_side = np.zeros([len(yy), len(zz)])
 
     #find the voxel in which each particle belongs
-    boxes = np.rint(np.stack((x,y,z)).T / np.array((dx,dx,dx))).astype(int)
+    boxes = np.rint(np.vstack((x,y,z)).T / np.array((dx,dx,dx))).astype(int)
     boxes[:,0] += int(math.floor(buff_boxes))
 
     #check box bounds
@@ -327,7 +327,7 @@ def str_to_file_old(x,y,z,strain,fname):
     Spits out a .bin file like HiDEM would produce. Use case: extract a subset of
     data on server for download
     """
-    data = np.stack((x,y,z,strain))
+    data = np.vstack((x,y,z,strain))
     count = strain.size
     with open(fname,'wb') as fout:
         fout.write("Count: "+str(count)+" Type: Float32\n")
