@@ -268,7 +268,15 @@
         BASE(XK,YK)=B2
         SUF(XK,YK)=S1
         FBED(XK,YK)= SI%FRIC * SCL*SCL*Z1
-        IF(SI%GeomMasked) GEOMMASK(XK,YK)=NINT(mask)
+        IF(SI%GeomMasked) THEN
+          GEOMMASK(XK,YK)=NINT(mask)
+          IF(GEOMMASK(XK,YK) == 0) THEN
+            BED(XK,YK)=-1000.0
+            BASE(XK,YK)=-1000.0
+            SUF(XK,YK)=-1000.0
+            FBED(XK,YK)= 0.0
+          END IF
+        END IF
 
 	ENDDO
 	CLOSE(400)
