@@ -8,10 +8,6 @@ renderView1 = FindViewOrCreate('RenderView1', viewtype='RenderView')
 
 glyph1 = Glyph(Input=HiDEM_data,
     GlyphType='2D Glyph')
-glyph1.Scalars = ['POINTS', 'None']
-glyph1.Vectors = ['POINTS', 'None']
-glyph1.ScaleFactor = 645.2785175323487
-glyph1.GlyphTransform = 'Transform2'
 glyph1.GlyphMode = 'All Points'
 glyph1.GlyphType.GlyphType = 'Vertex'
 
