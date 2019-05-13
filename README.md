@@ -41,6 +41,8 @@ Head of a sample mass3.dat file:
 1.000000000000000000e+02	0.000000000000000000e+00	9.248503686919999609e+02	9.248503686919999609e+02	9.248503686919999609e+02	4.768270480512356758e+07
 ```
 
+The first line specifies the number of records in the file.
+
 See more information in section 'Geometry File' 
 
 Note: To avoid spurious single particles appearing at the edge of the domain, interpolation of 
