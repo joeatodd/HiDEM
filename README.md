@@ -1,5 +1,7 @@
 # The Helsinki Discrete Element Model (HiDEM) #
 
+[![DOI](https://zenodo.org/badge/134481936.svg)](https://zenodo.org/badge/latestdoi/134481936)
+
 Developers: Jan Åström & Joe Todd
 
 This is HiDEM, the Helsinki Discrete Element Model, a particle model for simulating elastic behaviour, fracture and calving at marine terminating glaciers. Due to its computational demands, this code is designed to be run on parallel HPC facilities.
