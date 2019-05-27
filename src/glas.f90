@@ -2058,19 +2058,19 @@ SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
       IF(SI % ViscoElastic) THEN
         IF (RC.GT.LNN.AND.RC.LT.UpperBound) THEN
           IF(own(1)) THEN
-            FRX(N1)=FRX(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCX
-            FRY(N1)=FRY(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCY
-            FRZ(N1)=FRZ(N1)+SCL**2.0*ViscStrength*(LNN-RC)*RCZ
+            FRX(N1)=FRX(N1)+SCL*ViscStrength*(LNN-RC)*RCX
+            FRY(N1)=FRY(N1)+SCL*ViscStrength*(LNN-RC)*RCY
+            FRZ(N1)=FRZ(N1)+SCL*ViscStrength*(LNN-RC)*RCZ
           END IF
           IF(own(2)) THEN
-            FRX(N2)=FRX(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCX
-            FRY(N2)=FRY(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCY
-            FRZ(N2)=FRZ(N2)-SCL**2.0*ViscStrength*(LNN-RC)*RCZ
+            FRX(N2)=FRX(N2)-SCL*ViscStrength*(LNN-RC)*RCX
+            FRY(N2)=FRY(N2)-SCL*ViscStrength*(LNN-RC)*RCY
+            FRZ(N2)=FRZ(N2)-SCL*ViscStrength*(LNN-RC)*RCZ
           END IF
           IF(own(2)) THEN
-            WE(N2)=WE(N2)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
+            WE(N2)=WE(N2)+SCL*0.5*ViscStrength*(LNN-RC)**2.0
           ELSE
-            WE(N1)=WE(N1)+SCL**2.0*0.5*ViscStrength*(LNN-RC)**2.0
+            WE(N1)=WE(N1)+SCL*0.5*ViscStrength*(LNN-RC)**2.0
           END IF
         ENDIF
       END IF
