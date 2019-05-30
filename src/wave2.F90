@@ -251,35 +251,47 @@
 
         REWIND(400)
         READ(400,*) NM2
-	DO I=1,NM2
-        IF(SI%GeomMasked) THEN
-          READ(400,*) X,Y,S1,B2,B1,Z1,mask
-        ELSE
-          READ(400,*) X,Y,S1,B2,B1,Z1
-        END IF
-!        X=X-2000.0
-!        Y=Y-7000.0
-        XK=NINT((X-origin(1))/GRID)
-        YK=NINT((Y-origin(2))/GRID)
-        IF(XK < 0 .OR. YK < 0 .OR. XK > nx-1 .OR. YK > ny-1) &
-             CALL FatalError("Programming Error: Bad grid spec")
-
-        BED(XK,YK)=B1
-        BASE(XK,YK)=B2
-        SUF(XK,YK)=S1
-        FBED(XK,YK)= SI%FRIC * SCL*SCL*Z1
-        IF(SI%GeomMasked) THEN
-          GEOMMASK(XK,YK)=NINT(mask)
-          IF(GEOMMASK(XK,YK) == 0) THEN
-            BED(XK,YK)=-1000.0
-            BASE(XK,YK)=-1000.0
-            SUF(XK,YK)=-1000.0
-            FBED(XK,YK)= 0.0
+        DO I=1,NM2
+          IF(SI%GeomMasked) THEN
+            READ(400,*) X,Y,S1,B2,B1,Z1,mask
+          ELSE
+            READ(400,*) X,Y,S1,B2,B1,Z1
           END IF
-        END IF
+          !        X=X-2000.0
+          !        Y=Y-7000.0
+          XK=NINT((X-origin(1))/GRID)
+          YK=NINT((Y-origin(2))/GRID)
+          IF(XK < 0 .OR. YK < 0 .OR. XK > nx-1 .OR. YK > ny-1) &
+               CALL FatalError("Programming Error: Bad grid spec")
 
-	ENDDO
-	CLOSE(400)
+          BED(XK,YK)=B1
+          BASE(XK,YK)=B2
+          SUF(XK,YK)=S1
+          FBED(XK,YK)= SI%FRIC * SCL*SCL*Z1
+
+          !GeomMask can override input rasters
+          !GeomMask != 1 means no glacier lattice here
+          IF(SI%GeomMasked) THEN
+            GEOMMASK(XK,YK)=NINT(mask)
+            !GeomMask == 0, bedrock, set all heights to -1000.0, friction=0
+            !Behaviour undefined here
+            IF(GEOMMASK(XK,YK) == 0) THEN
+              BED(XK,YK)=-1000.0
+              BASE(XK,YK)=-1000.0
+              SUF(XK,YK)=-1000.0
+              FBED(XK,YK)= 0.0
+
+              !GeomMask /=1 (probably 2, fjord), set surf & base equal to bed
+              !Ice can be here, and interact with the bed, just no lattice gen here
+            ELSE IF(GEOMMASK(XK,YK) /= 1)
+              BASE(XK,YK) = BED(XK,YK)
+              SUF(XK,YK) = BED(XK,YK)
+            END IF
+          END IF
+
+        ENDDO
+
+        CLOSE(400)
 
 
 !============= Generate the lattice if new run ==============
