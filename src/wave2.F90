@@ -283,7 +283,7 @@
 
               !GeomMask /=1 (probably 2, fjord), set surf & base equal to bed
               !Ice can be here, and interact with the bed, just no lattice gen here
-            ELSE IF(GEOMMASK(XK,YK) /= 1)
+            ELSE IF(GEOMMASK(XK,YK) /= 1) THEN
               BASE(XK,YK) = BED(XK,YK)
               SUF(XK,YK) = BED(XK,YK)
             END IF
