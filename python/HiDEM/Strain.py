@@ -245,7 +245,7 @@ def grid_gen(x,y,z,buff=500.0,dx=60.0):
 
     return xx,yy,zz
 
-def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0):
+def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0,return_nx=False):
     """
     Given a strain at points, grid it and return gridded values
     """
@@ -277,7 +277,10 @@ def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0):
     sx_side[np.isnan(sx_side)] = 0.0
     sx_plan[np.isnan(sx_plan)] = 0.0
 
-    return sx_plan, sx_side
+    if return_nx:
+        return sx_plan, sx_side, nx_plan, nx_side
+    else:
+        return sx_plan, sx_side
 
 def get_bond_centrepoints(points,nn):
     """
