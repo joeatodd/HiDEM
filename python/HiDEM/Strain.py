@@ -252,13 +252,19 @@ def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0,return_nx=False):
 
     buff_boxes = math.floor(buff/dx)
 
+    origin = np.zeros(3)
+    origin[0] = np.min(x)
+    origin[1] = np.min(y)
+    origin[2] = np.min(z)
+
+    
     sx_plan = np.zeros([len(xx), len(yy)])
     nx_plan = np.zeros([len(xx), len(yy)])
     sx_side = np.zeros([len(yy), len(zz)])
     nx_side = np.zeros([len(yy), len(zz)])
 
     #find the voxel in which each particle belongs
-    boxes = np.rint(np.vstack((x,y,z)).T / np.array((dx,dx,dx))).astype(int)
+    boxes = np.rint( (np.vstack((x,y,z)).T - origin) / np.array((dx,dx,dx))).astype(int)
     boxes[:,0] += int(math.floor(buff_boxes))
 
     #check box bounds
@@ -281,6 +287,40 @@ def grid_strain(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0,return_nx=False):
         return sx_plan, sx_side, nx_plan, nx_side
     else:
         return sx_plan, sx_side
+
+def voxel_var(x,y,z,strain,xx,yy,zz,buff=500.0,dx=60.0):
+    """
+    Given variable at points, 3D grid it (mean) and return gridded values
+    """
+
+    buff_boxes = math.floor(buff/dx)
+
+    origin = np.zeros(3)
+    origin[0] = np.min(x)
+    origin[1] = np.min(y)
+    origin[2] = np.min(z)
+
+    sx = np.zeros([len(xx), len(yy), len(zz)])
+    nx = np.zeros([len(xx), len(yy), len(zz)])
+
+    #find the voxel in which each particle belongs
+    boxes = np.rint( (np.vstack((x,y,z)).T - origin) / np.array((dx,dx,dx))).astype(int)
+    boxes[:,0] += int(math.floor(buff_boxes))
+
+    #check box bounds
+    boxes[:,0] = boxes[:,0].clip(0,sx.shape[0]-1)
+    boxes[:,1] = boxes[:,1].clip(0,sx.shape[1]-1)
+    boxes[:,2] = boxes[:,2].clip(0,sx.shape[2]-1)
+
+    np.add.at(sx, (boxes[:,0],boxes[:,1],boxes[:,2]),strain)
+    np.add.at(nx, (boxes[:,0],boxes[:,1],boxes[:,2]),np.ones(strain.size,dtype=int))
+
+    sx /= nx
+    # sx_side[np.isnan(sx_side)] = 0.0
+    # sx_plan[np.isnan(sx_plan)] = 0.0
+
+    return sx, nx
+
 
 def get_bond_centrepoints(points,nn):
     """
