@@ -1958,8 +1958,25 @@ SUBROUTINE EnsureDualGraph(CN)
 
 END SUBROUTINE EnsureDualGraph
 
+!--------------------------
+! Computes both collision (repulsive) & viscous (attractive) forces
+! between nearby particles (candidates determined every N timesteps by
+! FindNearbyParticles).
+! 
+! Collision force is:  F = SCL * EF0 * (LNN - RC)^(3/2)
+! where SCL is particle diameter, EF0 is youngs modulus, LNN - RC is 
+! overlap distance. 3/2 exponent because increasing particle overlap
+! means increasing contact area (spheres) hence larger force.
+!
+! SCL**2 defines cross-section of particle, and SCL defines original
+! length. These cancel to produce a single SCL (EFC = EF0 * SCL)
+!
+! Converting these forces to stress (in post processing):
+! Stress = F / (SCL**2)
+!--------------------------
 SUBROUTINE FindCollisions(SI,ND,NN,NRXF,UT,FRX,FRY,FRZ, &
      T,IS,WE,EFC,FXF,FXC,NDL,LNN)
+
 
   USE TypeDefs
   USE Utils
