@@ -2,6 +2,16 @@ import numpy as np
 
 #modified from Icebergs.py for Jan's coordinate system
 def compute_rotation_matrix(plane_vector):
+    """
+    Given a 3D vector describing the normal direction of a glacier front, return
+    the rotation matrix which will convert this glacier domain into HiDEM format 
+    (flow purely in y direction)
+    
+    Assuming that the z component of input vector is zero, should always return 
+    matrix for which new z component is (0,0,1) i.e. untransformed in this 
+    direction
+    """
+    assert plane_vector.size == 3, "Input not a 3D vector!"
 
     ex = np.empty(3)
     ey = np.empty(3)
@@ -13,8 +23,12 @@ def compute_rotation_matrix(plane_vector):
     ey = np.asarray(plane_vector)
 
     MaxIndex = np.argmax(abs(ey))
-    MinIndex = np.argmin(abs(ey))
 
+    #Odd approach here to catch an edge case (0,1,0), (1,0,0)
+    #Basically, we do argmin but take last occurrence (z) if two are equal
+    #MinIndex = np.argmin(abs(ey))
+    MinIndex = 2 - np.argmin(abs(ey)[::-1])
+    
     for i in range(3):
         if (i == MaxIndex or i == MinIndex):
             continue
