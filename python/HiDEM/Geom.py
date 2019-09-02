@@ -11,6 +11,7 @@ def compute_rotation_matrix(plane_vector):
     matrix for which new z component is (0,0,1) i.e. untransformed in this 
     direction
     """
+    plane_vector = np.asarray(plane_vector)
     assert plane_vector.size == 3, "Input not a 3D vector!"
 
     ex = np.empty(3)
