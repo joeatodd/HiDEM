@@ -8,6 +8,7 @@ import math
 import os
 from glob import glob
 from HiDEM import Vtu
+from difflib import SequenceMatcher as SM
 
 float_re = re.compile('-?\ *[0-9]+\.?[0-9]*(?:[Ee]\ *[-\+]?\ *[0-9]+)?')
 count_re = re.compile("Count: ([0-9]*)")
@@ -175,6 +176,9 @@ def fname_sth_from_str(fname_in, check=True):
         search_glob = search_glob.replace("STR*","STH.")
         infiles = glob(search_glob)
         if len(infiles) > 1:
+            sim_rat = [SM(None,fname_out,f).ratio() for f in infiles]
+            for i,f in enumerate(sim_rat):
+                print i, infiles[i], f
             raise Exception("Fuzzy matching found more than 1 possible STH file")
         elif len(infiles) == 0:
             raise Exception("Failed to find STH file")
