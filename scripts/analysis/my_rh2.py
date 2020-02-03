@@ -3,12 +3,15 @@
 import numpy as np
 import getopt
 import sys
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import math
 from glob import glob
 import re
 from timeit import default_timer as timer
 from HiDEM import Strain,Vtu
+
 
 # get input files from user
 
@@ -33,9 +36,9 @@ for opt, arg in opts:
     elif(opt =='-b'):
         buff = float(arg)
     elif(opt == '-d'):
-		dx = float(arg)
+        dx = float(arg)
     elif(opt =='-n'):
-        interval == int(arg)
+        interval = int(arg)
     elif(opt =='-v'):
         vmax = float(arg)
     else:
