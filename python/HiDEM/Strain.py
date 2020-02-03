@@ -174,12 +174,11 @@ def fname_sth_from_str(fname_in, check=True):
         strings = text_re.findall(fname_in)
         search_glob = "*".join(strings)
         search_glob = search_glob.replace("STR*","STH.")
+
         infiles = glob(search_glob)
         if len(infiles) > 1:
             sim_rat = [SM(None,fname_out,f).ratio() for f in infiles]
-            for i,f in enumerate(sim_rat):
-                print i, infiles[i], f
-            raise Exception("Fuzzy matching found more than 1 possible STH file")
+            return infiles[sim_rat.index(max(sim_rat))]
         elif len(infiles) == 0:
             raise Exception("Failed to find STH file")
         else:
@@ -203,7 +202,8 @@ def fname_sth_from_vtu(fname_in, check=True):
         search_glob = search_glob.replace("JYR*","STH.").replace(".vtu",".bin")
         infiles = glob(search_glob)
         if len(infiles) > 1:
-            raise Exception("Fuzzy matching found more than 1 possible STH file")
+            sim_rat = [SM(None,fname_out,f).ratio() for f in infiles]
+            return infiles[sim_rat.index(max(sim_rat))]
         elif len(infiles) == 0:
             raise Exception("Failed to find STH file")
         else:
