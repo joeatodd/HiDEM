@@ -16,6 +16,8 @@
 ! *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ! *************************************************************************
 
+! TTMAT represents the bond orientation/rotation matrix.
+
 SUBROUTINE TTMAT(X1,Y1,Z1,X2,Y2,Z2,RY,TT,Transp)
 
   USE TypeDefs

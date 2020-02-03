@@ -292,6 +292,8 @@ CONTAINS
              -(UTM%A(6*N2-0)-UTM%A(6*N1-0)))**2
 	ENDDO
 
+        !F has units of Newtons, but has no clear physical meaning, due
+        !to the way the equations of motions are split
         DO X=1,NN
         F(6*X-5)= -(VDP(X)/(DT*2))*UTM%M(6*X-5)
         F(6*X-4)= -(VDP(X)/(DT*2))*UTM%M(6*X-4)
@@ -302,6 +304,10 @@ CONTAINS
 	END DO
 
         !TODO - comment equation breakdown here for future ref
+        !A = beam interaction
+        !C = a velocity/acceleration term
+        !D = damps motion of beams & particles
+        !F = related to drag - previous timestep
 	R=-A -C -D -F
 	EN=EN+A*(UT%M-UTM%M)
 
