@@ -1,5 +1,5 @@
 ! *************************************************************************
-! * The subroutine Initializefcc is based on a legacy code that used to be 
+! * The subroutine Initializehcp is based on a legacy code that used to be 
 ! * freely distributed on the internet. It has been modified to fit HiDEM. 
 ! * We are not aware who created the original version.
 ! *************************************************************************
@@ -14,7 +14,7 @@ IMPLICIT NONE
 
 CONTAINS
 
-!defines and makes the FCC lattice - dense packing
+!defines and makes the HCP lattice - dense packing
 
 !ip - returns number of nodes (in this partition)
 !ntasks - how many cores
@@ -51,8 +51,8 @@ melt = melta*0.0_dp
 !box is never actualy used...
 !b is used, which is box/l, so L never actually enters into this, so it's only
 !used for the number of vertical layers
-box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to fcc ground state
-CALL Initializefcc(NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
+box=2.0d0**(2.0d0/3.0d0)*REAL(l,8) ! box size equal to hcp ground state
+CALL Initializehcp(NN,NTOT,NANS,NRXF,NANPart,InvPartInfo,&
      neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,melange_data)
 
 CLOSE(400)
@@ -62,7 +62,7 @@ END SUBROUTINE FIBG3
 !---------------------------------------------------------------!
 
 
-SUBROUTINE Initializefcc(NN,NTOT,NANS,NRXF,NANPart, &
+SUBROUTINE Initializehcp(NN,NTOT,NANS,NRXF,NANPart, &
      InvPartInfo,neighcount,box,l,wrkdir,SCL,surf,base,melt,origin,grid,wl,UC,StrictDomain,RunName,&
      melange_data)
 
@@ -602,7 +602,7 @@ END IF
 ! Our connections - NCN, CN
 ! Our neighparts - neighparts
 
-END SUBROUTINE Initializefcc
+END SUBROUTINE Initializehcp
 
 SUBROUTINE GetBBoxes(NRXF, UT, NN, IsOutlier, BBox, PBBox)
 
@@ -1542,7 +1542,7 @@ SUBROUTINE FindBeams(xo, ip, SCL, CN, nbeams, searchdist_in)
     max_neigh = 30
   ELSE 
     !Default usage - we are looking for particles which share a beam
-    !FCC lattice = 12 neighbours
+    !HCP lattice = 12 neighbours
     searchdist = SCL * (1.6**0.5)
     max_neigh = 12
   END IF

@@ -167,7 +167,7 @@ These are part of the compiled code:
 |amat.f | Called by effload, does integration |
 |tmat.f, ttmat.f | Rotation matrices |
 |kmat.f | Stiffness matrix computation |
-|glas.f90 | Computing the FCC lattice, dense packing |
+|glas.f90 | Computing the HCP lattice, dense packing |
 |ranmar.f | Random number generator |
 |dt.f90 | Called by glas.f90, finds and write connections to FSfiles |
 
@@ -195,7 +195,7 @@ rc2.f90, rc3.f90 - compute the calved size distrib
 | Timestep          | DT    | timestep size   | 1.0e-4 |
 | Width             | S     | beam width (relative to unit particle)   | 0.7 |
 | Youngs Modulus    | EF0   | particle bond young's mod, describes interaction between connected particles   | 1.0e+9 |
-| Size              | LS    | Something to do with the fcc lattice 'box size'   | 100 |
+| Size              | LS    | Something to do with the HCP lattice 'box size'   | 100 |
 | Domain Inclination | SUB   | Angle of the domain vs gravity vector, not used    | 0 |
 | Water Line   | WL    | Sea level for buoyancy calc   | |
 | Grounding Line  | GL    | 'grounding line' - not used   | -100 |
