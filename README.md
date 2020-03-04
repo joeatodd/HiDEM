@@ -282,9 +282,23 @@ User may optionally specify a 'geom_mask' column in geometry input file, which t
 
 HiDEM produces data relating to *particles* and inter-particle *bonds*. Particle information is written to .vtu files (readable in Paraview (v5.5) - use HiDEM_load.py macro). In addition to particle positions, the user can decide to include:
 
- - Particle motion in current timestep ('Displacement')
- - Total particle rotation through simulation ('Rotation')
+ - Particle motion in current timestep [metres] ('Displacement')
+ - Total particle rotation through simulation [radians] ('Rotation')
  - Particle CPU partition (for debugging)
+
+Brief note on Rotation:
+
+For visualisation, it's useful to express the surface normal of one of a particle's faces (cube). The conversion between Rotation in the vtu (x,y,z components, units of radians) to a normal vector is as follows:
+
+```
+	nx = -1.0*np.cos(rot_arr[:,2]) * np.sin(rot_arr[:,1]) * np.sin(rot_arr[:,2]) - \
+         np.sin(rot_arr[:,2])*np.cos(rot_arr[:,0])
+		 
+    ny =  -np.sin(rot_arr[:,2])*np.sin(rot_arr[:,1])*np.sin(rot_arr[:,0])+ \
+          np.cos(rot_arr[:,2])*np.cos(rot_arr[:,0])
+		  
+    nz =   (np.cos(rot_arr[:,1])*np.sin(rot_arr[:,0]))
+```
 
 Bond information is stored in two files: \*STR\*.bin files, produced every timestep, and a \*STH\*.bin file, produced once at the start of the simulation. The STH contains the two particle IDs for each bond in the simulation, and is produced only once to save disk space (neither the particle IDs nor the number of bonds change over time). The STR file lists the EFS value (strength) of each bond. Values are usually:
 

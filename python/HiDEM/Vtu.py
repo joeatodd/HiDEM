@@ -87,6 +87,26 @@ def data_to_vtu(points, point_data, fname, dp=False):
 
     #TODO - presumably might need to clean up some data after this? C memory leaks?
 
+def add_normals(indata):
+    """
+    Adds a 'cube normal' array to a dataset dict
+    This is taken from HiDEMToBlender.py
+    """
+
+    rot_arr = indata["Rotation"]
+
+    #add a 45 degree turn for visualisation purposes:
+    #rot_arr[:,2] += np.pi*0.25
+
+    nx = -1.0*np.cos(rot_arr[:,2]) * np.sin(rot_arr[:,1]) * np.sin(rot_arr[:,2]) - \
+         np.sin(rot_arr[:,2])*np.cos(rot_arr[:,0])
+    ny =  -np.sin(rot_arr[:,2])*np.sin(rot_arr[:,1])*np.sin(rot_arr[:,0])+ \
+          np.cos(rot_arr[:,2])*np.cos(rot_arr[:,0])
+    nz =   (np.cos(rot_arr[:,1])*np.sin(rot_arr[:,0]))
+
+    normal_out = (np.vstack((nx,ny,nz)).T)
+    indata["Normal"] = normal_out
+
 def vtu_sort_fun(fname):
     """
     Sorting key for non-zero padded filenames
