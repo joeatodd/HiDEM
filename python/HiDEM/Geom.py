@@ -95,3 +95,33 @@ class HiDEMTransformation:
 
         self.rot_mat = np.matrix(self.rot_mat)
         self.unrot_mat = self.rot_mat.T
+
+    def points_to_real(self, in_points):
+        """
+        Translates points in HiDEM coords to 'real world'.
+        """
+        out_points = (in_points - self.translation) * self.unrot_mat
+        return np.asarray(out_points)
+
+    def points_to_hidem(self, in_points):
+        """
+        Translates points in 'real world' coords to HiDEM coords.
+        """
+        out_points = (in_points * self.rot_mat) + self.translation
+        return np.asarray(out_points)
+
+    def data_to_real(self, in_data):
+        """
+        Translates data (displacement, rotation) from HiDEM coords to 'real world'.
+        """
+        assert(isinstance(in_data,dict))
+
+        out_data = in_data.copy()
+
+        out_data["Displacement"] = np.asarray(in_data["Displacement"] * self.unrot_mat)
+
+        # out_data["Rotation"] = np.asarray(in_data["Rotation"] * self.unrot_mat)
+        if(out_data["Normal"] is not None):
+            out_data["Normal"] = np.asarray(in_data["Normal"] * self.unrot_mat)
+
+        return out_data
