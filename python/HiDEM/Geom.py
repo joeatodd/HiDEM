@@ -83,7 +83,10 @@ class HiDEMTransformation:
             transformin.readline()
             transformin.readline()
             grid_line = transformin.readline().split(" ")
-            self.grid_xrange[0], self.grid_xrange[1], self.grid_res, self.grid_yrange[0], self.grid_yrange[1], self.grid_res = [float(j) for j in grid_line]
+
+            self.grid_xrange[0], self.grid_xrange[1], \
+                self.grid_res, self.grid_yrange[0], \
+                self.grid_yrange[1], self.grid_res = [float(j) for j in grid_line]
 
 
         # xsteps = int((grid_xrange[-1] - grid_xrange[0]) / grid_res)

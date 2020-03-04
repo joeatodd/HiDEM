@@ -24,7 +24,7 @@ def bonds_from_file(fname_bin, fname_sth=None):
         fname_sth = fname_sth_from_str(fname_bin)
 
     indata_str = open(fname_bin, 'rb')
-    header = indata_str.readline()
+    header = str(indata_str.readline())
     num_count = int(count_re.search(header).group(1))
     float_type = type_re.search(header).group(1).lower()
 
@@ -43,7 +43,7 @@ def bonds_from_file(fname_bin, fname_sth=None):
 def nn_from_file(fname_sth):
     
     with open(fname_sth, 'rb') as f:
-        header = f.readline()
+        header = str(f.readline())
         num_count = int(count_re.search(header).group(1))
         nn_data = np.fromfile(f, dtype=np.int32, count=num_count*2)
     nn_data = nn_data.reshape((-1,2))
@@ -125,7 +125,7 @@ def get_scl(sth_file):
     scl_re = re.compile("SCL:  ("+float_re.pattern+")")
 
     with open(sth_file, 'rb') as f:
-        header = f.readline()
+        header = str(f.readline())
         try:
             SCL = float(scl_re.search(header).group(1))
         except:
@@ -207,7 +207,7 @@ def fname_sth_from_vtu(fname_in, check=True):
         elif len(infiles) == 0:
             raise Exception("Failed to find STH file")
         else:
-            print len(infiles)
+            print(len(infiles))
             return infiles[0]
     else:
         return fname_out

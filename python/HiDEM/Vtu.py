@@ -68,7 +68,7 @@ def data_to_vtu(points, point_data, fname, dp=False):
     mesh.SetPoints(pointsVtk)
 
     #Add all variables
-    for varname, values in point_data.iteritems():
+    for varname, values in point_data.items():
         dataVtk = numpy_to_vtk(values.real.astype(datatype), deep=True)
         dataVtk.SetName(varname)
         mesh.GetPointData().AddArray(dataVtk)
