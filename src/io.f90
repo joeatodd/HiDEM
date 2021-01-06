@@ -511,7 +511,7 @@ SUBROUTINE BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
   !... and tell everyone else
   CALL MPI_BCast(fh_mpi_byte_offset,1, MPI_OFFSET, 0, MPI_COMM_WORLD, ierr)
 
-  !Update cpu specific start points w/ header length
+  !Update process specific start points w/ header length
   fh_starts = fh_mpi_byte_offset + fh_starts
   fh_mystarts = fh_mpi_byte_offset + fh_mystarts
   ms_counter = 1
@@ -520,11 +520,18 @@ SUBROUTINE BinaryVTKOutput(SI,NRY,PNN,NRXF,UT,UTM,NANS,NTOT,NANPart)
 
   IF(OutputBeams) THEN
     !Find end of file, set view, write beam node nums, offsets, types
+
+    !Write byte count for connectivity
+    !Note all processes must set_view even though only root writes from this view
+    CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter)-intsize, MPI_INTEGER, MPI_INTEGER,&
+         'native', MPI_INFO_NULL, ierr)
+    IF(myid==0) THEN
+      CALL MPI_File_Write(fh, INT(NBeamsTot*KIND(work_int) * 2), 1, &
+         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+    END IF
+
     CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER, MPI_INTEGER,&
          'native', MPI_INFO_NULL, ierr)
-    !Write byte count for connectivity
-    IF(myid==0) CALL MPI_File_Write(fh, INT(NBeamsTot*KIND(work_int) * 2), 1, &
-         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_int, NBeams*2, MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
 
     !Reset the MPI I/O view to default (full file, read as bytes)
@@ -602,7 +609,7 @@ SUBROUTINE SetVTKOffsets(fh_starts, fh_mystarts, ms_counter, counts, DOFs, var_s
     fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + counts(i)*DOFs*var_size
   END DO
   !root writes an extra int at the start
-  IF(myid /= 0) fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize 
+  fh_mystarts(ms_counter) = fh_mystarts(ms_counter) + intsize
 
 
   ms_counter = ms_counter + 1
@@ -642,20 +649,28 @@ SUBROUTINE WriteRealPointDataToVTK(SI,fh, data_arr, fh_mystarts, ms_counter, cou
   INTEGER :: fh, ms_counter, DOFs, counts(:)
   TYPE(SimInfo_t) :: SI
   !-------------------------------
-  INTEGER :: mycount, totcount, ierr
+  INTEGER :: mycount, totcount, ierr, intsize
   REAL(KIND=sp), ALLOCATABLE :: work_real_sp(:)
+  DOUBLE PRECISION test_dp
+
+  CALL MPI_TYPE_SIZE(MPI_INTEGER, intsize, ierr)
 
   mycount = counts(myid+1)
   totcount = SUM(counts(1:ntasks))
+
+  !Root writes byte count as int
+  CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter)-intsize, MPI_INTEGER,&
+       MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+  IF(myid==0) THEN
+    CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
+         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+  END IF
 
   !Find end of file, set view, write var
   IF(SI%DoublePrec) THEN
 
     CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_DOUBLE_PRECISION,&
          MPI_DOUBLE_PRECISION, 'native', MPI_INFO_NULL, ierr)
-    !Root writes byte count
-    IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
-         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, data_arr, mycount*DOFs, MPI_DOUBLE_PRECISION, &
          MPI_STATUS_IGNORE, ierr)
 
@@ -667,9 +682,6 @@ SUBROUTINE WriteRealPointDataToVTK(SI,fh, data_arr, fh_mystarts, ms_counter, cou
 
     CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_REAL4, MPI_REAL4,&
          'native', MPI_INFO_NULL, ierr)
-    !Write byte count for connectivity
-    IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(work_real_sp) * DOFs), 1,&
-         MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
     CALL MPI_File_Write_All(fh, work_real_sp, mycount*DOFs, MPI_REAL4, &
          MPI_STATUS_IGNORE, ierr)
 
@@ -687,16 +699,22 @@ SUBROUTINE WriteIntPointDataToVTK(fh, data_arr, fh_mystarts, ms_counter, counts,
   INTEGER(kind=MPI_Offset_kind) :: fh_mystarts(10)
   INTEGER :: fh, ms_counter, DOFs, counts(:)
   !-------------------------------
-  INTEGER :: mycount, totcount, ierr
+  INTEGER :: mycount, totcount, ierr, intsize
 
   mycount = counts(myid+1)
   totcount = SUM(counts(1:ntasks))
-  
+
+  CALL MPI_TYPE_SIZE(MPI_INTEGER, intsize, ierr)
+
+  !Root writes byte count
+  CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter)-intsize, MPI_INTEGER,&
+       MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
+  IF(myid==0) THEN
+    CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
+       MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
+  END IF
   CALL MPI_File_Set_View(fh, fh_mystarts(ms_counter), MPI_INTEGER,&
        MPI_INTEGER, 'native', MPI_INFO_NULL, ierr)
-  !Root writes byte count
-  IF(myid==0) CALL MPI_File_Write(fh, INT(totcount * KIND(data_arr) * DOFs), 1,&
-       MPI_INTEGER, MPI_STATUS_IGNORE, ierr)
   CALL MPI_File_Write_All(fh, data_arr, mycount*DOFs, MPI_INTEGER, &
        MPI_STATUS_IGNORE, ierr)
 
