@@ -1006,41 +1006,88 @@
         IF(SI%FixBack .OR. SI%FixLat) THEN
           XIND = FLOOR((NRXF%M(1,I) + UTP(6*I-5) - origin(1))/GRID)
           YIND = FLOOR((NRXF%M(2,I) + UTP(6*I-4) - origin(2))/GRID)
+          ymax = MIN(MAX(YIND,0),ny-1) !added with Jan's fixed margins
+          xmax = MIN(MAX(XIND+(2*gridratio),0),nx-1) !added with Jan's fixed margins
           gridratio = FLOOR(MAX(SCL/GRID,1.0))
 
-          !Freeze if near back plane
-          IF(SI%FixBack) THEN
-            IF(SI%GeomMasked) THEN 
-              !geommask goes from 0:nx-1, 0:ny-1 
-              !ensure within bounds
-              xmin = MIN(MAX(XIND,0),nx-1)
-              ymin = MIN(MAX(YIND-(2*gridratio),0),ny-1)
-              ymax = MIN(MAX(YIND,0),ny-1)
-              IF(ANY(GEOMMASK(xmin,ymin:ymax)==0) .OR. ymin == 0) THEN
-                UTP(6*I-5)=UT%M(6*I-5)
-                UTP(6*I-4)=UT%M(6*I-4)
-              END IF
-            ELSE 
-              IF(YIND <= 2*gridratio) THEN
-                UTP(6*I-5)=UT%M(6*I-5)
-                UTP(6*I-4)=UT%M(6*I-4)
-              END IF
-            END IF
-          END IF
+          IF(X < 2.0*SCL .AND. Y < 3500.0) THEN
+            UTP(6*I-5)=UT%M(6*I-5)
+            UTP(6*I-4)=UT%M(6*I-4)
+            !UTP(6*I-3)=UT%M(6*I-3)
+            !UTP(6*I-2)=UT%M(6*I-2)
+            !UTP(6*I-1)=UT%M(6*I-1)
+            !UTP(6*I-0)=UT%M(6*I-0)
+          ENDIF
 
-          !Freeze if near edge of glacier
-          IF(SI%FixLat) THEN
-            !geommask goes from 0:nx-1, 0:ny-1
-            ymin = MIN(MAX(YIND,0),ny-1)
-            xmin = MIN(MAX(XIND-(2*gridratio),0),nx-1)
-            xmax = MIN(MAX(XIND+(2*gridratio),0),nx-1)
+          IF(X < 2.0*SCL .AND. Y > 8500.0) THEN
+            UTP(6*I-5)=UT%M(6*I-5)
+            UTP(6*I-4)=UT%M(6*I-4)
+            !UTP(6*I-3)=UT%M(6*I-3)                                                
+            !UTP(6*I-2)=UT%M(6*I-2)                                                
+            !UTP(6*I-1)=UT%M(6*I-1)                                                
+            !UTP(6*I-0)=UT%M(6*I-0)                                                
+          ENDIF
 
-            IF(ANY(GEOMMASK(xmin:xmax,ymin)==0)) THEN
-              UTP(6*I-5)=UT%M(6*I-5)
-              UTP(6*I-4)=UT%M(6*I-4)
-            END IF
+          IF(Y < 2.0*SCL) THEN
+            UTP(6*I-5)=UT%M(6*I-5)
+            UTP(6*I-4)=UT%M(6*I-4)
+            !UTP(6*I-3)=UT%M(6*I-3)
+            !UTP(6*I-2)=UT%M(6*I-2)
+            !UTP(6*I-1)=UT%M(6*I-1)
+            !UTP(6*I-0)=UT%M(6*I-0)
+          ENDIF
+
+          IF(X > 7592-2.0*SCL) THEN
+            UTP(6*I-5)=UT%M(6*I-5)
+            UTP(6*I-4)=UT%M(6*I-4)
+            !UTP(6*I-3)=UT%M(6*I-3)
+            !UTP(6*I-2)=UT%M(6*I-2)
+            !UTP(6*I-1)=UT%M(6*I-1)
+            !UTP(6*I-0)=UT%M(6*I-0)
+          ENDIF
+
+          IF(Y > 9200-2.0*SCL ) THEN !.AND. X > 3000.0) THEN
+            UTP(6*I-5)=UT%M(6*I-5) !allows for movement in x?
+            UTP(6*I-4)=UT%M(6*I-4)
+            !UTP(6*I-3)=UT%M(6*I-3)
+            !UTP(6*I-2)=UT%M(6*I-2)
+            !UTP(6*I-1)=UT%M(6*I-1)
+            !UTP(6*I-0)=UT%M(6*I-0)
+          ENDIF
+
+          !!Freeze if near back plane
+          !IF(SI%FixBack) THEN
+            !IF(SI%GeomMasked) THEN 
+              !!geommask goes from 0:nx-1, 0:ny-1 
+              !!ensure within bounds
+              !xmin = MIN(MAX(XIND,0),nx-1)
+              !ymin = MIN(MAX(YIND-(2*gridratio),0),ny-1)
+              !ymax = MIN(MAX(YIND,0),ny-1)
+              !IF(ANY(GEOMMASK(xmin,ymin:ymax)==0) .OR. ymin == 0) THEN
+                !UTP(6*I-5)=UT%M(6*I-5)
+                !UTP(6*I-4)=UT%M(6*I-4)
+              !END IF
+            !ELSE 
+              !IF(YIND <= 2*gridratio) THEN
+                !UTP(6*I-5)=UT%M(6*I-5)
+                !UTP(6*I-4)=UT%M(6*I-4)
+              !END IF
+            !END IF
+          !END IF
+
+          !!Freeze if near edge of glacier
+          !IF(SI%FixLat) THEN
+            !!geommask goes from 0:nx-1, 0:ny-1
+            !ymin = MIN(MAX(YIND,0),ny-1)
+            !xmin = MIN(MAX(XIND-(2*gridratio),0),nx-1)
+            !xmax = MIN(MAX(XIND+(2*gridratio),0),nx-1)
+
+            !IF(ANY(GEOMMASK(xmin:xmax,ymin)==0)) THEN
+              !UTP(6*I-5)=UT%M(6*I-5)
+              !UTP(6*I-4)=UT%M(6*I-4)
+            !END IF
           END IF
-        END IF
+        !END IF
 
        !Compute drag/friction energy
 	DMPEN=DMPEN+VDP(I)*(UTP(6*I-5)-UTM%M(6*I-5))**2/(4*DT)
